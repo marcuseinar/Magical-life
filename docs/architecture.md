@@ -94,38 +94,44 @@ log; the rendered totals are `fold(events)`.
 
 ```ts
 type GameEvent =
-  | { kind: 'game/started';  gameId: GameId; config: GameConfig; players: Player[] }
-  | { kind: 'life/changed';  target: PlayerId; delta: number; source?: PlayerId }
-  | { kind: 'commander/damaged'; target: PlayerId; from: PlayerId;
-      commander: CommanderSlot; delta: number }
+  | { kind: 'game/started'; gameId: GameId; config: GameConfig; players: Player[] }
+  | { kind: 'life/changed'; target: PlayerId; delta: number; source?: PlayerId }
+  | {
+      kind: 'commander/damaged';
+      target: PlayerId;
+      from: PlayerId;
+      commander: CommanderSlot;
+      delta: number;
+    }
   | { kind: 'counter/changed'; target: PlayerId; counter: CounterKind; delta: number }
-  | { kind: 'flag/moved';    flag: FlagKind; to: PlayerId | null }
+  | { kind: 'flag/moved'; flag: FlagKind; to: PlayerId | null }
   | { kind: 'player/eliminated'; target: PlayerId; cause: EliminationCause }
-  | { kind: 'event/retracted'; retracts: EventId }   // undo
-  | { kind: 'game/ended';    winner: PlayerId | null }
+  | { kind: 'event/retracted'; retracts: EventId } // undo
+  | { kind: 'game/ended'; winner: PlayerId | null };
 ```
 
 Every event additionally carries the envelope:
 
 ```ts
 type Envelope = {
-  id: EventId;          // `${authorId}:${seq}` — globally unique by construction
-  authorId: PlayerId;   // the device that wrote it
-  seq: number;          // monotonic per author
-  at: number;           // author's wall clock, for display only, never for ordering
-  lamport: number;      // for deterministic ordering across peers
+  id: EventId; // `${authorId}:${seq}` — globally unique by construction
+  authorId: PlayerId; // the device that wrote it
+  seq: number; // monotonic per author
+  at: number; // author's wall clock, for display only, never for ordering
+  lamport: number; // for deterministic ordering across peers
 };
 ```
 
 Why events and not a state object:
 
 - Undo is a retraction event, not a mutation. History survives.
-- The shared log the user asked for is free — it *is* the storage format.
+- The shared log the user asked for is free — it _is_ the storage format.
 - Merging two peers' logs is set union, because of the ownership rule below.
 - Replay makes bugs reproducible: attach the log to a bug report and re-fold it.
 
-`CounterKind` covers poison, energy, experience, rad, ticket, and arbitrary
-user-named counters. Adding one is a data change, not a code change.
+`commander/damaged` joins this union in M2; it is deliberately absent until then.
+
+`CounterKind` covers poison, energy, experience, rad and ticket. Adding one is a data change, not a code change.
 `FlagKind` covers monarch, the initiative, city's blessing, and the day/night
 designator — states that exactly one player (or nobody) holds at a time.
 
@@ -134,7 +140,7 @@ designator — states that exactly one player (or nobody) holds at a time.
 The rule that makes this simple: **the player who is affected owns the event.**
 
 A device only ever appends events whose `target` is its own player. If you deal
-me commander damage, *my* device records it, tagged `from: you`. Announcing it
+me commander damage, _my_ device records it, tagged `from: you`. Announcing it
 across the table is what players already do; the app just mirrors it.
 
 Consequences:
@@ -168,12 +174,26 @@ splitting), so the cold start of the common case stays minimal.
 
 Enforced in CI; a regression fails the build.
 
-| Metric | Budget |
-|---|---|
-| Initial JS, gzipped, solo route | ≤ 60 kB |
-| Time to interactive, mid-range Android, 4G | ≤ 1.5 s |
-| Tap → visible life change | ≤ 100 ms |
-| Lighthouse performance | ≥ 95 |
+| Metric                                     | Budget   |
+| ------------------------------------------ | -------- |
+| Initial JS, gzipped, solo route            | ≤ 60 kB  |
+| Time to interactive, mid-range Android, 4G | ≤ 1.5 s  |
+| Tap → visible life change                  | ≤ 100 ms |
+| Lighthouse performance                     | ≥ 95     |
+
+## Where the code is today
+
+Milestone 1 is built: solo play, both input styles, counters, flags, undo,
+persistence, offline, and the two themes. The layers above all exist, the
+dependency rule is enforced by `eslint-plugin-boundaries` (verified to fail a
+deliberate violation, not merely configured), and `domain/` sits at 100% branch
+coverage.
+
+Two things stated in this document are not yet built and are marked as such
+above: commander damage (M2) and every transport other than the local one (M3).
+`Transport` is therefore a design commitment, not yet an interface with two
+implementations — it arrives with the peer-to-peer work rather than being
+speculatively stubbed now.
 
 ## What is deliberately not decided yet
 

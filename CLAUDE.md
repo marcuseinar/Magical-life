@@ -10,6 +10,7 @@ Magical Life: a Magic: The Gathering life counter. Mobile first, offline first,
 instant to start, no login unless the feature genuinely requires one.
 
 Read before making non-trivial changes:
+
 - `docs/architecture.md` — layering and the dependency rule
 - `docs/adr/` — decisions already made, and why
 - `docs/testing.md` — what to test and where
@@ -44,11 +45,26 @@ Playwright · Capacitor · Cloudflare Workers for the later backend.
 9. **Respect the performance budget** in `docs/architecture.md`. "Fast to start"
    is a requirement, not a preference.
 
+## Commands
+
+```
+npm run dev            npm run build          npm run preview
+npm test               npm run test:coverage  npm run test:e2e
+npm run check          npm run lint           npm run format
+```
+
+`npm run lint` runs ESLint (including the boundaries rule), Prettier and
+Stylelint. Stylelint fails on a raw colour outside `ui/tokens/`, which is how
+rule 5 below is actually enforced.
+
+Locally, Playwright may need `PLAYWRIGHT_CHROMIUM_PATH` pointed at a Chromium
+binary if the sandbox ships its own.
+
 ## Conventions
 
 - Naming says what it means: `applyLifeDelta`, not `handleChange`.
 - No abbreviations except the established domain ones (`edh`, `cmdr`, `omw`).
-- Comments explain *why*. The code already says what.
+- Comments explain _why_. The code already says what.
 - Functions do one thing. Prefer composition to flags — a boolean parameter that
   changes behaviour is two functions wearing a trench coat.
 - Errors are values in the domain (`Result`-shaped), exceptions only at the edges.
@@ -75,5 +91,5 @@ structural, write an ADR in `docs/adr/` rather than deciding it silently in a
 commit.
 
 Do not add speculative abstraction for milestones that have not started. The
-Rust escape hatch in ADR 0001 is preserved by *purity*, not by building a
+Rust escape hatch in ADR 0001 is preserved by _purity_, not by building a
 plugin system for it now.

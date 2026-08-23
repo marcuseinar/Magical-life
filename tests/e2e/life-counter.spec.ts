@@ -1,0 +1,127 @@
+import { expect, test } from '@playwright/test';
+import { COMMITTED, expectLife, readLife, scrub, startGame, zone } from './support';
+
+test('opens straight into a game with no login and no waiting', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: 'Magical Life' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /sign in|log in/i })).toHaveCount(0);
+});
+
+test('plays a constructed game down to zero', async ({ page }) => {
+  await startGame(page, /constructed/i, 2);
+
+  await expect(page.getByLabel('Player 1: 20 life')).toBeVisible();
+  await expect(page.getByLabel('Player 2: 20 life')).toBeVisible();
+
+  for (let tap = 0; tap < 3; tap++) await zone(page, 'Player 1', 'lose').click();
+
+  // Batched into a single change rather than three.
+  await expect(page.getByRole('button', { name: /cancel pending change of -3/i })).toBeVisible();
+  await expect(page.getByLabel('Player 1: 17 life')).toBeVisible({ timeout: COMMITTED });
+  await expect(page.getByLabel('Player 2: 20 life')).toBeVisible();
+});
+
+test('cancels a pending change from the badge', async ({ page }) => {
+  await startGame(page, /constructed/i, 2);
+
+  await zone(page, 'Player 1', 'lose').click();
+  await page.getByRole('button', { name: /cancel pending change/i }).click();
+
+  await page.waitForTimeout(COMMITTED);
+  expect(await readLife(page, 'Player 1')).toBe(20);
+});
+
+test('takes a big swing from a drag rather than twenty taps', async ({ page }) => {
+  await startGame(page, /commander/i, 2);
+
+  // Player 2 has the near panel, so screen-down is down for them too.
+  await scrub(page, 'Player 2', -150);
+
+  // A deliberate gesture commits on release, without waiting out the window.
+  await expectLife(page, 'Player 2').toBeLessThan(20);
+  await expectLife(page, 'Player 2').toBeGreaterThan(-20);
+});
+
+test('reads the drag from the seat, not the screen, for the far panel', async ({ page }) => {
+  await startGame(page, /commander/i, 2);
+
+  // Player 1 sits across the table and their panel is upside down, so the same
+  // physical drag means the opposite thing.
+  await scrub(page, 'Player 2', -150);
+  await expectLife(page, 'Player 2').toBeLessThan(40);
+
+  await scrub(page, 'Player 1', -150);
+  await expectLife(page, 'Player 1').toBeGreaterThan(40);
+});
+
+test('undoes the last change', async ({ page }) => {
+  await startGame(page, /constructed/i, 2);
+
+  await zone(page, 'Player 1', 'lose').click();
+  await expect(page.getByLabel('Player 1: 19 life')).toBeVisible({ timeout: COMMITTED });
+
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByLabel('Player 1: 20 life')).toBeVisible();
+});
+
+test('loses nothing when the app is reloaded mid-game', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  await zone(page, 'Player 3', 'lose').click();
+  await expect(page.getByLabel('Player 3: 39 life')).toBeVisible({ timeout: COMMITTED });
+
+  await page.reload();
+
+  await expect(page.getByLabel('Player 3: 39 life')).toBeVisible();
+  await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
+});
+
+test('tracks poison to lethal and lets a player declare themselves out', async ({ page }) => {
+  await startGame(page, /commander/i, 2);
+
+  await page.getByRole('button', { name: /show counters for player 1/i }).click();
+  const addPoison = page.getByRole('button', { name: /add one poison counter to player 1/i });
+  for (let counter = 0; counter < 10; counter++) await addPoison.click();
+
+  await expect(page.getByLabel(/counters for player 1/i).getByText('10')).toBeVisible();
+  await page.getByRole('button', { name: 'Out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Back in' })).toBeVisible();
+});
+
+test('starts a fresh game only after confirming', async ({ page }) => {
+  await startGame(page, /constructed/i, 2);
+
+  await page.getByRole('button', { name: 'New game' }).click();
+  await page.getByRole('button', { name: /keep playing/i }).click();
+  await expect(page.getByLabel('Player 1: 20 life')).toBeVisible();
+
+  await page.getByRole('button', { name: 'New game' }).click();
+  await page.getByRole('button', { name: /end game/i }).click();
+  await expect(page.getByRole('heading', { name: 'Magical Life' })).toBeVisible();
+});
+
+test('works with no network at all', async ({ page, context }) => {
+  await startGame(page, /commander/i, 2);
+  await page.waitForFunction(async () => {
+    await navigator.serviceWorker.ready;
+    return navigator.serviceWorker.controller !== null;
+  });
+  await context.setOffline(true);
+  await page.reload();
+
+  await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
+  await zone(page, 'Player 1', 'lose').click();
+  await expect(page.getByLabel('Player 1: 39 life')).toBeVisible({ timeout: COMMITTED });
+});
+
+test('fits a 320 pixel screen', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await startGame(page, /commander/i, 4);
+
+  const overflows = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth
+  );
+  expect(overflows).toBe(false);
+  await expect(page.getByLabel('Player 4: 40 life')).toBeVisible();
+});

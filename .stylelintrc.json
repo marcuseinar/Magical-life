@@ -1,0 +1,33 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "overrides": [
+    {
+      "files": ["**/*.svelte"],
+      "customSyntax": "postcss-html"
+    },
+    {
+      "files": ["src/ui/tokens/**/*.css"],
+      "rules": {
+        "color-no-hex": null,
+        "declaration-property-value-disallowed-list": null
+      }
+    }
+  ],
+  "rules": {
+    "custom-property-pattern": null,
+    "selector-class-pattern": null,
+    "no-descending-specificity": null,
+    "custom-property-empty-line-before": null,
+    "comment-empty-line-before": null,
+    "import-notation": "string",
+    "property-no-vendor-prefix": [true, { "ignoreProperties": ["user-select"] }],
+    "color-no-hex": [true, { "message": "Use a semantic token from ui/tokens, not a raw colour." }],
+    "declaration-property-value-disallowed-list": {
+      "/^(color|background|background-color|border-color|fill|stroke)$/": [
+        "/^rgb/",
+        "/^hsl/",
+        "/^oklch/"
+      ]
+    }
+  }
+}

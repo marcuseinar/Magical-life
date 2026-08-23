@@ -18,7 +18,7 @@ that has no correct answer.
 
 **A CRDT library (Yjs, Automerge).** Genuinely solves concurrent editing, and is
 what you would reach for by default. Rejected because it solves a problem we do
-not have: it is built for *shared* mutable structures where any participant may
+not have: it is built for _shared_ mutable structures where any participant may
 edit any field. Our data has a natural ownership partition (below), which makes
 the conflict case impossible by construction. The library would add a
 non-trivial dependency, an opaque binary format, and a merge semantics we would

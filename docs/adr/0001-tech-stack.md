@@ -52,7 +52,7 @@ Where it fights the requirements:
   on-device model runtimes, and every vendor LLM SDK are JavaScript first. This
   is the requirement most likely to be reached last and hurt most.
 - **Requirement 9 (component and UI testing).** Playwright works against any DOM,
-  so end-to-end is fine either way. But *component* testing — mount one unit,
+  so end-to-end is fine either way. But _component_ testing — mount one unit,
   drive it, assert on the accessibility tree — is mature and ergonomic with
   Vitest + Testing Library, and thin-to-absent for Rust web frameworks.
 
@@ -63,7 +63,7 @@ Where it fights the requirements:
 - `adapter-static` emits a plain static site → GitHub Pages, zero config, £0.
 - The same static build is what Capacitor wraps for iOS and Android. One build
   artifact, three targets.
-- Svelte 5 runes give explicit, testable reactive primitives that work *outside*
+- Svelte 5 runes give explicit, testable reactive primitives that work _outside_
   components, so the domain layer stays framework-free.
 - Scoped styles plus CSS custom properties make requirement 5 a one-file change.
 - Vitest, `@testing-library/svelte`, Playwright, and `fast-check` cover
@@ -76,7 +76,7 @@ Where it fights the requirements:
 **TypeScript + Svelte 5 + SvelteKit with `adapter-static`.**
 
 Rust/WASM is rejected as the application framework — not because it is bad, but
-because the one thing this app must be above all else is *instantly ready*, and
+because the one thing this app must be above all else is _instantly ready_, and
 WASM taxes exactly that. The requirement that decided it is "it should be fast
 to just start the app and go".
 
@@ -88,7 +88,7 @@ the tournament pairing algorithms. That core touches no DOM, no network, no
 storage. It is reachable only through ports.
 
 That is precisely the shape that can be replaced by a Rust crate compiled to
-WASM later, *if and only if* a real need appears. Two plausible triggers:
+WASM later, _if and only if_ a real need appears. Two plausible triggers:
 
 - **Swiss/pod pairing** is weighted maximum matching over a graph. If it becomes
   slow or we want the identical implementation on the client and the server, a
@@ -101,23 +101,23 @@ which is also the thing Clean Architecture is supposed to stop us doing.
 
 ## The full stack
 
-| Concern | Choice | Note |
-|---|---|---|
-| Language | TypeScript, `strict` | `noUncheckedIndexedAccess` on |
-| UI framework | Svelte 5 (runes) | |
-| App framework | SvelteKit + `adapter-static` | SPA fallback, `paths.base` set for Pages |
-| Build | Vite | |
-| Styling | Plain CSS + custom-property design tokens | No utility framework — see `docs/theming.md` |
-| State | Svelte stores over a pure reducer | Domain state is framework-free |
-| Persistence | IndexedDB via `idb`, `localStorage` for prefs | Offline first |
-| P2P | WebRTC `RTCDataChannel` | See `docs/design/multiplayer.md` |
-| Signalling | Cloudflare Worker + Durable Object | Plus a QR-code offline path |
-| Native shell | Capacitor | Wraps the same static build |
-| Unit/component tests | Vitest + `@testing-library/svelte` | |
-| Property/fuzz tests | `fast-check` | Against the reducer and pairing |
-| E2E / UI tests | Playwright | Mobile viewports, Chromium + WebKit |
-| Backend (later) | Cloudflare Workers + D1 + Durable Objects | Free tier; see ADR 0003 |
-| CI/CD | GitHub Actions → GitHub Pages | |
+| Concern              | Choice                                        | Note                                         |
+| -------------------- | --------------------------------------------- | -------------------------------------------- |
+| Language             | TypeScript, `strict`                          | `noUncheckedIndexedAccess` on                |
+| UI framework         | Svelte 5 (runes)                              |                                              |
+| App framework        | SvelteKit + `adapter-static`                  | SPA fallback, `paths.base` set for Pages     |
+| Build                | Vite                                          |                                              |
+| Styling              | Plain CSS + custom-property design tokens     | No utility framework — see `docs/theming.md` |
+| State                | Svelte stores over a pure reducer             | Domain state is framework-free               |
+| Persistence          | IndexedDB via `idb`, `localStorage` for prefs | Offline first                                |
+| P2P                  | WebRTC `RTCDataChannel`                       | See `docs/design/multiplayer.md`             |
+| Signalling           | Cloudflare Worker + Durable Object            | Plus a QR-code offline path                  |
+| Native shell         | Capacitor                                     | Wraps the same static build                  |
+| Unit/component tests | Vitest + `@testing-library/svelte`            |                                              |
+| Property/fuzz tests  | `fast-check`                                  | Against the reducer and pairing              |
+| E2E / UI tests       | Playwright                                    | Mobile viewports, Chromium + WebKit          |
+| Backend (later)      | Cloudflare Workers + D1 + Durable Objects     | Free tier; see ADR 0003                      |
+| CI/CD                | GitHub Actions → GitHub Pages                 |                                              |
 
 ### Why not React Native / Flutter / Expo?
 

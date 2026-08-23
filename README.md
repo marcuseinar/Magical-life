@@ -8,7 +8,16 @@ damage tracking, and league/tournament running.
 
 ## Status
 
-Pre-implementation. The stack is chosen and the system is designed; see `docs/`.
+Milestone 1 is built: solo play for one to six players, both input styles,
+counters, undo, offline, installable. See `docs/roadmap.md` for what is next.
+
+```
+npm install
+npm run dev            # http://localhost:5173
+npm test               # unit, property and component tests
+npm run test:e2e       # user journeys, accessibility and the monkey walk
+npm run lint           # eslint, prettier, stylelint and the dependency rule
+```
 
 - [Architecture](docs/architecture.md) — system design and layering
 - [Roadmap](docs/roadmap.md) — milestones
@@ -19,6 +28,7 @@ Pre-implementation. The stack is chosen and the system is designed; see `docs/`.
 - [Multiplayer](docs/design/multiplayer.md) — P2P, commander damage
 - [Tournaments](docs/design/tournaments.md) — formats, pairing, Challonge
 - [Testing strategy](docs/testing.md)
+- [Deploying](docs/deploying.md) — GitHub Pages setup
 - [Theming](docs/theming.md)
 - [CLAUDE.md](CLAUDE.md) — working agreement for AI agents in this repo
 

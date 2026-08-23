@@ -5,15 +5,15 @@
 WebRTC gives you a direct data channel between two browsers. It does not give
 you a way to find the other browser. Three separate things are often conflated:
 
-| Piece | What it does | Can it be free? |
-|---|---|---|
-| **STUN** | Tells a peer its own public IP:port | Yes — public STUN servers exist |
-| **Signalling** | Carries the offer/answer/ICE handshake between peers | Needs *something* |
-| **TURN** | Relays traffic when direct connection fails | Costs bandwidth |
+| Piece          | What it does                                         | Can it be free?                 |
+| -------------- | ---------------------------------------------------- | ------------------------------- |
+| **STUN**       | Tells a peer its own public IP:port                  | Yes — public STUN servers exist |
+| **Signalling** | Carries the offer/answer/ICE handshake between peers | Needs _something_               |
+| **TURN**       | Relays traffic when direct connection fails          | Costs bandwidth                 |
 
 So "connect through a STUN server" is not sufficient on its own — STUN answers
 "where am I?", not "where is Anna?". Something must carry roughly 2–4 kB of
-handshake between the two devices *once*. After that, the connection is direct
+handshake between the two devices _once_. After that, the connection is direct
 and no server is involved for the rest of the game.
 
 ## Three connection paths, in order of preference
@@ -60,7 +60,7 @@ Verify current Cloudflare free-tier limits before launch; they change.
 Coffee-shop and hotel WiFi with client isolation will defeat direct WebRTC. The
 usual answer is TURN, which costs real bandwidth money.
 
-Better answer for *this* app: our payloads are tiny. A life change is under 200
+Better answer for _this_ app: our payloads are tiny. A life change is under 200
 bytes. So when WebRTC fails, fall back to relaying the **game events themselves**
 through the same Durable Object over a WebSocket. That is a "dedicated server" in
 the strict sense, but it is a few kilobytes per game and it only engages when the
@@ -79,7 +79,7 @@ Be explicit, because P2P invites wishful thinking.
 - That is fine, and it is the right call. This app is a shared notepad for people
   sitting at one table looking at each other. The social layer is the enforcement
   layer, exactly as it is with dice and paper.
-- What the app *does* provide is **attribution**: every event names its author,
+- What the app _does_ provide is **attribution**: every event names its author,
   and the log is visible to everyone. Cheating is not prevented, it is obvious.
 - **Sanctioned play (Milestone 5) is different.** There, the server is authoritative
   for results submission, and P2P state is treated as a convenience input that a
@@ -103,7 +103,7 @@ A three-dimensional but sparse relation: `(victim, dealer, commanderSlot) → to
 Stored as `commander/damaged` events; derived into a matrix by `fold`.
 
 ```ts
-type CommanderSlot = 0 | 1;   // partner support
+type CommanderSlot = 0 | 1; // partner support
 // derived: Map<`${victim}:${dealer}:${slot}`, number>
 ```
 
@@ -166,7 +166,7 @@ declares them dead is wrong and annoying.
 
 ## The shared log
 
-Worth building, and cheap, because the log *is* the storage format — there is no
+Worth building, and cheap, because the log _is_ the storage format — there is no
 extra persistence work, only a view.
 
 It earns its place in three ways:

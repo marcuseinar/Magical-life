@@ -26,7 +26,7 @@ This is where `fast-check` earns its place, and it is the closest thing to the
 fuzzing the brief asks for.
 
 Generate arbitrary event sequences and assert invariants that must hold for
-*every* possible history:
+_every_ possible history:
 
 - `fold` is deterministic: shuffling the input and re-sorting yields identical state.
 - `fold(a ∪ b) === fold(b ∪ a)` — merge is commutative. This is the property that
@@ -70,6 +70,7 @@ transport tests. Fakes only for time, randomness, and identity — the three thi
 that must be deterministic.
 
 Specifically covered:
+
 - Full round trip: tap → use case → event → storage → reload → same state.
 - Two in-process peers exchanging events and converging.
 - A peer dropping mid-game, missing events, reconnecting, and catching up.
@@ -82,6 +83,7 @@ not optional when a large share of Magic players are on iPhones and Safari's
 IndexedDB and WebRTC behaviour differs.
 
 Journeys:
+
 1. Cold open → 20 life showing → tap down to 0. The core path; runs on every commit.
 2. Commander game, 4 players, commander damage to 21, elimination.
 3. Two browser contexts join a table, exchange life changes, converge.
@@ -97,11 +99,17 @@ that state always reloads to match what was on screen. The seed is printed on
 failure so any run is reproducible. This is the "random user journeys" the brief
 asks for, and it is the cheapest real bug-finder in the whole suite.
 
-### Visual regression
+### Visual regression — planned, not yet wired up
 
-Playwright screenshots of each panel layout (1–6 players) in each theme, light
-and dark, at three viewport sizes. Catches the restyling regressions that
-behavioural tests cannot see.
+The intent is Playwright screenshots of each panel layout (1–6 players) in each
+theme at three viewport sizes, to catch the restyling regressions behavioural
+tests cannot see.
+
+Deliberately not switched on yet: baselines rendered in one container and
+compared in another differ on font rasterisation alone, so the gate would fail
+for reasons that have nothing to do with the change under test. It needs a
+pinned rendering environment first. Until then this is the one gap in the
+strategy below, and it is a known one rather than an oversight.
 
 ### Accessibility
 

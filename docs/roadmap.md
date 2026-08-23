@@ -3,7 +3,7 @@
 Ordered so that every milestone ships something usable on its own, and so that
 each one's architecture is what the next one needs. Nothing here is a date.
 
-## M1 — The life counter
+## M1 — The life counter ✅
 
 The whole product for most users. If this is not excellent, nothing later matters.
 
@@ -19,6 +19,10 @@ The whole product for most users. If this is not excellent, nothing later matter
 
 **Done when**: a full Commander game can be played on one phone without touching
 anything but life totals, and closing the app mid-game loses nothing.
+
+Shipped. Not yet built and deliberately deferred: a visible game log view (the
+log exists and drives undo, but has no screen yet), a first-run hint for the
+drag gesture, and editable player names.
 
 ## M2 — Commander depth
 
@@ -82,7 +86,7 @@ The audio/video ideas. Recorded honestly rather than optimistically:
   "pass turn", "your turn" — and keyword spotting is a solved, on-device problem.
   This is the piece to try first, and it is worth trying.
 - **Automatic life tracking from audio** is harder but not absurd: "I attack for
-  seven" is a parseable utterance. Treat any detection as a *suggestion* the
+  seven" is a parseable utterance. Treat any detection as a _suggestion_ the
   player confirms, never an automatic change. An app that silently gets a life
   total wrong is worse than no app.
 - **Video board-state detection** is a research project, not a feature. Card

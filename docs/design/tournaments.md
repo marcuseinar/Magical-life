@@ -27,16 +27,16 @@ records. This is what real MTG events run and it should be the default.
   then dropped and lost out.
 
 **Pairing is not a sort.** Naive "sort by points, pair adjacent" produces
-rematches and dead ends. The correct model is *maximum-weight matching on a
-complete graph*: each possible pairing is an edge weighted by how good that
+rematches and dead ends. The correct model is _maximum-weight matching on a
+complete graph_: each possible pairing is an edge weighted by how good that
 pairing is (huge bonus for equal match points, large penalty for a rematch,
 small penalty for score difference), and we want the highest-total-weight
 perfect matching. Blossom algorithm, O(n³), trivial at tournament sizes.
 
 This is exactly the kind of pure, heavily-invariant-laden algorithm that belongs
 in `domain/` and gets hammered with `fast-check`: generate a random tournament
-state, pair it, assert *no rematch unless mathematically forced*, *every player
-paired exactly once*, *at most one bye*, *no player gets two byes*.
+state, pair it, assert _no rematch unless mathematically forced_, _every player
+paired exactly once_, _at most one bye_, _no player gets two byes_.
 
 ### Round robin
 
@@ -71,9 +71,10 @@ Practical approach, and honest about being a heuristic:
 2. Improve by local search — repeatedly swap two players between pods if the
    swap lowers a cost function, until no swap helps or a time budget expires.
 3. Cost = `w₁·(repeat opponent pairs) + w₂·(pod score variance) + w₃·(seat
-   position repeats)`, with `w₁` dominant.
+position repeats)`, with `w₁` dominant.
 
 Scoring within a pod, three options to offer the organiser:
+
 - **Win-only**: 3 for the win, 0 otherwise. Simple, brutal, common.
 - **Placement**: 4/2/1/0 by elimination order. Rewards surviving, which better
   reflects multiplayer skill, but requires tracking elimination order —
@@ -90,9 +91,8 @@ it and balance it across rounds as part of the cost function.
 Not a bracket at all: a persistent ladder over weeks or months.
 
 - Players report matches against anyone in the league, whenever they play.
-- Rating by **Glicko-2** rather than Elo: it models rating *uncertainty*, which
-  is what you want when someone plays 12 games in a month and someone else plays
-  2. A player who has not played recently has their confidence decay, so their
+- Rating by **Glicko-2** rather than Elo: it models rating _uncertainty_, which
+  is what you want when someone plays 12 games in a month and someone else plays 2. A player who has not played recently has their confidence decay, so their
   rating moves faster when they return.
 - Seasons with a soft reset (regress ratings toward the mean rather than wiping),
   a minimum-games threshold for the final standings, and an optional
@@ -126,6 +126,7 @@ Two directions, and they serve different people:
 
 **Export** — do this first, it is cheap and it removes all adoption risk. Emit
 standard formats so an organiser is never locked in:
+
 - Challonge API: create tournament, push participants, report matches.
 - A generic bracket JSON, plus CSV standings.
 - `.dek`-adjacent conventions are irrelevant here, but Melee/EventLink style CSV

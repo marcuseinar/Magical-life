@@ -52,23 +52,30 @@ you're holding in the dark at 11pm.
 
 Three candidates were considered.
 
-| Candidate | Verdict |
-|---|---|
-| **Vertical drag-scrub** — press and drag up/down, release to commit | **Chosen** |
-| iOS-style wheel picker, flick then confirm | More discoverable, but two-handed and slow; a good *fallback* for accessibility |
-| Radial dial | Looks great in a demo, poor one-handed ergonomics, hard to hit precisely |
+| Candidate                                                           | Verdict                                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Vertical drag-scrub** — press and drag up/down, release to commit | **Chosen**                                                                      |
+| iOS-style wheel picker, flick then confirm                          | More discoverable, but two-handed and slow; a good _fallback_ for accessibility |
+| Radial dial                                                         | Looks great in a demo, poor one-handed ergonomics, hard to hit precisely        |
 
 ### The chosen gesture
 
-1. **Press and hold anywhere on your own panel** for 180 ms. The panel dims
-   slightly and a scrub track fades in — this is the "you are now scrubbing"
-   signal, and the delay is what stops it from stealing taps from style 1.
-2. **Drag up to gain, down to lose.** The delta badge follows your thumb.
+1. **Press a zone.** The tap registers at once — one point, immediately, because
+   a life counter that waits for your finger to lift feels broken.
+2. **Drag up to gain, down to lose.** Past 12 px of vertical travel the press
+   becomes a scrub: the delta badge follows your thumb from wherever the tap
+   left it.
 3. **Release to commit** — immediately, not after the 4 s window. A deliberate
    gesture deserves an immediate result. The badge stays visible for the
-   normal window purely so you can still tap it to undo.
-4. **Cancel** by dragging back through zero and off the bottom of the panel, or
-   by lifting outside the panel bounds.
+   normal window purely so you can still tap it to cancel.
+4. **Cancel** by dragging back through zero, or by tapping the badge.
+
+Engagement is by **movement, not by a hold timer**. An earlier draft used a
+180 ms press-and-hold, which reads well on paper but collides with hold-to-repeat
+— and hold-to-repeat is the one thing everyone already expects from a life
+counter. Separating them by axis instead of by time lets both exist: holding
+still repeats, moving scrubs, and a scrub inherits whatever the taps have
+already accumulated rather than discarding it.
 
 ### Scrub sensitivity
 
@@ -77,10 +84,10 @@ fine ratio, and a 40-point Commander swing needs a coarse one. So the ratio is
 distance-dependent, not velocity-dependent:
 
 | Distance from press origin | Points per 8 px |
-|---|---|
-| 0–60 px | 1 |
-| 60–160 px | 2 |
-| 160 px+ | 5 |
+| -------------------------- | --------------- |
+| 0–60 px                    | 1               |
+| 60–160 px                  | 2               |
+| 160 px+                    | 5               |
 
 Distance-based rather than velocity-based because it is **reversible**: dragging
 back to the same pixel always gives the same number. Velocity-scaled scrubbing
@@ -91,10 +98,10 @@ A haptic tick fires on each unit change up to 5 units, then on each multiple of
 
 ### Discoverability
 
-Style 2 is invisible until you find it. So: on first run the panel shows a
-one-time hint ("hold and drag to change by a lot"), and the settings screen
-offers **Tap**, **Drag**, or **Both** (default). "Both" works because the 180 ms
-hold cleanly separates the two.
+Style 2 is invisible until you find it. A first-run hint on the panel ("drag to
+change by a lot") is the planned answer. No mode switch is needed: because the
+two styles are separated by axis rather than by time, both are always live and
+neither can steal the other's input.
 
 ## Reading the numbers
 
@@ -110,13 +117,13 @@ hold cleanly separates the two.
 
 Every player must be able to read their own total right-way-up, so panels rotate.
 
-| Players | Layout |
-|---|---|
-| 1 | Full screen |
-| 2 | Stacked halves, top panel rotated 180° |
-| 3 | Two rotated on the left, one on the right (or 3-up rows on tablet) |
-| 4 | 2×2, top row rotated 180° |
-| 5–6 | 2×3, top row rotated 180° |
+| Players | Layout                                                             |
+| ------- | ------------------------------------------------------------------ |
+| 1       | Full screen                                                        |
+| 2       | Stacked halves, top panel rotated 180°                             |
+| 3       | Two rotated on the left, one on the right (or 3-up rows on tablet) |
+| 4       | 2×2, top row rotated 180°                                          |
+| 5–6     | 2×3, top row rotated 180°                                          |
 
 Rotation is a CSS transform on the panel, not a separate component. The
 component does not know it is upside down.

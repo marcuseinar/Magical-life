@@ -1,0 +1,66 @@
+/*
+ * Primitive palette. No meaning attached — semantic.css decides what these are for.
+ * This is the only file in the project allowed to contain a raw colour.
+ */
+
+:root {
+  /* The table in a dim room, not a white app screen. */
+  --ink-900: #07060a;
+  --ink-800: #0d0b11;
+  --ink-700: #14111b;
+  --ink-600: #1d1926;
+  --ink-500: #2a2435;
+
+  /* Card-frame metals. */
+  --gold-500: #c9a227;
+  --gold-400: #dfbf5a;
+  --gold-300: #f0dda2;
+  --bronze-600: #6b5320;
+
+  /* Printed card stock. */
+  --parchment-100: #f3ecd8;
+  --parchment-200: #e3d8ba;
+  --parchment-400: #b4a985;
+  /* Both of these clear 4.5:1 against the page ground; do not darken them. */
+  --parchment-500: #8b8168;
+  --parchment-600: #7c735a;
+
+  --blood-600: #8f1d24;
+  --blood-500: #b3252f;
+  --blood-400: #e04451;
+  --ichor-500: #4f8f2f;
+  --ichor-400: #7fc45a;
+
+  /*
+   * The five colours, each as a deep field to sit behind text and a bright glow
+   * to light it. Taken from the mana symbols rather than the card frames, which
+   * are too pale to read white type against.
+   */
+  --mana-white-ink: #4c4840;
+  --mana-white-lit: #6f6a5e;
+  --mana-white-glow: #f8f2de;
+
+  --mana-blue-ink: #10365e;
+  --mana-blue-lit: #1a4f85;
+  --mana-blue-glow: #6cb8f5;
+
+  --mana-black-ink: #2b2434;
+  --mana-black-lit: #3d3349;
+  --mana-black-glow: #b3a3cc;
+
+  --mana-red-ink: #5b1c15;
+  --mana-red-lit: #822a1f;
+  --mana-red-glow: #f0795a;
+
+  --mana-green-ink: #17391f;
+  --mana-green-lit: #22522d;
+  --mana-green-glow: #6fc983;
+
+  --mana-colourless-ink: #35332e;
+  --mana-colourless-lit: #4a4740;
+  --mana-colourless-glow: #cbc5b4;
+
+  --mana-multicolour-ink: #4a3812;
+  --mana-multicolour-lit: #6b511c;
+  --mana-multicolour-glow: #f0d68a;
+}

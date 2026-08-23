@@ -1,7 +1,7 @@
 # Theming and design tokens
 
 Requirement: restyle the app without large code changes. That is a constraint on
-*where styling decisions live*, and it is met by keeping them all in one place
+_where styling decisions live_, and it is met by keeping them all in one place
 and never letting a component make one.
 
 ## Two layers of tokens
@@ -32,16 +32,24 @@ caught by a Stylelint rule that bans raw colour literals outside the token file.
 ## Switching themes
 
 ```html
-<html data-theme="dark">
+<html data-theme="dark"></html>
 ```
 
 Each theme redefines the semantic layer only, never the components:
 
 ```css
-:root                  { /* light — the complete set */ }
-:root[data-theme="dark"]        { /* overrides */ }
-:root[data-theme="mono"]        { /* high contrast */ }
-:root[data-theme="pauper"]      { /* a community theme */ }
+:root {
+  /* light — the complete set */
+}
+:root[data-theme='dark'] {
+  /* overrides */
+}
+:root[data-theme='mono'] {
+  /* high contrast */
+}
+:root[data-theme='pauper'] {
+  /* a community theme */
+}
 ```
 
 `@media (prefers-color-scheme: dark)` supplies the default when the user has
@@ -62,7 +70,7 @@ in the component.
 
 Mobile first: base styles target a phone in portrait. Enhancement upward via
 container queries rather than viewport media queries, so a panel restyles based
-on *its own* size. That matters here because a 4-player 2×2 grid on a tablet
+on _its own_ size. That matters here because a 4-player 2×2 grid on a tablet
 gives each panel roughly the size of a phone screen — the panel should look the
 same in both cases, and with container queries it does, for free.
 
