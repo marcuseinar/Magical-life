@@ -141,16 +141,42 @@ test('never scrolls, however many players are on screen', async ({ page }) => {
   expect(await scrollable()).toEqual({ vertical: false, horizontal: false });
 });
 
-test('picks who goes first and says so', async ({ page }) => {
+test('spins round the table before landing on who goes first', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+
+  // The winner is decided immediately but must not be revealed until the spin ends.
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /choose who goes first/i })).toBeDisabled();
+
+  // Sample who is lit while it runs: a spotlight that never moves is not a spin.
+  const spotlit = new Set<string>();
+  const until = Date.now() + 2400;
+  while (Date.now() < until) {
+    // Read the DOM directly: a locator would auto-wait once the spin ends and
+    // nothing is lit, hanging until the test times out.
+    const name = await page.evaluate(
+      () => document.querySelector('article[data-spotlit="true"] h2')?.textContent ?? null
+    );
+    if (name) spotlit.add(name.trim());
+    await page.waitForTimeout(50);
+  }
+  expect(spotlit.size, `spotlight visited ${[...spotlit].join(', ')}`).toBeGreaterThan(1);
+
+  // And it settles on exactly one player.
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1, { timeout: 6000 });
+  await expect(page.getByText(/goes first/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /choose who goes first/i })).toBeEnabled();
+});
+
+test('can be rolled again, and still marks only one player', async ({ page }) => {
   await startGame(page, /commander/i, 4);
 
-  await page.getByRole('button', { name: /choose who goes first/i }).click();
+  for (let roll = 0; roll < 2; roll++) {
+    await page.getByRole('button', { name: /choose who goes first/i }).click();
+    await expect(page.getByText('1st', { exact: true })).toHaveCount(1, { timeout: 6000 });
+  }
 
-  await expect(page.getByText(/goes first/i)).toBeVisible();
-  // Exactly one player carries the marker, however many times it is rolled.
-  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
-
-  await page.getByRole('button', { name: /choose who goes first/i }).click();
   await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
 });
 

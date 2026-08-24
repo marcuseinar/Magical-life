@@ -142,6 +142,31 @@ shared chip that shows who holds it; tapping moves it, which writes a
 `flag/moved` event. Exactly one holder is enforced by the reducer, so the UI
 cannot get it wrong.
 
+## Choosing who goes first
+
+Somebody has to go first and nobody wants to argue about it, so the app decides —
+but a result that simply appears is a missed moment. Instead a spotlight travels
+round the table, slowing as it goes, and settles on the winner.
+
+**The result is decided before the animation starts.** The use case picks a
+player, records `turn/firstPlayer`, and only then does the spin run — landing on
+the seat that was already chosen. Keeping the two apart means the theatre cannot
+influence the outcome, the log is honest, and the choice stays testable without
+a clock.
+
+The schedule (`ui/interaction/firstPlayerSpin.ts`) is pure and fixed at 2.2
+seconds regardless of the winner or the number of players, so the _length_ of
+the spin never hints at who won. It makes two full passes of the table before
+running in to the winner, so nobody appears to have been skipped, and the delays
+grow so the last few steps land like a coin settling.
+
+While it runs, every panel except the lit one falls back. That is what makes it
+read as a light travelling round a table rather than a card changing colour —
+which matters when the person watching is sitting opposite.
+
+Under `prefers-reduced-motion` the schedule collapses to a single step: the
+answer, immediately.
+
 ## The app is a surface, not a document
 
 Nothing scrolls and nothing zooms. A life counter lives face-up on a table

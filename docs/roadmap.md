@@ -12,7 +12,8 @@ The whole product for most users. If this is not excellent, nothing later matter
 - Formats: Standard 20, Commander 40, Two-Headed Giant 30, custom
 - Poison and the counter tray; monarch/initiative flags
 - Undo via retraction; rematch (same players and format, fresh totals)
-- Random first player, because somebody has to decide and nobody wants to
+- Random first player, revealed by a spotlight travelling round the table —
+  decided before the animation runs, so the theatre cannot change the result
 - No scrolling, no zooming: the app is a fixed surface
 - Persistence, so a reload mid-game loses nothing
 - PWA: installable, offline, keep-awake

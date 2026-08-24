@@ -6,12 +6,15 @@
   let {
     players,
     firstPlayer = null,
+    spotlight = null,
     onLifeChange,
     onOpenCounters,
     onElimination
   }: {
     players: readonly PlayerState[];
     firstPlayer?: PlayerId | null;
+    /** Seat index under the travelling spotlight, if one is running. */
+    spotlight?: number | null;
     onLifeChange: (player: PlayerState, delta: number) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
@@ -42,6 +45,8 @@
         {player}
         rotated={isRotated(index)}
         isFirstPlayer={player.id === firstPlayer}
+        spotlit={index === spotlight}
+        dimmed={spotlight !== null && index !== spotlight}
         onLifeChange={(delta) => onLifeChange(player, delta)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}
         onElimination={(eliminated) => onElimination(player, eliminated)}
