@@ -18,6 +18,17 @@ const PRECACHED = [...build, ...files, ...prerendered];
  *  fallback under both of these names depending on how the host serves it. */
 const SHELL = [`${base}/`, `${base}/index.html`];
 
+/**
+ * This app's own front door.
+ *
+ * A worker's scope is a path prefix, so production at `/repo/` also covers
+ * `/repo/pr-3/` — a pull-request preview. Serving the cached shell for any
+ * navigation in scope would therefore make a preview silently render
+ * production. Only the exact root is ours to answer for.
+ */
+const isAppRoot = (url: URL) =>
+  url.pathname === `${base}/` || url.pathname === `${base}/index.html`;
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -66,11 +77,13 @@ self.addEventListener('fetch', (event) => {
       const url = new URL(event.request.url);
 
       /*
-       * Every navigation is the same single-page shell, so serve it from the
-       * cache without asking the network. This is what makes the app open at a
-       * table with no signal, and it is checked by an end-to-end test.
+       * The app root is the same single-page shell every time, so serve it from
+       * the cache without asking the network. That is what makes the app open at
+       * a table with no signal, and it is checked by an end-to-end test.
+       * Anything deeper is not ours: pass it through untouched.
        */
       if (event.request.mode === 'navigate') {
+        if (!isAppRoot(url)) return fetch(event.request);
         return (await shellFrom(cache)) ?? (await fetch(event.request));
       }
 
@@ -85,7 +98,7 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       } catch {
-        const shell = await shellFrom(cache);
+        const shell = isAppRoot(url) ? await shellFrom(cache) : undefined;
         if (shell) return shell;
         throw new Error('offline and not cached');
       }

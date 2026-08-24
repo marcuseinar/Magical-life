@@ -1,17 +1,19 @@
 name: CI
 
-# Every push is checked. Deployment is gated on the repository's *default*
-# branch rather than a hardcoded name, so renaming it never silently stops
-# publishing — which is exactly what a hardcoded `main` did on day one.
+# Every push and every pull request is checked. Publishing is decided per event:
+# the default branch goes to production, a pull request gets its own preview.
 on:
   push:
   pull_request:
   workflow_dispatch:
 
-# One deploy at a time, and never cancel one halfway.
 concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+  # Keyed on the branch, so a push and its pull request share one run.
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ (github.head_ref || github.ref_name) != github.event.repository.default_branch }}
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -56,41 +58,70 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  build:
-    name: Build and measure
+  publish:
+    name: Build and publish
     runs-on: ubuntu-latest
     needs: [verify, e2e]
+    # A pull request from a fork has no write token, so it cannot publish.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # publish-pages.sh commits onto gh-pages; a shallow clone cannot.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build for GitHub Pages
+
+      - name: Decide where this build belongs
+        id: target
+        env:
+          REPO: ${{ github.event.repository.name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "dir=pr-${{ github.event.number }}" >> "$GITHUB_OUTPUT"
+            echo "base=/$REPO/pr-${{ github.event.number }}" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_name }}" = "$DEFAULT_BRANCH" ]; then
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "base=/$REPO" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            # A branch with no pull request is built and measured, not published.
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "base=/$REPO" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
         run: npm run build
         env:
-          # A project site is served from /<repo>, so the app must know its base.
-          # For a user site (<user>.github.io) set this to an empty string.
-          BASE_PATH: /${{ github.event.repository.name }}
+          BASE_PATH: ${{ steps.target.outputs.base }}
+
       - name: Bundle budget
         run: node scripts/check-bundle-size.mjs
-      - uses: actions/upload-pages-artifact@v3
-        if: github.ref_name == github.event.repository.default_branch
-        with:
-          path: build
 
-  deploy:
-    name: Deploy to GitHub Pages
-    if: github.ref_name == github.event.repository.default_branch
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Publish
+        if: steps.target.outputs.publish == 'true'
+        run: scripts/publish-pages.sh ${{ steps.target.outputs.dir }}
+
+      - name: Link the preview on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-${{ github.event.number }}/
+        run: |
+          BODY=$(printf '%s\n\n%s\n\n%s' \
+            'Testable build of this pull request:' \
+            "$PREVIEW" \
+            'Rebuilt on every push, removed when this pull request closes.')
+          gh pr comment "${{ github.event.number }}" --edit-last --body "$BODY" \
+            || gh pr comment "${{ github.event.number }}" --body "$BODY"

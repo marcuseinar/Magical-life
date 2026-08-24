@@ -1,51 +1,80 @@
 # Deploying
 
 The app is a static site. CI builds it and publishes it to GitHub Pages on every
-green push to `main`; there is no server and no hosting bill.
+green push to the default branch, and gives every pull request its own testable
+URL. There is no server and no hosting bill.
 
 ## One-time GitHub setup
 
-1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-   Not "Deploy from a branch" — the workflow publishes an artifact directly, and
-   the branch option will ignore it.
-2. **Settings → Actions → General → Workflow permissions:** "Read and write
-   permissions" must be allowed, or the deploy step cannot mint its token.
-3. Push to the repository's **default branch**. The `deploy` job prints the live
-   URL, and Settings → Pages shows it from then on.
+Do these in order — the third depends on the first two having happened.
 
-That is the whole setup. There is nothing to configure on the repository side
-for the app itself.
+1. **Default branch.** Settings → Branches → set the default to `main`.
+   The workflow publishes from whatever GitHub reports as the default branch,
+   so this is what decides where production comes from.
 
-### Which branch deploys
+2. **Land something on `main`.** The first run on the default branch creates the
+   `gh-pages` branch. Until it exists there is nothing for Pages to serve.
 
-The workflow deploys from whatever GitHub reports as the repository's default
-branch, not from a branch named `main`. This is deliberate: the first version
-hardcoded `main`, the repository did not have a branch by that name, and the
-result was a workflow that never ran even once — with no error anywhere to say
-so, because a trigger that matches nothing simply does nothing.
+3. **Pages source.** Settings → Pages → Build and deployment → **Deploy from a
+   branch** → `gh-pages` → `/ (root)`.
+   _Not_ "GitHub Actions". Pages serves exactly one source, and previews need to
+   live in the same tree as production (see below), so the branch is the source.
 
-Pushes to any other branch still run the full check suite; they just stop short
-of publishing.
+4. **Protect `main`.** Settings → Branches → Add branch ruleset (or protection
+   rule) for `main`:
+   - Require a pull request before merging
+   - Require status checks to pass, and select all three:
+     `Types, lint, tests`, `User journeys`, `Build and publish`
+   - Require branches to be up to date before merging
 
-## The URL, and why `BASE_PATH` exists
+   The check names are the job names in `.github/workflows/ci.yml`. They only
+   appear in that list once each job has run at least once. Do **not** require
+   the cleanup workflow's job — it runs on close, not on the pull request.
 
-A **project site** — the normal case — is served from a subdirectory:
+## Previews: every pull request gets a testable URL
+
+Opening a pull request builds the app and publishes it to its own directory,
+then comments the link:
 
 ```
-https://<user>.github.io/<repo>/
+https://<user>.github.io/<repo>/pr-<number>/
 ```
 
-Every asset the app requests therefore has to be prefixed with `/<repo>`, or the
-page loads and then fetches its JavaScript from the wrong place. SvelteKit
-handles this through `kit.paths.base`, which `svelte.config.js` reads from the
-`BASE_PATH` environment variable, which CI sets from the repository name.
+It rebuilds on every push to the branch, and is deleted when the pull request
+closes. Open it on a phone — that is the point of it.
 
-If you later move to a **user site** (a repository named `<user>.github.io`,
-served from the domain root) or attach a custom domain, set `BASE_PATH` to an
-empty string in `.github/workflows/ci.yml`. Nothing else changes.
+### How it works, and why it is a branch rather than an Action
 
-Local `npm run dev` and `npm run preview` leave `BASE_PATH` unset, so the app
-runs at the root and the base path never gets in the way while developing.
+GitHub Pages serves a single source. There is no per-deployment preview URL the
+way Netlify or Vercel provide one. So production and every open preview have to
+live side by side in one tree on `gh-pages`:
+
+```
+gh-pages/
+  index.html          production
+  _app/…
+  pr-12/              preview for pull request 12
+  pr-15/              preview for pull request 15
+```
+
+`scripts/publish-pages.sh` maintains that shape. Publishing production replaces
+everything _except_ the `pr-*` directories; publishing a preview replaces only
+its own. Two runs can race for the branch, so it fetches, rebuilds its commit
+and retries up to three times.
+
+Each preview is built with its own `BASE_PATH` (`/<repo>/pr-<n>`), so its assets
+resolve from its own directory.
+
+**Forks cannot publish.** A pull request from a fork gets a read-only token, so
+the publish job is skipped for it. The checks still run.
+
+### The service worker and preview isolation
+
+A service worker's scope is a path prefix, so production at `/<repo>/` also
+covers `/<repo>/pr-12/`. If it answered navigations for anything in scope with
+its own cached shell, every preview would silently render production. The worker
+therefore serves the shell **only for its own app root** and passes anything
+deeper through to the network. `tests/base-path/` asserts this.
 
 ## Custom domain
 
