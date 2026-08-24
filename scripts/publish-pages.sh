@@ -15,6 +15,12 @@ BRANCH="${PAGES_BRANCH:-gh-pages}"
 WORKTREE="$(mktemp -d)/pages"
 SOURCE="${PAGES_SOURCE:-build}"
 
+# The runner has no git identity of its own, and a commit needs one. Passed
+# per-command rather than written into config, so the script behaves the same
+# wherever it runs.
+AUTHOR_NAME="${PAGES_AUTHOR_NAME:-github-actions[bot]}"
+AUTHOR_EMAIL="${PAGES_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
+
 if [ ! -d "$SOURCE" ]; then
   echo "no $SOURCE directory to publish" >&2
   exit 1
@@ -59,7 +65,9 @@ publish_once() {
     return 0
   fi
 
-  git -C "$WORKTREE" commit -q -m "publish ${TARGET:-production} (${GITHUB_SHA:-local})"
+  git -C "$WORKTREE" \
+    -c "user.name=$AUTHOR_NAME" -c "user.email=$AUTHOR_EMAIL" \
+    commit -q -m "publish ${TARGET:-production} (${GITHUB_SHA:-local})"
   git -C "$WORKTREE" push origin "$BRANCH"
 }
 

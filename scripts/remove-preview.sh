@@ -8,6 +8,12 @@ TARGET="${1:?usage: remove-preview.sh pr-123}"
 BRANCH="${PAGES_BRANCH:-gh-pages}"
 WORKTREE="$(mktemp -d)/pages"
 
+# The runner has no git identity of its own, and a commit needs one. Passed
+# per-command rather than written into config, so the script behaves the same
+# wherever it runs.
+AUTHOR_NAME="${PAGES_AUTHOR_NAME:-github-actions[bot]}"
+AUTHOR_EMAIL="${PAGES_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
+
 cleanup() {
   git worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
   rm -rf "$WORKTREE"
@@ -29,5 +35,7 @@ fi
 
 rm -rf "${WORKTREE:?}/${TARGET:?}"
 git -C "$WORKTREE" add -A
-git -C "$WORKTREE" commit -q -m "remove preview $TARGET"
+git -C "$WORKTREE" \
+  -c "user.name=$AUTHOR_NAME" -c "user.email=$AUTHOR_EMAIL" \
+  commit -q -m "remove preview $TARGET"
 git -C "$WORKTREE" push origin "$BRANCH"
