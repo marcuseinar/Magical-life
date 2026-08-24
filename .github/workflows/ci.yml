@@ -1,14 +1,17 @@
 name: CI
 
+# Every push is checked. Deployment is gated on the repository's *default*
+# branch rather than a hardcoded name, so renaming it never silently stops
+# publishing — which is exactly what a hardcoded `main` did on day one.
 on:
   push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
 
-# Only one deploy at a time, and never cancel one halfway.
+# One deploy at a time, and never cancel one halfway.
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
 
 jobs:
   verify:
@@ -71,13 +74,13 @@ jobs:
       - name: Bundle budget
         run: node scripts/check-bundle-size.mjs
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main'
+        if: github.ref_name == github.event.repository.default_branch
         with:
           path: build
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.ref == 'refs/heads/main'
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     needs: build
     permissions:

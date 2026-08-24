@@ -10,11 +10,22 @@ green push to `main`; there is no server and no hosting bill.
    the branch option will ignore it.
 2. **Settings → Actions → General → Workflow permissions:** "Read and write
    permissions" must be allowed, or the deploy step cannot mint its token.
-3. Push to `main`. The `deploy` job prints the live URL, and Settings → Pages
-   shows it from then on.
+3. Push to the repository's **default branch**. The `deploy` job prints the live
+   URL, and Settings → Pages shows it from then on.
 
 That is the whole setup. There is nothing to configure on the repository side
 for the app itself.
+
+### Which branch deploys
+
+The workflow deploys from whatever GitHub reports as the repository's default
+branch, not from a branch named `main`. This is deliberate: the first version
+hardcoded `main`, the repository did not have a branch by that name, and the
+result was a workflow that never ran even once — with no error anywhere to say
+so, because a trigger that matches nothing simply does nothing.
+
+Pushes to any other branch still run the full check suite; they just stop short
+of publishing.
 
 ## The URL, and why `BASE_PATH` exists
 
