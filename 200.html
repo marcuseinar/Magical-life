@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07060a" />
+    <meta name="description" content="A Magic: The Gathering life counter for the table." />
+    <link rel="icon" href="/Magical-life/favicon.svg" />
+    <link rel="manifest" href="/Magical-life/manifest.webmanifest" />
+    <link href="/Magical-life/_app/immutable/entry/start.Dua5yhvm.js" rel="modulepreload">
+		<link href="/Magical-life/_app/immutable/chunks/Dx9_yaan.js" rel="modulepreload">
+		<link href="/Magical-life/_app/immutable/chunks/CRKeXldX.js" rel="modulepreload">
+		<link href="/Magical-life/_app/immutable/entry/app.BgFm2Rww.js" rel="modulepreload">
+		<link href="/Magical-life/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/Magical-life/_app/immutable/nodes/0.LQ7sAXac.js" rel="modulepreload">
+		
+		<link href="/Magical-life/_app/immutable/assets/0.C-czxPhJ.css" rel="stylesheet">
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">
+			<script>
+				{
+					__sveltekit_1vde8m = {
+						base: "/Magical-life",
+						assets: "/Magical-life"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/Magical-life/_app/immutable/entry/start.Dua5yhvm.js"),
+						import("/Magical-life/_app/immutable/entry/app.BgFm2Rww.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+
+					if ('serviceWorker' in navigator) {
+						const script_url = '/Magical-life/service-worker.js';
+						const policy = globalThis?.window?.trustedTypes?.createPolicy(
+							'sveltekit-trusted-url',
+							{ createScriptURL(url) { return url; } }
+						);
+						const sanitised = policy?.createScriptURL(script_url) ?? script_url;
+						addEventListener('load', function () {
+							navigator.serviceWorker.register(sanitised);
+						});
+					}
+				}
+			</script>
+		</div>
+  </body>
+</html>
