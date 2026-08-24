@@ -124,6 +124,12 @@ Stated so the gaps are deliberate:
 - Cloudflare's platform behaviour — we test our handlers, not their runtime.
 - Real NAT traversal against real hostile networks. Automatable only with real
   infrastructure; covered by a manual pre-release checklist instead.
+- **Offline reload in Safari.** Playwright's WebKit build throws an internal
+  error on `page.reload()` under offline emulation, before the page is involved,
+  so the test would measure the harness rather than the app. The service worker
+  contract it depends on — installed, controlling, shell cached — _is_ asserted
+  in every browser. Add "aeroplane-mode reload on a real iPhone" to the manual
+  pre-release checklist.
 - Native shell behaviour beyond smoke tests, until Milestone 4 adds device runs.
 
 ## CI gates

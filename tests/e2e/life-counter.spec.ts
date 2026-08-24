@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { COMMITTED, expectLife, readLife, scrub, startGame, zone } from './support';
 
 test('opens straight into a game with no login and no waiting', async ({ page }) => {
@@ -101,12 +102,49 @@ test('starts a fresh game only after confirming', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Magical Life' })).toBeVisible();
 });
 
-test('works with no network at all', async ({ page, context }) => {
-  await startGame(page, /commander/i, 2);
-  await page.waitForFunction(async () => {
+/** Resolves once a service worker is not merely registered but controlling this page. */
+const serviceWorkerControlling = (page: Page) =>
+  page.waitForFunction(async () => {
     await navigator.serviceWorker.ready;
     return navigator.serviceWorker.controller !== null;
   });
+
+test('caches the app shell, which is what makes it work offline', async ({ page }) => {
+  await startGame(page, /commander/i, 2);
+
+  const supported = await page.evaluate(() => 'serviceWorker' in navigator);
+  test.skip(!supported, 'This browser build has no service worker.');
+
+  await serviceWorkerControlling(page);
+
+  /*
+   * The shell being in the cache is the actual contract — a missing one is how
+   * offline broke the first time, when a single 404 on a dotfile made an atomic
+   * `cache.addAll` reject and the install fail silently.
+   */
+  const cachedShell = await page.evaluate(async () => {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      if ((await cache.match('/')) ?? (await cache.match('/index.html'))) return true;
+    }
+    return false;
+  });
+
+  expect(cachedShell).toBe(true);
+});
+
+test('works with no network at all', async ({ page, context, browserName }) => {
+  /*
+   * Chromium only. Playwright's WebKit build fails `page.reload()` under
+   * offline emulation with "WebKit encountered an internal error" — thrown by
+   * the driver before the page is involved, so it tests the harness rather than
+   * the app. Safari offline is a manual pre-release check (docs/testing.md);
+   * the shell-cache test above covers the app's side of it everywhere.
+   */
+  test.skip(browserName === 'webkit', 'Playwright WebKit cannot emulate offline reloads.');
+
+  await startGame(page, /commander/i, 2);
+  await serviceWorkerControlling(page);
   await context.setOffline(true);
   await page.reload();
 
