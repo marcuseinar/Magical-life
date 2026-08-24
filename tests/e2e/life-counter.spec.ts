@@ -180,6 +180,19 @@ test('can be rolled again, and still marks only one player', async ({ page }) =>
   await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
 });
 
+test('skips the spin entirely when motion is unwelcome', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await startGame(page, /commander/i, 4);
+
+  const started = Date.now();
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+
+  // The schedule has a reduced-motion path of its own; this covers the wiring
+  // that reads the preference, which unit tests cannot reach.
+  expect(Date.now() - started).toBeLessThan(1200);
+});
+
 test('keeps every action on one row on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await startGame(page, /commander/i, 4);
