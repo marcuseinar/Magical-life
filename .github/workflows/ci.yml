@@ -10,10 +10,16 @@ on:
 concurrency:
   # Keyed on the branch, so a push and its pull request share one run.
   group: ci-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: ${{ (github.head_ref || github.ref_name) != github.event.repository.default_branch }}
+  # Literal rather than the env below: workflow-level keys cannot read `env`.
+  cancel-in-progress: ${{ (github.head_ref || github.ref_name) != 'main' }}
 
 permissions:
   contents: read
+
+env:
+  # The branch production is published from. Change here and in the concurrency
+  # expression above together.
+  PRODUCTION_BRANCH: main
 
 jobs:
   verify:
@@ -84,13 +90,12 @@ jobs:
         id: target
         env:
           REPO: ${{ github.event.repository.name }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "dir=pr-${{ github.event.number }}" >> "$GITHUB_OUTPUT"
             echo "base=/$REPO/pr-${{ github.event.number }}" >> "$GITHUB_OUTPUT"
             echo "publish=true" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.ref_name }}" = "$DEFAULT_BRANCH" ]; then
+          elif [ "${{ github.ref_name }}" = "$PRODUCTION_BRANCH" ]; then
             echo "dir=" >> "$GITHUB_OUTPUT"
             echo "base=/$REPO" >> "$GITHUB_OUTPUT"
             echo "publish=true" >> "$GITHUB_OUTPUT"

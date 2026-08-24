@@ -6,22 +6,19 @@ URL. There is no server and no hosting bill.
 
 ## One-time GitHub setup
 
-Do these in order — the third depends on the first two having happened.
+Do these in order — the second depends on the first having happened.
 
-1. **Default branch.** Settings → Branches → set the default to `main`.
-   The workflow publishes from whatever GitHub reports as the default branch,
-   so this is what decides where production comes from.
+1. **Merge something into `main`.** The first run on `main` creates the
+   `gh-pages` branch with production at its root.
 
-2. **Land something on `main`.** The first run on the default branch creates the
-   `gh-pages` branch. Until it exists there is nothing for Pages to serve.
-
-3. **Pages source.** Settings → Pages → Build and deployment → **Deploy from a
+2. **Pages source.** Settings → Pages → Build and deployment → **Deploy from a
    branch** → `gh-pages` → `/ (root)`.
    _Not_ "GitHub Actions". Pages serves exactly one source, and previews need to
    live in the same tree as production (see below), so the branch is the source.
+   Doing this before step 1 leaves the site 404ing, because nothing is at the
+   root yet.
 
-4. **Protect `main`.** Settings → Branches → Add branch ruleset (or protection
-   rule) for `main`:
+3. **Protect `main`.** Settings → Branches → Add branch ruleset for `main`:
    - Require a pull request before merging
    - Require status checks to pass, and select all three:
      `Types, lint, tests`, `User journeys`, `Build and publish`
@@ -30,6 +27,24 @@ Do these in order — the third depends on the first two having happened.
    The check names are the job names in `.github/workflows/ci.yml`. They only
    appear in that list once each job has run at least once. Do **not** require
    the cleanup workflow's job — it runs on close, not on the pull request.
+
+### The default branch does not matter
+
+Production publishes from **`main` by name** (`PRODUCTION_BRANCH` in the
+workflow), not from whatever GitHub reports as the default branch. That is
+deliberate: the default branch is a repository setting that GitHub's mobile web
+UI does not expose, and deployment should not depend on a setting you cannot
+reach from the device in your hand.
+
+Setting `main` as the default branch is still worth doing when convenient — it
+decides what a fresh clone checks out and what a new pull request defaults its
+base to. It changes nothing about deployment. On a phone, Safari's **aA → Request
+Desktop Website** exposes the section; it lives under Settings → Branches.
+
+If the production branch is ever renamed, change `PRODUCTION_BRANCH` and the
+`concurrency` expression together. A wrong value there fails loudly — green
+checks and no deploy — rather than silently, because the workflow triggers on
+every push regardless.
 
 ## Previews: every pull request gets a testable URL
 
