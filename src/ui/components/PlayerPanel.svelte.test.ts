@@ -17,12 +17,12 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
 
 const mount = (over: Partial<PlayerState> = {}) => {
   const onLifeChange = vi.fn();
-  const onCounterChange = vi.fn();
+  const onOpenCounters = vi.fn();
   const onElimination = vi.fn();
   render(PlayerPanel, {
-    props: { player: player(over), onLifeChange, onCounterChange, onElimination }
+    props: { player: player(over), onLifeChange, onOpenCounters, onElimination }
   });
-  return { onLifeChange, onCounterChange, onElimination };
+  return { onLifeChange, onOpenCounters, onElimination };
 };
 
 const decrease = () => screen.getByRole('button', { name: /lose one life/i });
@@ -156,7 +156,7 @@ describe('player panel', () => {
         player: player(),
         rotated: true,
         onLifeChange,
-        onCounterChange: vi.fn(),
+        onOpenCounters: vi.fn(),
         onElimination: vi.fn()
       }
     });
@@ -169,12 +169,32 @@ describe('player panel', () => {
     expect(onLifeChange.mock.calls[0]![0]).toBeLessThan(-20);
   });
 
-  it('adds a counter through the tray', async () => {
-    const { onCounterChange } = mount();
-    await fireEvent.click(screen.getByRole('button', { name: /show counters for anna/i }));
-    await fireEvent.click(screen.getByRole('button', { name: /add one poison counter to anna/i }));
+  it('asks for the counter sheet rather than opening one inside the card', async () => {
+    const { onOpenCounters } = mount();
+    await fireEvent.click(screen.getByRole('button', { name: /counters for anna/i }));
 
-    expect(onCounterChange).toHaveBeenCalledWith('poison', 1);
+    expect(onOpenCounters).toHaveBeenCalled();
+    // The editor is a page-level sheet; a panel is far too small to hold it.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('marks the player chosen to go first', () => {
+    const onLifeChange = vi.fn();
+    render(PlayerPanel, {
+      props: {
+        player: player(),
+        isFirstPlayer: true,
+        onLifeChange,
+        onOpenCounters: vi.fn(),
+        onElimination: vi.fn()
+      }
+    });
+    expect(screen.getByText('1st')).toBeInTheDocument();
+  });
+
+  it('marks nobody by default', () => {
+    mount();
+    expect(screen.queryByText('1st')).not.toBeInTheDocument();
   });
 
   it('shows only counters that are actually on the board', async () => {

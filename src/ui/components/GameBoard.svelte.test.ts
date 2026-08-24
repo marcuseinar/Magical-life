@@ -19,7 +19,7 @@ const mount = (count: number) => {
     props: {
       players: Array.from({ length: count }, (_, index) => seat(index)),
       onLifeChange: vi.fn(),
-      onCounterChange: vi.fn(),
+      onOpenCounters: vi.fn(),
       onElimination: vi.fn()
     }
   });

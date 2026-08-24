@@ -40,7 +40,11 @@ export const applyLifeDelta =
 ```
 
 Ports are interfaces declared here and implemented in `adapters/`:
-`Clock`, `IdSource`, `EventLog`, `Transport`, `Storage`, `Haptics`, `Rng`.
+`Clock`, `IdSource`, `Rng`, `EventLog`, `Transport`, `Storage`, `Haptics`.
+
+`Rng` exists for the same reason as `Clock`: choosing who goes first is random,
+but `domain/` must stay pure, so the _choice_ is made in a use case and reaches
+the domain as a decided fact.
 Tests substitute fakes; nothing is mocked by monkey-patching.
 
 ### `adapters/` — the outside world

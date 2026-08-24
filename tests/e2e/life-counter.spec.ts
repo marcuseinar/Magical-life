@@ -81,13 +81,110 @@ test('loses nothing when the app is reloaded mid-game', async ({ page }) => {
 test('tracks poison to lethal and lets a player declare themselves out', async ({ page }) => {
   await startGame(page, /commander/i, 2);
 
-  await page.getByRole('button', { name: /show counters for player 1/i }).click();
-  const addPoison = page.getByRole('button', { name: /add one poison counter to player 1/i });
+  await page.getByRole('button', { name: 'Counters for Player 1' }).click();
+  const sheet = page.getByRole('dialog', { name: /counters for player 1/i });
+  const addPoison = sheet.getByRole('button', { name: /add one poison counter/i });
   for (let counter = 0; counter < 10; counter++) await addPoison.click();
 
-  await expect(page.getByLabel(/counters for player 1/i).getByText('10')).toBeVisible();
+  await page.getByRole('button', { name: 'Close counters' }).click();
+  await expect(page.getByText('Poison')).toBeVisible();
+
   await page.getByRole('button', { name: 'Out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Back in' })).toBeVisible();
+});
+
+test('opens the counter sheet without disturbing the cards behind it', async ({ page }) => {
+  // Six players is the tightest layout, and where the editor used to spill out
+  // of its panel and shove the life total off the card.
+  await startGame(page, /commander/i, 6);
+
+  const totalsInsideTheirPanels = async () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('article')].every((panel) => {
+        const total = panel.querySelector('p.total');
+        if (!total) return false;
+        const card = panel.getBoundingClientRect();
+        const box = total.getBoundingClientRect();
+        return (
+          box.left >= card.left - 1 &&
+          box.right <= card.right + 1 &&
+          box.top >= card.top - 1 &&
+          box.bottom <= card.bottom + 1
+        );
+      })
+    );
+
+  expect(await totalsInsideTheirPanels()).toBe(true);
+
+  await page.getByRole('button', { name: 'Counters for Player 6' }).click();
+  await expect(page.getByRole('dialog', { name: /counters for player 6/i })).toBeVisible();
+
+  expect(await totalsInsideTheirPanels()).toBe(true);
+  await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
+});
+
+test('never scrolls, however many players are on screen', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const scrollable = () =>
+    page.evaluate(() => {
+      const root = document.documentElement;
+      return {
+        vertical: root.scrollHeight > root.clientHeight,
+        horizontal: root.scrollWidth > root.clientWidth
+      };
+    });
+
+  expect(await scrollable()).toEqual({ vertical: false, horizontal: false });
+
+  await page.getByRole('button', { name: 'Counters for Player 6' }).click();
+  expect(await scrollable()).toEqual({ vertical: false, horizontal: false });
+});
+
+test('picks who goes first and says so', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+
+  await expect(page.getByText(/goes first/i)).toBeVisible();
+  // Exactly one player carries the marker, however many times it is rolled.
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+});
+
+test('keeps every action on one row on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await startGame(page, /commander/i, 4);
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+
+  const rows = await page.evaluate(
+    () =>
+      new Set(
+        [...document.querySelectorAll('nav[aria-label="Game"] button')].map((button) =>
+          Math.round(button.getBoundingClientRect().top)
+        )
+      ).size
+  );
+
+  expect(rows).toBe(1);
+});
+
+test('rematches without walking back through setup', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  await zone(page, 'Player 2', 'lose').click();
+  await expect(page.getByLabel('Player 2: 39 life')).toBeVisible({ timeout: COMMITTED });
+
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+
+  // Straight back into a game, same four players, fresh totals.
+  await expect(page.getByLabel('Player 2: 40 life')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Player 4' })).toBeVisible();
+  // Never passed back through setup.
+  await expect(page.getByRole('button', { name: /begin at/i })).toHaveCount(0);
 });
 
 test('starts a fresh game only after confirming', async ({ page }) => {

@@ -3,14 +3,18 @@ import { createGameSession } from '$application/gameSession';
 import type { GameSession } from '$application/gameSession';
 import type { EventLog } from '$application/ports/eventLog';
 import type { IdSource } from '$application/ports/idSource';
+import type { Rng } from '$application/ports/rng';
 import { applyLifeDelta } from '$application/usecases/applyLifeDelta';
 import { changeCounter } from '$application/usecases/changeCounter';
+import { chooseFirstPlayer } from '$application/usecases/chooseFirstPlayer';
+import { rematch } from '$application/usecases/rematch';
 import { setElimination } from '$application/usecases/setElimination';
 import { startGame } from '$application/usecases/startGame';
 import type { SeatRequest } from '$application/usecases/startGame';
 import { undoLast } from '$application/usecases/undoLast';
 import { randomIdSource } from '$adapters/platform/randomIdSource';
 import { systemClock } from '$adapters/platform/systemClock';
+import { systemRng } from '$adapters/platform/systemRng';
 import { createIndexedDbEventLog } from '$adapters/storage/indexedDbEventLog';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
 import type { GameEvent } from '$domain/events';
@@ -29,10 +33,11 @@ import type { GameState } from '$domain/state';
 export type GameStore = ReturnType<typeof createGameStore>;
 
 export function createGameStore(
-  overrides: { log?: EventLog; ids?: IdSource; session?: GameSession } = {}
+  overrides: { log?: EventLog; ids?: IdSource; rng?: Rng; session?: GameSession } = {}
 ) {
   const log = overrides.log ?? (browser ? createIndexedDbEventLog() : createMemoryEventLog());
   const ids = overrides.ids ?? randomIdSource;
+  const rng = overrides.rng ?? systemRng;
   const session =
     overrides.session ??
     createGameSession({
@@ -85,6 +90,18 @@ export function createGameStore(
 
     async setEliminated(target: PlayerId, eliminated: boolean) {
       await setElimination({ session })(target, eliminated);
+      sync();
+    },
+
+    async chooseFirstPlayer() {
+      const result = await chooseFirstPlayer({ session, rng })();
+      sync();
+      return result;
+    },
+
+    /** Same people, same format, fresh totals. */
+    async rematch() {
+      await rematch({ session })();
       sync();
     },
 

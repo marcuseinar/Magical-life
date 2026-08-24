@@ -11,7 +11,9 @@ The whole product for most users. If this is not excellent, nothing later matter
 - Tap zones (style 1) and drag-scrub (style 2), sharing the pending-delta machine
 - Formats: Standard 20, Commander 40, Two-Headed Giant 30, custom
 - Poison and the counter tray; monarch/initiative flags
-- Undo via retraction; game log; new game / rematch
+- Undo via retraction; rematch (same players and format, fresh totals)
+- Random first player, because somebody has to decide and nobody wants to
+- No scrolling, no zooming: the app is a fixed surface
 - Persistence, so a reload mid-game loses nothing
 - PWA: installable, offline, keep-awake
 - Dark and light themes
@@ -22,17 +24,30 @@ anything but life totals, and closing the app mid-game loses nothing.
 
 Shipped. Not yet built and deliberately deferred: a visible game log view (the
 log exists and drives undo, but has no screen yet), a first-run hint for the
-drag gesture, and editable player names.
+drag gesture, and editable player names — the last of these is why the name on a
+crowded plate can truncate to "Play…" at six players.
 
 ## M2 — Commander depth
 
 - Commander damage matrix, the crown chip, and the damage sheet
 - Attribution on the pending badge (one tap tags life loss as commander damage)
+- **Once the table is connected (M3), damage gets confirmed rather than
+  asserted**: when a player records commander damage, the named source sees a
+  prompt to confirm it was them. Cheap to build on the event log — a claim event
+  and a confirmation event — and it removes the one thing a shared counter
+  cannot otherwise settle: who actually dealt it. Until M3 there are no other
+  devices to ask, so this waits on the transport.
 - Elimination detection across all three lethal conditions
 - Post-game summary: elimination order, damage sources, game length
 
 ## M3 — The table (P2P)
 
+- **The join flow, as the host imagines it**: one player sets the game up on
+  their device exactly as they do today, then taps a button and gets a QR code
+  _and_ a short game code per seat. Each player scans or types their own, and
+  their phone becomes that panel. This is the shape the signalling design in
+  `docs/design/multiplayer.md` should serve, and it is what the QR handshake
+  there is for.
 - WebRTC transport adapter, log merge, convergence
 - QR handshake and short-code signalling (Cloudflare Worker + Durable Object)
 - Relay fallback for hostile networks

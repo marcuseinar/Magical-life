@@ -44,6 +44,7 @@ export function reduce(state: GameState | null, event: GameEvent): GameState | n
       config: event.config,
       players: event.players.map((seat) => seatPlayer(seat, event.config.startingLife)),
       flags: noFlagHolders(),
+      firstPlayer: null,
       ended: false,
       winner: null
     };
@@ -70,6 +71,11 @@ export function reduce(state: GameState | null, event: GameEvent): GameState | n
 
     case 'flag/moved':
       return { ...state, flags: { ...state.flags, [event.flag]: event.to } };
+
+    case 'turn/firstPlayer':
+      return state.players.some((player) => player.id === event.target)
+        ? { ...state, firstPlayer: event.target }
+        : state;
 
     case 'player/eliminated':
       return mapPlayer(state, event.target, (player) => ({ ...player, eliminated: true }));

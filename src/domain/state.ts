@@ -24,6 +24,7 @@ export type GameState = {
   readonly config: GameConfig;
   readonly players: readonly PlayerState[];
   readonly flags: Readonly<Record<FlagKind, PlayerId | null>>;
+  readonly firstPlayer: PlayerId | null;
   readonly ended: boolean;
   readonly winner: PlayerId | null;
 };

@@ -142,6 +142,34 @@ shared chip that shows who holds it; tapping moves it, which writes a
 `flag/moved` event. Exactly one holder is enforced by the reducer, so the UI
 cannot get it wrong.
 
+## The app is a surface, not a document
+
+Nothing scrolls and nothing zooms. A life counter lives face-up on a table
+getting knocked and leaned on, and a stray drag that scrolls the page out from
+under a tap is worse than useless.
+
+- `html`/`body` are fixed and `overflow: hidden`; `overscroll-behavior: none`
+  kills the rubber band.
+- `touch-action: none` on the body stops pinch-zoom and double-tap-zoom. The
+  counter sheet and the setup screen opt back in with `touch-action: pan-y`,
+  because they are the only things that can be taller than the screen.
+- Safari runs its own pinch gesture above `touch-action`, so `gesturestart` and
+  friends are cancelled directly.
+
+Deliberately **not** used: `user-scalable=no` / `maximum-scale=1` in the viewport
+meta. Safari on iOS has ignored both since iOS 10 — they would not have worked
+on the device this was reported from — and they fail the accessibility gate.
+
+## Counters live in a sheet, not in the card
+
+The counter editor is rendered at page level and opened over the board, not
+inside the panel. A panel is small and clips its own overflow: an editor drawn
+inside one spills off the card at four players and off the screen at six, taking
+the life total with it as the plate grows.
+
+The sheet rotates to match its player's panel, so it reads the right way up from
+that seat.
+
 ## Accessibility
 
 Not an afterthought, because it is also what makes UI testing possible.

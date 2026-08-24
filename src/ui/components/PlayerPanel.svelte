@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { CounterKind } from '$domain/rules';
   import { lethalReasons, threatLevel } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import { scrubPoints } from '$ui/interaction/pendingDelta';
@@ -15,14 +14,16 @@
     /** Panels facing an opponent across the table are upside down, so their
      *  left/right and up/down are the mirror of ours. */
     rotated = false,
+    isFirstPlayer = false,
     onLifeChange,
-    onCounterChange,
+    onOpenCounters,
     onElimination
   }: {
     player: PlayerState;
     rotated?: boolean;
+    isFirstPlayer?: boolean;
     onLifeChange: (delta: number) => void;
-    onCounterChange: (counter: CounterKind, delta: number) => void;
+    onOpenCounters: () => void;
     onElimination: (eliminated: boolean) => void;
   } = $props();
 
@@ -155,6 +156,12 @@
     <ManaPip colour={player.colour} />
     <h2 class="name">{player.name}</h2>
 
+    {#if isFirstPlayer}
+      <!-- Purely visual: the page-level status message announces the roll once,
+           rather than every panel repeating it. -->
+      <span class="first" aria-hidden="true">1st</span>
+    {/if}
+
     <div class="plate__end">
       {#if reasons.length > 0 || player.eliminated}
         <button
@@ -165,7 +172,7 @@
           {player.eliminated ? 'Back in' : 'Out'}
         </button>
       {/if}
-      <CounterTray playerName={player.name} counters={player.counters} onchange={onCounterChange} />
+      <CounterTray playerName={player.name} counters={player.counters} onopen={onOpenCounters} />
     </div>
   </footer>
 </article>
@@ -283,8 +290,10 @@
 
   .plate {
     display: flex;
+    flex: none;
     gap: var(--space-2);
     align-items: center;
+    min-width: 0;
     padding: var(--space-2) var(--space-3);
     border-top: 1px solid var(--frame-rule);
 
@@ -308,10 +317,13 @@
 
   .plate__end {
     display: flex;
-    flex-wrap: wrap;
     gap: var(--space-2);
     align-items: center;
     justify-content: flex-end;
+
+    /* Never wrap: a plate that grows squeezes the field and shoves the life
+       total out of the card, which is exactly what used to happen. */
+    min-width: 0;
   }
 
   .out {
@@ -322,6 +334,18 @@
     font-size: var(--size-chip);
     letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+
+  .first {
+    flex: none;
+    padding: 2px var(--space-2);
+    border: 1px solid var(--frame-rule-strong);
+    border-radius: var(--radius-pill);
+    color: var(--text-gold);
+    font-size: var(--size-chip);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .out[aria-pressed='true'] {

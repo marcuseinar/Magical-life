@@ -165,6 +165,38 @@ describe('elimination', () => {
   });
 });
 
+describe('who goes first', () => {
+  it('is nobody until it is decided', () => {
+    expect(fold(newGame())?.firstPlayer).toBeNull();
+  });
+
+  it('is recorded once chosen', () => {
+    const events = newGame([{ kind: 'turn/firstPlayer', target: BJORN }]);
+    expect(fold(events)?.firstPlayer).toBe(BJORN);
+  });
+
+  it('can be rolled again', () => {
+    const events = newGame([
+      { kind: 'turn/firstPlayer', target: BJORN },
+      { kind: 'turn/firstPlayer', target: ANNA }
+    ]);
+    expect(fold(events)?.firstPlayer).toBe(ANNA);
+  });
+
+  it('ignores a player who is not in the game', () => {
+    const events = newGame([{ kind: 'turn/firstPlayer', target: CARA }]);
+    expect(fold(events)?.firstPlayer).toBeNull();
+  });
+
+  it('is forgotten when a new game starts', () => {
+    const events = [
+      ...newGame([{ kind: 'turn/firstPlayer', target: BJORN }]),
+      ...makeLog('anna', [started(commanderConfig, [anna, bjorn])], 100)
+    ];
+    expect(fold(events)?.firstPlayer).toBeNull();
+  });
+});
+
 describe('game end', () => {
   it('is not ended by default', () => {
     const state = fold(newGame());

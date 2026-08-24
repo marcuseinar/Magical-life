@@ -1,17 +1,19 @@
 <script lang="ts">
-  import type { CounterKind } from '$domain/rules';
+  import type { PlayerId } from '$domain/ids';
   import type { PlayerState } from '$domain/state';
   import PlayerPanel from './PlayerPanel.svelte';
 
   let {
     players,
+    firstPlayer = null,
     onLifeChange,
-    onCounterChange,
+    onOpenCounters,
     onElimination
   }: {
     players: readonly PlayerState[];
+    firstPlayer?: PlayerId | null;
     onLifeChange: (player: PlayerState, delta: number) => void;
-    onCounterChange: (player: PlayerState, counter: CounterKind, delta: number) => void;
+    onOpenCounters: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
   } = $props();
 
@@ -39,8 +41,9 @@
       <PlayerPanel
         {player}
         rotated={isRotated(index)}
+        isFirstPlayer={player.id === firstPlayer}
         onLifeChange={(delta) => onLifeChange(player, delta)}
-        onCounterChange={(counter, delta) => onCounterChange(player, counter, delta)}
+        onOpenCounters={() => onOpenCounters(player, isRotated(index))}
         onElimination={(eliminated) => onElimination(player, eliminated)}
       />
     </div>

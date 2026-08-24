@@ -11,6 +11,15 @@ import { changeCounter } from './changeCounter';
 import { moveFlag } from './moveFlag';
 import { setElimination } from './setElimination';
 import { undoLast } from './undoLast';
+import { chooseFirstPlayer } from './chooseFirstPlayer';
+import { rematch } from './rematch';
+import type { Rng } from '../ports/rng';
+
+/** A dealt sequence of "random" numbers, so a roll is a fact and not a coin toss. */
+const fixedRng = (...values: number[]): Rng => {
+  let index = 0;
+  return { next: () => values[index++ % values.length]! };
+};
 
 const HOST = playerId('host');
 
@@ -215,6 +224,110 @@ describe('use cases', () => {
         ok: false,
         error: 'no-game'
       });
+    });
+  });
+
+  describe('chooseFirstPlayer', () => {
+    it('picks a player and records the decision', async () => {
+      const result = await chooseFirstPlayer({ session, rng: fixedRng(0) })();
+      expect(result).toEqual({ ok: true, value: seats[0] });
+      expect(session.state?.firstPlayer).toBe(seats[0]);
+    });
+
+    it('can pick any seat, not just the first', async () => {
+      await chooseFirstPlayer({ session, rng: fixedRng(0.99) })();
+      expect(session.state?.firstPlayer).toBe(seats[1]);
+    });
+
+    it('never falls off the end when the roll is exactly one', async () => {
+      await chooseFirstPlayer({ session, rng: fixedRng(1) })();
+      expect(session.state?.firstPlayer).toBe(seats[1]);
+    });
+
+    it('can be rolled again', async () => {
+      await chooseFirstPlayer({ session, rng: fixedRng(0) })();
+      await chooseFirstPlayer({ session, rng: fixedRng(0.99) })();
+      expect(session.state?.firstPlayer).toBe(seats[1]);
+    });
+
+    it('never chooses a player who is already out', async () => {
+      await setElimination({ session })(seats[0]!, true);
+      // A roll of zero would pick the first seat, but that seat is eliminated.
+      await chooseFirstPlayer({ session, rng: fixedRng(0) })();
+      expect(session.state?.firstPlayer).toBe(seats[1]);
+    });
+
+    it('refuses when everybody is out', async () => {
+      await setElimination({ session })(seats[0]!, true);
+      await setElimination({ session })(seats[1]!, true);
+      expect(await chooseFirstPlayer({ session, rng: fixedRng(0) })()).toEqual({
+        ok: false,
+        error: 'no-players'
+      });
+    });
+
+    it('refuses when no game has started', async () => {
+      const empty = createGameSession({
+        clock: fakeClock(),
+        log: createMemoryEventLog(),
+        authorId: HOST
+      });
+      expect(await chooseFirstPlayer({ session: empty, rng: fixedRng(0) })()).toEqual({
+        ok: false,
+        error: 'no-game'
+      });
+    });
+  });
+
+  describe('rematch', () => {
+    it('resets life without asking for the setup again', async () => {
+      await applyLifeDelta({ session })(seats[0]!, -25);
+      await rematch({ session })();
+      expect(session.state?.players.map((p) => p.life)).toEqual([40, 40]);
+    });
+
+    it('keeps the same people, names and colours', async () => {
+      const before = session.state!.players.map((p) => ({ ...p }));
+      await rematch({ session })();
+      const after = session.state!.players;
+
+      expect(after.map((p) => p.id)).toEqual(before.map((p) => p.id));
+      expect(after.map((p) => p.name)).toEqual(before.map((p) => p.name));
+      expect(after.map((p) => p.colour)).toEqual(before.map((p) => p.colour));
+    });
+
+    it('keeps the format', async () => {
+      await rematch({ session })();
+      expect(session.state?.config.format).toBe('commander');
+      expect(session.state?.config.startingLife).toBe(40);
+    });
+
+    it('clears counters, eliminations and who went first', async () => {
+      await changeCounter({ session })(seats[0]!, 'poison', 4);
+      await setElimination({ session })(seats[1]!, true);
+      await chooseFirstPlayer({ session, rng: fixedRng(0) })();
+
+      await rematch({ session })();
+
+      expect(session.state?.players[0]?.counters.poison).toBe(0);
+      expect(session.state?.players[1]?.eliminated).toBe(false);
+      expect(session.state?.firstPlayer).toBeNull();
+    });
+
+    it('appends rather than erasing — the finished game stays in the log', async () => {
+      await applyLifeDelta({ session })(seats[0]!, -25);
+      const before = session.events.length;
+      await rematch({ session })();
+      expect(session.events.length).toBe(before + 1);
+    });
+
+    it('refuses when no game has started', async () => {
+      const empty = createGameSession({
+        clock: fakeClock(),
+        log: createMemoryEventLog(),
+        authorId: HOST
+      });
+      expect(await rematch({ session: empty })()).toEqual({ ok: false, error: 'no-game' });
     });
   });
 

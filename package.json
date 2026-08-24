@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:base-path": "playwright test --config=playwright.base-path.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

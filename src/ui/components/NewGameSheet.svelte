@@ -75,6 +75,10 @@
     max-width: 32rem;
     min-height: 100%;
     margin-inline: auto;
+    overflow-y: auto;
+
+    /* Opts back in to vertical scrolling, which the app disables globally. */
+    touch-action: pan-y;
     padding: var(--space-6) var(--space-4);
     text-align: center;
   }

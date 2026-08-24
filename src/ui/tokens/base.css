@@ -11,9 +11,18 @@ html,
 body {
   height: 100%;
   margin: 0;
+  overflow: hidden;
+
+  /* The app is a fixed surface, not a document. Nothing scrolls, nothing
+     rubber-bands, and a stray drag never drags the page out from under a tap. */
+  overscroll-behavior: none;
 }
 
 body {
+  /* Pinning the body is what actually stops iOS rubber-banding the page. */
+  position: fixed;
+  inset: 0;
+
   /* A dim table, lit from above. */
   background:
     radial-gradient(ellipse 120% 70% at 50% -10%, var(--surface-page-glow), transparent 70%),
@@ -23,12 +32,19 @@ body {
   font-size: var(--size-body);
   line-height: 1.5;
 
-  /* A life counter is not a document; nothing here should rubber-band or select. */
-  overscroll-behavior: none;
   /* stylelint-disable-next-line property-no-vendor-prefix -- iOS Safari still needs it */
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+
+  /*
+   * Kills pinch-zoom and double-tap-zoom over the whole app. This is the part
+   * that actually works: `user-scalable=no` in the viewport meta has been
+   * ignored by Safari on iOS since iOS 10, and it fails the accessibility gate,
+   * so it is deliberately not used. Anything that genuinely needs to scroll
+   * opts back in with `touch-action: pan-y`.
+   */
+  touch-action: none;
 }
 
 button {

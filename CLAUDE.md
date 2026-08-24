@@ -44,6 +44,9 @@ Playwright · Capacitor · Cloudflare Workers for the later backend.
    auth code path, and must never load auth code into the bundle.
 9. **Respect the performance budget** in `docs/architecture.md`. "Fast to start"
    is a requirement, not a preference.
+10. **Nothing scrolls and nothing zooms.** The app is a fixed surface. Anything
+    that can exceed the screen opts back in locally with `touch-action: pan-y`
+    and its own `overflow`; never by relaxing the rule globally.
 
 ## Commands
 
