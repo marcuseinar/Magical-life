@@ -243,38 +243,55 @@
                for whose commander. Tapping works too. The pip is the player's
                own colour, standing in for the portrait that will replace it. -->
           <div class="blame">
-            <div
-              bind:this={blameRow}
-              class="blame__stage"
-              role="group"
-              aria-label="Whose commander dealt this to {player.name}?"
-            >
-              <div class="blame__reel" style="--index: {blamedIndex}">
-                {#each blame as candidate (candidate ?? 'nobody')}
-                  <button
-                    class="blame__chip"
-                    data-selected={attributedTo === candidate}
-                    aria-pressed={attributedTo === candidate}
-                    aria-label={candidate === null
-                      ? 'Not commander damage'
-                      : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
-                    data-colour={seats.find((s) => s.id === candidate)?.colour}
-                    onclick={() => (attributedTo = candidate)}
-                  >
-                    <span class="blame__badge">
-                      <!-- The badge you are aiming at carries the number. It is
-                         the one place on the card that is guaranteed to be both
-                         where you are looking and above your thumb. -->
-                      {#if attributedTo === candidate}
-                        <span class="blame__amount" aria-hidden="true">{controller.pending}</span>
-                      {:else if candidate === null}
-                        <span class="blame__none" aria-hidden="true">–</span>
-                      {:else}
-                        <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={40} />
-                      {/if}
-                    </span>
-                  </button>
-                {/each}
+            <div class="blame__stage">
+              <!-- The frame the aiming measures against and the group a screen
+                   reader announces are deliberately the same element: one place
+                   that means "the row", so the two cannot describe different
+                   things. -->
+              <div
+                bind:this={blameRow}
+                class="blame__track"
+                role="group"
+                aria-label="Whose commander dealt this to {player.name}?"
+              >
+                <div class="blame__reel" style="--index: {blamedIndex}">
+                  {#each blame as candidate (candidate ?? 'nobody')}
+                    <button
+                      class="blame__chip"
+                      data-selected={attributedTo === candidate}
+                      aria-pressed={attributedTo === candidate}
+                      aria-label={candidate === null
+                        ? 'Not commander damage'
+                        : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
+                      data-colour={seats.find((s) => s.id === candidate)?.colour}
+                      onclick={() => (attributedTo = candidate)}
+                    >
+                      <span class="blame__badge">
+                        {#if candidate === null}
+                          <span class="blame__none" aria-hidden="true">–</span>
+                        {:else}
+                          <ManaPip
+                            colour={seats.find((s) => s.id === candidate)!.colour}
+                            size={40}
+                          />
+                        {/if}
+                      </span>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <!-- The pending change keeps the size, the place and the draining
+                   ring it has everywhere else in the app; only its rim takes the
+                   colour of whoever the reel has brought to the middle. It is
+                   the same component, so the two cannot drift apart. -->
+              <div class="blame__delta" data-colour={blamed?.colour}>
+                <DeltaBadge
+                  value={controller.pending}
+                  progress={controller.progress}
+                  label={player.name}
+                  oncancel={() => controller.cancel()}
+                />
               </div>
             </div>
 
@@ -569,9 +586,35 @@
    * slide out from under you and hand your finger to its neighbour. */
   .blame__stage {
     position: relative;
-    height: calc(var(--blame-step) + var(--space-3));
+    display: grid;
+    place-items: center;
     width: 100%;
+  }
+
+  /* The clipping lives here and not on the stage, so the reel is cut off at the
+     card edges while the badge standing in the middle is free to overhang. On
+     the stage it clipped the top off the badge. */
+  .blame__track {
+    width: 100%;
+    height: var(--blame-step);
     overflow: hidden;
+  }
+
+  .blame__delta {
+    /* Only the rim is recoloured: the number, its size and the draining ring
+       are the badge's own, exactly as for any other life change. */
+    --badge-rim: var(--player-glow, var(--frame-rule));
+    --badge-rim-width: 2px;
+
+    /* Out of the grid flow so the reel keeps the stage's height, and centred on
+       the same point the reel brings the blamed badge to. */
+    position: absolute;
+    pointer-events: auto;
+  }
+
+  /* The pip the badge is standing on would otherwise peer out from behind it. */
+  .blame__chip[data-selected='true'] .blame__badge {
+    opacity: 0;
   }
 
   .blame__reel {
@@ -627,48 +670,6 @@
       background-color var(--duration-fast) var(--ease-out),
       border-color var(--duration-fast) var(--ease-out),
       transform var(--duration-fast) var(--ease-out);
-  }
-
-  /* The aimed badge grows and holds the pending number.
-   *
-   * `transform` and never the grid: the column widths are the hit zones the
-   * absolute aiming reads, so resizing them would move the targets under the
-   * finger that is choosing between them. Scaling paints outside the column
-   * without changing where anything *is* — the badge overlaps its neighbours
-   * the way a pressed key on a phone keyboard pops over the ones beside it. */
-  .blame__chip[data-selected='true'] .blame__badge {
-    z-index: 1;
-
-    /* The pip gives way to the number, so identity moves to the ring. It is the
-       ring and not the fill because filling with the player colour put cream
-       digits on white and on colourless, where they could not be read; a bright
-       ring on the sunken surface stays legible whichever of the seven it is. */
-    border-width: 2px;
-    border-color: var(--player-glow, var(--frame-rule-strong));
-    box-shadow: 0 0 0 1px var(--frame-shadow);
-    transform: scale(1.5);
-  }
-
-  .blame__chip[data-selected='true'] {
-    /* Above the siblings it now overlaps. */
-    z-index: 1;
-  }
-
-  /* "Nobody" has no colour of its own, and `--player-glow` is inherited from
-     the panel — so without this the badge for *no* commander damage was ringed
-     in the colour of the player being damaged, which reads as blaming them. */
-  .blame__chip:not([data-colour])[data-selected='true'] .blame__badge {
-    border-color: var(--frame-rule-strong);
-  }
-
-  .blame__amount {
-    color: var(--text-primary);
-    font-family: var(--font-numeric);
-    font-size: 0.82rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
-    line-height: 1;
   }
 
   .blame__none {

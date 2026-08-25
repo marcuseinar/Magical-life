@@ -52,8 +52,11 @@
     aspect-ratio: 1;
     width: clamp(3.25rem, 17cqmin, 7rem);
     background: radial-gradient(circle at 50% 35%, var(--surface-raised), var(--surface-sunken));
+    /* Callers that want the rim to say something — whose commander is being
+       blamed, say — set these; everybody else gets the ordinary hairline. A
+       custom property crosses the component boundary where a selector cannot. */
     box-shadow:
-      inset 0 0 0 1px var(--frame-rule),
+      inset 0 0 0 var(--badge-rim-width, 1px) var(--badge-rim, var(--frame-rule)),
       var(--shadow-float);
     animation: land var(--duration-base) var(--ease-out);
   }

@@ -112,8 +112,10 @@ test('brings the blamed badge to the middle and queues the rest around it', asyn
   await page.mouse.up();
 });
 
-/* The number stays in the middle and the candidates travel through it. */
-test('keeps the pending damage in the badge at the middle', async ({ page }) => {
+/* The number keeps the size, the place and the draining ring it has for every
+   other life change — it is the same component. Only its rim is recoloured, by
+   whoever the reel has brought to the middle. */
+test('keeps the ordinary delta badge, recoloured by whoever is blamed', async ({ page }) => {
   await startGame(page, /commander/i, 6);
 
   const panel = page.locator('article[data-rotated="false"]').first();
@@ -122,22 +124,78 @@ test('keeps the pending damage in the badge at the middle', async ({ page }) => 
   const box = (await loseZone.boundingBox())!;
   const y = box.y + box.height / 2;
 
+  /* What the badge measures for an ordinary life change, with no row open —
+     after its entrance animation, which scales it up from 0.7 and will report a
+     smaller box if you measure through it. */
+  const settled = () =>
+    panel
+      .locator('.badge')
+      .evaluate((badge) =>
+        Promise.all(badge.getAnimations().map((a) => a.finished.catch(() => undefined)))
+      );
+
+  await loseZone.click();
+  await settled();
+  const plain = (await panel.locator('.badge').boundingBox())!;
+
   await page.mouse.move(box.x + box.width / 2, y);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
 
   const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
   const stage = (await group.boundingBox())!;
-  const aimAt = (index: number, steps = 5) =>
-    page.mouse.move(stage.x + (stage.width / 6) * (index + 0.5), y + 100, { steps });
+  await settled();
+  const attributing = (await panel.locator('.badge').boundingBox())!;
 
-  // Before aiming at anybody, the number rides on "not commander damage".
-  await expect(group.getByRole('button').nth(0).locator('.blame__amount')).toHaveText(/^-\d+$/);
+  // Same size, and still the one badge.
+  expect(Math.abs(attributing.width - plain.width)).toBeLessThan(1);
+  expect(Math.abs(attributing.height - plain.height)).toBeLessThan(1);
+  await expect(panel.locator('.badge')).toHaveCount(1);
 
-  await aimAt(3);
-  await expect(group.getByRole('button').nth(3).locator('.blame__amount')).toHaveText(/^-\d+$/);
-  await expect(group.locator('.blame__amount')).toHaveCount(1);
+  // And it is centred on the stage, where the reel delivers the blamed badge.
+  expect(
+    Math.abs(attributing.x + attributing.width / 2 - (stage.x + stage.width / 2))
+  ).toBeLessThan(4);
 
+  await page.mouse.up();
+});
+
+/* It overhangs the reel, so nothing above it may clip: the top of the badge was
+   being cut off by the element that clips the reel at the card edges. */
+test('does not clip the delta badge', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const box = (await loseZone.boundingBox())!;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
+
+  /* The row drops in from above the card, so during that animation the badge is
+     outside it on purpose. Measure once it has landed — WebKit was still mid
+     drop-in where Chromium had finished, which is the whole reason this waits
+     rather than pauses. */
+  await panel.evaluate((article) =>
+    Promise.all(
+      article.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))
+    )
+  );
+
+  const clipped = await panel.locator('.badge').evaluate((badge) => {
+    const rect = badge.getBoundingClientRect();
+    for (let node = badge.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.overflow === 'visible') continue;
+      const bounds = node.getBoundingClientRect();
+      if (rect.top < bounds.top - 0.5 || rect.bottom > bounds.bottom + 0.5) return true;
+    }
+    return false;
+  });
+
+  expect(clipped).toBe(false);
   await page.mouse.up();
 });
 
@@ -176,18 +234,20 @@ test('the stage the aiming reads never moves as the reel slides', async ({ page 
   await page.mouse.up();
 });
 
-/* It has to be bigger than its neighbours, or the number has nowhere to go. */
-test('draws the aimed badge larger than the rest', async ({ page }) => {
+/* The pip the badge stands on would otherwise peer out from behind it. */
+test('hides the pip the badge is standing on', async ({ page }) => {
   await startGame(page, /commander/i, 6);
   await zone(page, 'Player 1', 'lose').click();
 
-  const painted = await page
-    .getByRole('group', { name: /whose commander/i })
-    .locator('.blame__badge')
-    .evaluateAll((badges) => badges.map((badge) => badge.getBoundingClientRect().width));
+  const group = page.getByRole('group', { name: /whose commander/i });
+  const shown = await group
+    .getByRole('button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => getComputedStyle(button.querySelector('.blame__badge')!).opacity)
+    );
 
-  const [aimed, ...rest] = painted;
-  for (const other of rest) expect(aimed!).toBeGreaterThan(other * 1.2);
+  expect(shown[0]).toBe('0');
+  for (const opacity of shown.slice(1)) expect(opacity).toBe('1');
 });
 
 /* Round, because a square badge eats the width its neighbours need. */
