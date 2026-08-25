@@ -19,7 +19,7 @@
     spotlit = false,
     dimmed = false,
     celebrating = false,
-    opponents = [],
+    seats = [],
     tracksCommanderDamage = false,
     onLifeChange,
     onOpenCounters,
@@ -35,8 +35,9 @@
     celebrating?: boolean;
     /** A spin is running and the light is on somebody else. */
     dimmed?: boolean;
-    /** Everyone whose commander could have dealt the damage, this player included. */
-    opponents?: readonly PlayerState[];
+    /** Every seat in the game, in order, this player included — a stolen
+     *  commander can hit its own owner. */
+    seats?: readonly PlayerState[];
     tracksCommanderDamage?: boolean;
     onLifeChange: (delta: number, from: PlayerId | null) => void;
     onOpenCommander?: () => void;
@@ -46,6 +47,9 @@
 
   /** Far enough to be a deliberate drag rather than the wobble of a tap. */
   const SCRUB_THRESHOLD_PX = 12;
+
+  /** Sideways travel per step along the list of who dealt it. */
+  const BLAME_STEP_PX = 44;
   const REPEAT_DELAY_MS = 500;
   const REPEAT_MS = 250;
   const REPEAT_FAST_MS = 83;
@@ -66,13 +70,38 @@
 
   const commanderTaken = $derived(highestCommanderDamage(player));
 
+  /**
+   * Who could have dealt it: nobody in particular, then every seat in order.
+   * `null` first because most life loss is not commander damage, and every seat
+   * rather than only opponents because a stolen commander still deals its
+   * owner's damage — including to its owner.
+   */
+  const blame = $derived<readonly (PlayerId | null)[]>([null, ...seats.map((seat) => seat.id)]);
+
+  const blamed = $derived(seats.find((seat) => seat.id === attributedTo) ?? null);
+
+  const seatNumber = (id: PlayerId) => seats.findIndex((seat) => seat.id === id) + 1;
+
+  let blameRow = $state<HTMLElement | null>(null);
+
+  /* The strip is one scrolling row, so the chip the drag has landed on has to be
+     brought into view or the selection happens off screen. */
+  $effect(() => {
+    void attributedTo;
+    // Optional call: this is presentation polish, and it must not throw where
+    // the API is missing — jsdom has no `scrollIntoView`.
+    const selected = blameRow?.querySelector('[data-selected="true"]');
+    selected?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+  });
+
   /* Only worth asking on a loss, in a format where it counts, with someone to blame. */
   const askingWhoDealtIt = $derived(
-    tracksCommanderDamage && controller.pending < 0 && opponents.length > 0
+    tracksCommanderDamage && controller.pending < 0 && seats.length > 0
   );
 
   let scrubbing = $state(false);
   let origin = 0;
+  let originX = 0;
   let scrubBase = 0;
   let repeat: ReturnType<typeof setTimeout> | undefined;
 
@@ -101,6 +130,7 @@
     // Respond on touch-down, not on release: a life counter that waits feels broken.
     controller.nudge(sign);
     origin = event.clientY;
+    originX = event.clientX;
     scrubBase = controller.pending;
     scrubbing = false;
     startRepeating(sign);
@@ -109,6 +139,19 @@
   function drag(event: PointerEvent) {
     const target = event.currentTarget as HTMLElement;
     if (!target.hasPointerCapture(event.pointerId)) return;
+
+    /*
+     * Two axes, one gesture: down sets how much was lost, sideways sets whose
+     * commander did it. Sideways is handled first and independently of the
+     * vertical threshold, so blame can be picked during a drag that has not yet
+     * become a scrub — and both are measured from the press point, so dragging
+     * back always undoes exactly.
+     */
+    if (askingWhoDealtIt) {
+      const sideways = (event.clientX - originX) * (rotated ? -1 : 1);
+      const step = Math.round(sideways / BLAME_STEP_PX);
+      attributedTo = blame[Math.min(blame.length - 1, Math.max(0, step))] ?? null;
+    }
 
     const travelled = (origin - event.clientY) * (rotated ? -1 : 1);
     if (!scrubbing && Math.abs(travelled) < SCRUB_THRESHOLD_PX) return;
@@ -185,28 +228,38 @@
             label={player.name}
             oncancel={() => controller.cancel()}
           />
+        </div>
+      {/if}
 
-          {#if askingWhoDealtIt}
-            <!-- One tap turns this life loss into commander damage as well, so
-                 the two numbers are written together and cannot drift apart. -->
-            <div
-              class="blame"
-              role="group"
-              aria-label="Whose commander dealt this to {player.name}?"
-            >
-              {#each opponents as opponent (opponent.id)}
-                <button
-                  class="blame__pip"
-                  data-colour={opponent.colour}
-                  aria-pressed={attributedTo === opponent.id}
-                  aria-label="{opponent.name}'s commander"
-                  onclick={() => (attributedTo = attributedTo === opponent.id ? null : opponent.id)}
-                >
-                  <ManaPip colour={opponent.colour} size={20} />
-                </button>
-              {/each}
-            </div>
-          {/if}
+      {#if askingWhoDealtIt}
+        <!-- One gesture writes both numbers: drag down for how much, sideways
+                 for whose commander. Tapping works too. Seat numbers rather than
+                 mana symbols, which already mean something else in Magic. -->
+        <div class="blame">
+          <div
+            bind:this={blameRow}
+            class="blame__row"
+            role="group"
+            aria-label="Whose commander dealt this to {player.name}?"
+          >
+            {#each blame as candidate (candidate ?? 'nobody')}
+              <button
+                class="blame__chip"
+                data-selected={attributedTo === candidate}
+                aria-pressed={attributedTo === candidate}
+                aria-label={candidate === null
+                  ? 'Not commander damage'
+                  : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
+                onclick={() => (attributedTo = candidate)}
+              >
+                {candidate === null ? '–' : seatNumber(candidate)}
+              </button>
+            {/each}
+          </div>
+
+          <p class="blame__caption" aria-live="polite">
+            {blamed === null ? 'Not commander damage' : `${blamed.name}'s commander`}
+          </p>
         </div>
       {/if}
     </div>
@@ -406,29 +459,80 @@
     pointer-events: none;
   }
 
+  /* Below the total rather than above it: the badge already owns the space above,
+     and at six players a strip that grows downward from there covers the number
+     it is describing. */
   .blame {
-    display: flex;
+    position: absolute;
+    bottom: var(--space-2);
+    left: 0;
+    display: grid;
     gap: var(--space-1);
-    justify-content: center;
-    margin-top: var(--space-2);
+    justify-items: center;
+    width: 100%;
+    padding-inline: var(--space-2);
+    pointer-events: auto;
   }
 
-  .blame__pip {
+  .blame__row {
+    display: flex;
+    gap: var(--space-1);
+    justify-content: safe center;
+    max-width: 100%;
+
+    /* One row, always. Wrapping put three rows of chips over the life total at
+       six players; scrolling keeps the height fixed and the selected chip is
+       brought into view as the drag moves through the list. */
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    /* The sideways drag on the panel is what moves the selection; the strip must
+       not eat that gesture by scrolling itself. */
+    touch-action: none;
+  }
+
+  .blame__row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .blame__chip {
     display: grid;
+    flex: none;
     place-items: center;
-    padding: 3px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-pill);
-    opacity: 0.55;
+
+    /* A proper touch target. The first version was a 20px pip at 55% opacity,
+       which read as disabled rather than unselected. */
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    font-family: var(--font-numeric);
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
     transition:
-      opacity var(--duration-fast) var(--ease-out),
+      background-color var(--duration-fast) var(--ease-out),
       border-color var(--duration-fast) var(--ease-out);
   }
 
-  .blame__pip[aria-pressed='true'] {
+  .blame__chip[data-selected='true'] {
     border-color: var(--frame-rule-strong);
-    background: var(--surface-sunken);
-    opacity: 1;
+    background: var(--accent);
+    color: var(--text-on-accent);
+  }
+
+  .blame__caption {
+    margin: 0;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--size-chip);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .crown {
@@ -460,7 +564,7 @@
 
     /* Above the total, in the empty upper third — never over the number it
        describes, whatever size that number happens to be. */
-    top: 10%;
+    top: 8%;
     left: 50%;
     transform: translateX(-50%);
     pointer-events: auto;

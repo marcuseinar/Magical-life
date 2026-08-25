@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { COMMITTED, startGame, zone } from './support';
+import { COMMITTED, expectLife, readLife, startGame, zone } from './support';
 
 const crown = (page: Page, name: string) =>
   page.getByRole('button', { name: `Commander damage to ${name}` });
@@ -18,6 +18,86 @@ test('tags life loss as commander damage in one gesture', async ({ page }) => {
   // One gesture, both numbers, and they cannot disagree.
   await expect(page.getByLabel('Player 1: 37 life')).toBeVisible({ timeout: COMMITTED });
   await expect(crown(page, 'Player 1')).toHaveText(/3/);
+});
+
+test('picks the commander from the same drag that sets the damage', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  // Player 3 sits in the near row, so screen-down is down from their seat too.
+  const zone = page.getByRole('button', { name: 'Player 3, lose one life' });
+  const box = (await zone.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  // Down for how much, sideways for whose commander — one gesture.
+  await page.mouse.move(x, y + 120, { steps: 8 });
+  // Two steps sideways along [nobody, Player 1, Player 2, …].
+  await page.mouse.move(x + 88, y + 120, { steps: 8 });
+  await expect(page.getByText(/'s commander$/)).toBeVisible();
+  await page.mouse.up();
+
+  // Released deliberately, so it commits at once — but the DOM catches up a
+  // tick later.
+  await expectLife(page, 'Player 3').toBeLessThan(35);
+  const life = await readLife(page, 'Player 3');
+  // Whatever life it cost, the commander was charged exactly the same.
+  await expect(crown(page, 'Player 3')).toHaveText(new RegExp(`\\b${40 - life}\\b`));
+});
+
+test('offers a target big enough to hit', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await zone(page, 'Player 1', 'lose').click();
+
+  const group = page.getByRole('group', { name: /whose commander/i });
+  const sizes = await group.getByRole('button').evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const box = button.getBoundingClientRect();
+      return Math.min(box.width, box.height);
+    })
+  );
+  expect(sizes.length).toBeGreaterThan(1);
+  for (const size of sizes) expect(size).toBeGreaterThanOrEqual(44);
+});
+
+for (const count of [4, 6]) {
+  test(`the strip stays clear of the total and the plate at ${count} players`, async ({ page }) => {
+    await startGame(page, /commander/i, count);
+    await zone(page, `Player ${count - 1}`, 'lose').click();
+
+    const geometry = await page.evaluate((n) => {
+      const panel = [...document.querySelectorAll('article')][n - 2]!;
+      const card = panel.getBoundingClientRect();
+      const blame = panel.querySelector('.blame')!.getBoundingClientRect();
+      const total = panel.querySelector('p.total')!.getBoundingClientRect();
+      const plate = panel.querySelector('footer')!.getBoundingClientRect();
+      const overlaps = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      return {
+        insideCard: blame.top >= card.top && blame.bottom <= card.bottom + 1,
+        clearsTotal: !overlaps(blame, total),
+        clearsPlate: !overlaps(blame, plate)
+      };
+    }, count);
+
+    // Wrapping the chips put three rows over the life total at six players, and
+    // the caption over the name plate. One scrolling row keeps the height fixed.
+    expect(geometry).toEqual({ insideCard: true, clearsTotal: true, clearsPlate: true });
+  });
+}
+
+test('can blame the player themselves, for a commander that was stolen', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  await zone(page, 'Player 1', 'lose').click();
+  await page
+    .getByRole('group', { name: /whose commander dealt this to player 1/i })
+    .getByRole('button', { name: /^player 1's commander$/i })
+    .click();
+
+  await expect(page.getByLabel('Player 1: 39 life')).toBeVisible({ timeout: COMMITTED });
+  await expect(crown(page, 'Player 1')).toHaveText(/\b1\b/);
 });
 
 test('leaves life loss untagged when nobody is blamed', async ({ page }) => {

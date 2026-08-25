@@ -28,6 +28,10 @@
   } = $props();
 
   /* One and two players read best stacked; three and up want a grid. */
+  /* Every seat, in order: the panel needs them all, since a stolen commander
+     can hit its own owner. */
+  const seats = $derived(players);
+
   const columns = $derived(players.length <= 2 ? 1 : 2);
   const rows = $derived(Math.ceil(players.length / columns));
 
@@ -56,7 +60,7 @@
         celebrating={player.id === celebrating}
         dimmed={spotlight !== null && index !== spotlight}
         {tracksCommanderDamage}
-        opponents={players.filter((other) => other.id !== player.id)}
+        {seats}
         onLifeChange={(delta, from) => onLifeChange(player, delta, from)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}
         onOpenCommander={() => onOpenCommander(player, isRotated(index))}

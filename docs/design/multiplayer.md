@@ -131,6 +131,34 @@ One row per opposing commander, sorted by damage descending so the threat you
 care about is at the top. Rows appear only for opponents in the current game, so
 the sheet is exactly as long as it needs to be.
 
+### Picking who dealt it
+
+Two axes of one gesture. Dragging **down** sets how much life was lost; dragging
+**sideways** moves along the list of who dealt it, one seat per 44 px, starting
+from "nobody in particular". Both are measured from the press point, so dragging
+back always undoes exactly — the same rule the life scrub follows. Release
+commits both numbers together.
+
+Tapping works too: the strip is a row of real buttons.
+
+Three things the first attempt got wrong, all reported from a real game:
+
+- **Too small to hit.** They were 20 px mana pips. Now 44 px chips.
+- **They read as disabled.** Unselected sat at 55% opacity, which says "broken"
+  rather than "not chosen". Now full contrast, with the selection filled.
+- **Mana symbols were the wrong signal.** A player's identity colour looked like
+  it meant the _colour of the damage_, which is a thing Magic already has an
+  opinion about. Seat numbers instead — unambiguous, and they match the seating.
+
+The strip is one horizontally scrolling row, never wrapping. Wrapping put three
+rows of chips over the life total at six players and the caption over the name
+plate; a fixed-height row cannot. The selected chip is scrolled into view as the
+drag moves through the list, and an end-to-end test asserts the strip clears both
+the total and the plate at four and six players.
+
+Every seat appears, not only opponents, because a stolen commander still deals
+its owner's damage — including to its owner.
+
 ### The flow that actually happens at a table
 
 The important insight: **commander damage is nearly always life loss too.** So

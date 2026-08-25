@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import PlayerPanel from './PlayerPanel.svelte';
 import { COMMIT_WINDOW_MS } from '$ui/interaction/pendingDelta';
 import { playerId } from '$domain/ids';
@@ -29,8 +29,19 @@ const mount = (over: Partial<PlayerState> = {}) => {
 const decrease = () => screen.getByRole('button', { name: /lose one life/i });
 const increase = () => screen.getByRole('button', { name: /gain one life/i });
 
-const touch = (element: Element, event: 'pointerDown' | 'pointerMove' | 'pointerUp', y = 0) =>
-  fireEvent[event](element, { pointerId: 1, pointerType: 'touch', clientY: y, button: 0 });
+const touch = (
+  element: Element,
+  event: 'pointerDown' | 'pointerMove' | 'pointerUp',
+  y = 0,
+  x = 0
+) =>
+  fireEvent[event](element, {
+    pointerId: 1,
+    pointerType: 'touch',
+    clientY: y,
+    clientX: x,
+    button: 0
+  });
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -267,7 +278,7 @@ describe('player panel', () => {
         props: {
           player: player(over),
           tracksCommanderDamage: true,
-          opponents: [bjorn()],
+          seats: [player(), bjorn()],
           onLifeChange,
           onOpenCounters: vi.fn(),
           onOpenCommander,
@@ -313,12 +324,71 @@ describe('player panel', () => {
       await touch(decrease(), 'pointerDown');
       await touch(decrease(), 'pointerUp');
 
-      const blame = screen.getByRole('button', { name: /björn's commander/i });
-      await fireEvent.click(blame);
-      await fireEvent.click(blame);
+      await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
+      await fireEvent.click(screen.getByRole('button', { name: /not commander damage/i }));
 
       await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
       expect(onLifeChange).toHaveBeenCalledWith(-1, null);
+    });
+
+    it('offers seats by number rather than by mana symbol', async () => {
+      mountCommander();
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+
+      const group = screen.getByRole('group', { name: /whose commander/i });
+      // Nobody, then seat 1 and seat 2 — mana colours mean something else in
+      // Magic, so they are the wrong signal for "which player".
+      expect(
+        within(group)
+          .getAllByRole('button')
+          .map((b) => b.textContent?.trim())
+      ).toEqual(['–', '1', '2']);
+    });
+
+    it('says out loud whose commander is currently blamed', async () => {
+      mountCommander();
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+      expect(screen.getByText('Not commander damage')).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
+      expect(screen.getByText("Björn's commander")).toBeInTheDocument();
+    });
+
+    it('offers the player themselves, for a commander that was stolen', async () => {
+      mountCommander();
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+
+      expect(screen.getByRole('button', { name: /anna's commander/i })).toBeInTheDocument();
+    });
+
+    it('picks who dealt it from the same drag that sets how much', async () => {
+      const { onLifeChange } = mountCommander();
+      const zone = decrease();
+
+      await touch(zone, 'pointerDown', 300, 100);
+      // Down the screen for the damage, sideways for the commander: one gesture,
+      // both numbers.
+      await touch(zone, 'pointerMove', 400, 190);
+      await touch(zone, 'pointerUp', 400, 190);
+
+      const [delta, from] = onLifeChange.mock.calls[0]!;
+      expect(delta).toBeLessThan(-5);
+      expect(from).toBe('bjorn');
+    });
+
+    it('is reversible — dragging back drops the blame again', async () => {
+      const { onLifeChange } = mountCommander();
+      const zone = decrease();
+
+      await touch(zone, 'pointerDown', 300, 100);
+      await touch(zone, 'pointerMove', 400, 190);
+      await touch(zone, 'pointerMove', 400, 100);
+      await touch(zone, 'pointerUp', 400, 100);
+
+      expect(onLifeChange.mock.calls[0]![1]).toBeNull();
     });
 
     it('forgets the blame once the change is committed', async () => {
