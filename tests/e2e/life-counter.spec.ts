@@ -141,17 +141,109 @@ test('never scrolls, however many players are on screen', async ({ page }) => {
   expect(await scrollable()).toEqual({ vertical: false, horizontal: false });
 });
 
-test('picks who goes first and says so', async ({ page }) => {
+test('spins round the table before landing on who goes first', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+
+  // The winner is decided immediately but must not be revealed until the spin ends.
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /choose who goes first/i })).toBeDisabled();
+
+  // Sample who is lit while it runs: a spotlight that never moves is not a spin.
+  const spotlit = new Set<string>();
+  const until = Date.now() + 2400;
+  while (Date.now() < until) {
+    // Read the DOM directly: a locator would auto-wait once the spin ends and
+    // nothing is lit, hanging until the test times out.
+    const name = await page.evaluate(
+      () => document.querySelector('article[data-spotlit="true"] h2')?.textContent ?? null
+    );
+    if (name) spotlit.add(name.trim());
+    await page.waitForTimeout(50);
+  }
+  expect(spotlit.size, `spotlight visited ${[...spotlit].join(', ')}`).toBeGreaterThan(1);
+
+  // And it settles on exactly one player.
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1, { timeout: 6000 });
+  await expect(page.getByText(/goes first/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /choose who goes first/i })).toBeEnabled();
+});
+
+test('blinks the winner once the spotlight stops', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1, { timeout: 8000 });
+
+  // Blinking, and only the winner.
+  const blinking = await page.evaluate(() => {
+    const panels = [...document.querySelectorAll('article')] as HTMLElement[];
+    const lit = panels.filter((panel) => panel.dataset.celebrating === 'true');
+    return {
+      count: lit.length,
+      isTheWinner: lit[0]?.textContent?.includes('1st') ?? false
+    };
+  });
+  expect(blinking).toEqual({ count: 1, isTheWinner: true });
+
+  // And it stops, rather than nagging for the rest of the game.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          [...document.querySelectorAll('article')].filter(
+            (panel) => (panel as HTMLElement).dataset.celebrating === 'true'
+          ).length
+      )
+    )
+    .toBe(0);
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+});
+
+test('can be rolled again, and still marks only one player', async ({ page }) => {
   await startGame(page, /commander/i, 4);
 
-  await page.getByRole('button', { name: /choose who goes first/i }).click();
+  for (let roll = 0; roll < 2; roll++) {
+    await page.getByRole('button', { name: /choose who goes first/i }).click();
+    await expect(page.getByText('1st', { exact: true })).toHaveCount(1, { timeout: 6000 });
+  }
 
-  await expect(page.getByText(/goes first/i)).toBeVisible();
-  // Exactly one player carries the marker, however many times it is rolled.
   await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+});
 
-  await page.getByRole('button', { name: /choose who goes first/i }).click();
-  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+test('skips the spin entirely when motion is unwelcome', async ({ page }) => {
+  /*
+   * Measured against a normal roll rather than a fixed number of milliseconds.
+   * An absolute bound is flaky by construction here: the same work costs 463ms
+   * on local Chromium and 1402ms on WebKit under CI load, so a threshold
+   * calibrated on one browser fails on the other for reasons that have nothing
+   * to do with the animation. Comparing the two paths cancels that overhead out,
+   * because both pay it.
+   */
+  const timeRoll = async () => {
+    const badge = page.getByText('1st', { exact: true });
+    await expect(badge).toHaveCount(0);
+    const started = Date.now();
+    await page.getByRole('button', { name: /choose who goes first/i }).click();
+    await expect(badge).toHaveCount(1, { timeout: 15_000 });
+    return Date.now() - started;
+  };
+
+  await startGame(page, /commander/i, 4);
+  const animated = await timeRoll();
+
+  // A rematch clears the marker, so the second measurement starts from zero.
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const instant = await timeRoll();
+
+  // The schedule has a reduced-motion path of its own; this covers the wiring
+  // that reads the preference, which unit tests cannot reach.
+  expect(
+    animated - instant,
+    `animated ${animated}ms vs reduced-motion ${instant}ms`
+  ).toBeGreaterThan(1500);
 });
 
 test('keeps every action on one row on a phone', async ({ page }) => {

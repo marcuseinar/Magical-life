@@ -151,6 +151,9 @@ The architectural boundary is enforced mechanically, not by review:
 
 ## Deployment
 
-`main` → GitHub Actions → GitHub Pages, on green only. Tags cut a release and
-trigger the Capacitor builds. Preview deployments per pull request so UI changes
-are reviewable in a browser rather than in a diff.
+Default branch → GitHub Actions → GitHub Pages, on green only. Every pull
+request also publishes to `/pr-<number>/` and comments the link, so a UI change
+is reviewable on a phone rather than in a diff. See `docs/deploying.md`.
+
+Merging is blocked until `Types, lint, tests`, `User journeys` and
+`Build and publish` are all green.

@@ -25,6 +25,23 @@ test('plays a full game when served from a subdirectory', async ({ page }) => {
   expect(problems, `errors or 404s: ${problems.join(' | ')}`).toEqual([]);
 });
 
+test('does not answer for a sibling path, so previews stay their own app', async ({ page }) => {
+  await page.goto('./');
+  await page.waitForFunction(async () => {
+    await navigator.serviceWorker.ready;
+    return navigator.serviceWorker.controller !== null;
+  });
+
+  /*
+   * A worker's scope is a path prefix, so this app also covers /pr-3/. If it
+   * answered navigations there with its own cached shell, every pull-request
+   * preview would silently render production instead.
+   */
+  const response = await page.goto('./pr-3/');
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole('button', { name: /begin at/i })).toHaveCount(0);
+});
+
 test('caches its shell under the base path, not the root', async ({ page }) => {
   await page.goto('./');
   await page.waitForFunction(async () => {

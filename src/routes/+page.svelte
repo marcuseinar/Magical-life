@@ -1,19 +1,29 @@
 <script lang="ts">
   import { FORMATS } from '$domain/rules';
   import type { CounterKind } from '$domain/rules';
+  import type { PlayerId } from '$domain/ids';
   import type { PlayerState } from '$domain/state';
   import { createGameStore } from '$lib/gameStore.svelte';
+  import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
+  import { createSpinController } from '$ui/interaction/spinController.svelte';
   import CounterSheet from '$ui/components/CounterSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
   import NewGameSheet from '$ui/components/NewGameSheet.svelte';
 
   const store = createGameStore();
+  const spin = createSpinController();
 
   type Confirmation = 'rematch' | 'new-game';
 
   let confirming = $state<Confirmation | null>(null);
   let counters = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let rolled = $state<string | null>(null);
+  /** Covers the whole roll, including the storage write before the spin starts,
+   *  so the winner is never revealed a frame early. */
+  let rolling = $state(false);
+  /** The winner, while their panel is blinking. */
+  let celebrating = $state<PlayerId | null>(null);
+  let blinkTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
     void store.hydrate();
@@ -27,15 +37,38 @@
   );
 
   async function roll() {
-    const result = await store.chooseFirstPlayer();
-    if (!result.ok) return;
-    rolled = store.state?.players.find((player) => player.id === result.value)?.name ?? null;
+    if (rolling) return;
+
+    rolling = true;
+    rolled = null;
+    try {
+      // Decided first and written to the log; the spin only reveals it.
+      const result = await store.chooseFirstPlayer();
+      if (!result.ok) return;
+
+      const players = store.state?.players ?? [];
+      const seat = players.findIndex((player) => player.id === result.value);
+      if (seat === -1) return;
+
+      await spin.run(players.length, seat);
+      rolled = players[seat]?.name ?? null;
+
+      // Blink the winner so a table of six all see it without being told.
+      clearTimeout(blinkTimer);
+      celebrating = result.value;
+      blinkTimer = setTimeout(() => (celebrating = null), WINNER_BLINK_MS);
+    } finally {
+      rolling = false;
+    }
   }
 
   async function confirm() {
     const action = confirming;
     confirming = null;
     rolled = null;
+    spin.stop();
+    clearTimeout(blinkTimer);
+    celebrating = null;
     if (action === 'rematch') await store.rematch();
     if (action === 'new-game') await store.abandon();
   }
@@ -58,7 +91,9 @@
 
     <GameBoard
       players={store.state.players}
-      firstPlayer={store.state.firstPlayer}
+      firstPlayer={rolling ? null : store.state.firstPlayer}
+      spotlight={spin.spotlight}
+      {celebrating}
       onLifeChange={(player, delta) => store.changeLife(player.id, delta)}
       onOpenCounters={(player, rotated) => (counters = { player, rotated })}
       onElimination={(player, eliminated) => store.setEliminated(player.id, eliminated)}
@@ -68,12 +103,16 @@
       <button class="tool" onclick={() => store.undo()}>Undo</button>
       <!-- Short visible label so four actions fit one row on a phone; the
            accessible name spells it out and contains the visible text. -->
-      <button class="tool" onclick={roll} aria-label="Choose who goes first">First</button>
+      <button class="tool" onclick={roll} disabled={rolling} aria-label="Choose who goes first"
+        >First</button
+      >
       <button class="tool" onclick={() => (confirming = 'rematch')}>Rematch</button>
       <button class="tool" onclick={() => (confirming = 'new-game')}>New game</button>
     </nav>
 
-    <p class="announce" role="status">{rolled === null ? '' : `${rolled} goes first`}</p>
+    <p class="announce" role="status" data-rolled={rolled !== null}>
+      {rolled === null ? '' : `${rolled} goes first`}
+    </p>
   </main>
 
   {#if openPlayer !== null && counters !== null}
@@ -142,6 +181,11 @@
     color: var(--danger);
   }
 
+  .tool:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
   .announce {
     min-height: 1.4em;
     margin: 0;
@@ -151,6 +195,28 @@
     font-size: 0.9rem;
     letter-spacing: var(--tracking-display);
     text-align: center;
+  }
+
+  .announce[data-rolled='true'] {
+    animation: declare var(--duration-slow) var(--ease-out);
+  }
+
+  @keyframes declare {
+    from {
+      transform: translateY(0.4em);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .announce[data-rolled='true'] {
+      animation: none;
+    }
   }
 
   .scrim {

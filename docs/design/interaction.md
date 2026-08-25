@@ -142,6 +142,79 @@ shared chip that shows who holds it; tapping moves it, which writes a
 `flag/moved` event. Exactly one holder is enforced by the reducer, so the UI
 cannot get it wrong.
 
+## Choosing who goes first
+
+Somebody has to go first and nobody wants to argue about it, so the app decides —
+but a result that simply appears is a missed moment. Instead a spotlight travels
+round the table, slowing as it goes, and settles on the winner.
+
+**The result is decided before the animation starts.** The use case picks a
+player, records `turn/firstPlayer`, and only then does the spin run — landing on
+the seat that was already chosen. Keeping the two apart means the theatre cannot
+influence the outcome, the log is honest, and the choice stays testable without
+a clock.
+
+The schedule (`ui/interaction/firstPlayerSpin.ts`) is pure and fixed at 2.2
+seconds regardless of the winner or the number of players, so the _length_ of
+the spin never hints at who won. It makes two full passes of the table before
+running in to the winner, so nobody appears to have been skipped, and the delays
+grow so the last few steps land like a coin settling.
+
+While it runs, every panel except the lit one falls back. That is what makes it
+read as a light travelling round a table rather than a card changing colour —
+which matters when the person watching is sitting opposite.
+
+Under `prefers-reduced-motion` the schedule collapses to a single step: the
+answer, immediately.
+
+## Choosing who goes first
+
+The winner is decided by the use case and written to the log _before_ anything
+moves. The animation is presentation only: it reveals an answer that already
+exists, so the drama can never change the result, and the schedule stays a pure
+function with no randomness of its own.
+
+The reveal is two phases, because that is what the eye reads as a spin:
+
+1. **A flurry** — ten flat 60 ms flicks round the table, about 600 ms of even,
+   readable alternation.
+2. **A ramp** — steeply decelerating into a pause of half a second or more on
+   the winner.
+
+Then the winner's panel **blinks three times**, so a table of six all see the
+result without anyone having to announce it.
+
+A single smooth deceleration curve was tried first and was wrong. Spread across
+twenty-odd steps it flattens into a uniform drift; spread across few enough
+steps to have a real tail, it makes the opening frames 1–40 ms — shorter than a
+frame, so the fast phase is not fast, it is invisible. Separating the phases
+lets both halves be right, and a floor of `MIN_STEP_MS` guarantees no step is
+ever too short to see.
+
+Total duration is fixed regardless of seat count or winner, so the length of the
+spin never hints at the answer. Under `prefers-reduced-motion` there is no spin
+and no blink: the result appears at once.
+
+### It names the first player, not the player who chooses
+
+The rules do not work the way this feature does, and that is deliberate.
+
+Under the Comprehensive Rules the random method decides _who chooses_; that
+player then decides whether to play or draw. In a match, after the first game it
+is the loser of the previous game who chooses, with no roll at all. This applies
+in multiplayer too, not only in one-on-one.
+
+The app skips that step and names a first player outright. Weighed and rejected:
+a prompt after the spin — "Play" or "Draw" in a duel, tap a panel in a pod —
+would be rules-accurate at the cost of one extra tap before every single game.
+For a counter whose defining requirement is being instant to start, the tap
+costs more than the accuracy buys. Players who care about play-or-draw already
+know they are choosing, and can roll again or simply agree.
+
+Revisit if: tournament support arrives (M5), where the distinction is real and
+a judge may need the log to show who won the roll separately from who started —
+or if the previous-game-loser rule becomes worth automating between rematches.
+
 ## The app is a surface, not a document
 
 Nothing scrolls and nothing zooms. A life counter lives face-up on a table

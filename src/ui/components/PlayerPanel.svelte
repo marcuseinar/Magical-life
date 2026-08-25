@@ -15,6 +15,9 @@
      *  left/right and up/down are the mirror of ours. */
     rotated = false,
     isFirstPlayer = false,
+    spotlit = false,
+    dimmed = false,
+    celebrating = false,
     onLifeChange,
     onOpenCounters,
     onElimination
@@ -22,6 +25,12 @@
     player: PlayerState;
     rotated?: boolean;
     isFirstPlayer?: boolean;
+    /** Under the travelling spotlight while first player is being decided. */
+    spotlit?: boolean;
+    /** Just won the roll — blinks to make the result unmissable. */
+    celebrating?: boolean;
+    /** A spin is running and the light is on somebody else. */
+    dimmed?: boolean;
     onLifeChange: (delta: number) => void;
     onOpenCounters: () => void;
     onElimination: (eliminated: boolean) => void;
@@ -109,6 +118,9 @@
   data-threat={threat}
   data-rotated={rotated}
   data-eliminated={player.eliminated}
+  data-spotlit={spotlit}
+  data-celebrating={celebrating}
+  data-dimmed={dimmed}
 >
   <Filigree />
 
@@ -196,7 +208,11 @@
       inset 0 1px 0 var(--frame-highlight),
       inset 0 0 0 1px var(--frame-rule),
       var(--shadow-panel);
-    transition: box-shadow var(--duration-base) var(--ease-out);
+    transform: rotate(var(--panel-turn, 0deg)) scale(var(--panel-lift, 1));
+    transition:
+      box-shadow var(--duration-base) var(--ease-out),
+      transform var(--duration-fast) var(--ease-out),
+      opacity var(--duration-fast) var(--ease-out);
   }
 
   /* Card stock, not a flat fill. */
@@ -211,7 +227,61 @@
   }
 
   .panel[data-rotated='true'] {
-    transform: rotate(180deg);
+    --panel-turn: 180deg;
+  }
+
+  /* Three hard blinks the moment the spotlight settles, so a table of six
+     people all see which card was chosen without being told. */
+  .panel[data-celebrating='true'] {
+    animation: chosen 300ms linear 3;
+  }
+
+  @keyframes chosen {
+    0%,
+    49% {
+      box-shadow:
+        inset 0 0 0 2px var(--frame-rule-strong),
+        inset 0 0 60px -12px var(--accent),
+        var(--shadow-float);
+    }
+
+    50%,
+    100% {
+      box-shadow:
+        inset 0 1px 0 var(--frame-highlight),
+        inset 0 0 0 1px var(--frame-rule),
+        var(--shadow-panel);
+    }
+  }
+
+  /* The spotlight travelling round the table while first player is decided. */
+  .panel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 45%, var(--accent), transparent 68%);
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-out);
+    pointer-events: none;
+  }
+
+  .panel[data-spotlit='true'] {
+    --panel-lift: 1.03;
+
+    box-shadow:
+      inset 0 0 0 2px var(--frame-rule-strong),
+      inset 0 0 60px -12px var(--accent),
+      var(--shadow-float);
+  }
+
+  .panel[data-spotlit='true']::after {
+    opacity: 0.24;
+  }
+
+  /* Everyone the light is not on falls back, which is what makes it read as a
+     spotlight travelling round the table rather than a panel changing colour. */
+  .panel[data-dimmed='true'] {
+    opacity: 0.4;
   }
 
   .panel[data-threat='warning'] {
@@ -338,6 +408,7 @@
 
   .first {
     flex: none;
+    animation: strike var(--duration-slow) var(--ease-out);
     padding: 2px var(--space-2);
     border: 1px solid var(--frame-rule-strong);
     border-radius: var(--radius-pill);
@@ -351,6 +422,22 @@
   .out[aria-pressed='true'] {
     border-color: var(--frame-rule);
     color: var(--text-muted);
+  }
+
+  @keyframes strike {
+    0% {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+
+    60% {
+      transform: scale(1.18);
+      opacity: 1;
+    }
+
+    100% {
+      transform: scale(1);
+    }
   }
 
   @keyframes dread {
@@ -371,7 +458,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .panel[data-threat='lethal'] {
+    .panel[data-threat='lethal'],
+    .panel[data-celebrating='true'],
+    .first {
       animation: none;
     }
   }

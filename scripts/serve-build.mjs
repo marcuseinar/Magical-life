@@ -40,8 +40,11 @@ createServer(async (request, response) => {
   try {
     return send(response, 200, await readFile(file), TYPES[extname(file)]);
   } catch {
+    // Only the app root falls back to the shell. Everything else 404s, the way
+    // branch-served Pages does — which is what makes a preview at a sibling
+    // path detectable rather than silently served the production app.
+    if (relative !== '/') return send(response, 404, 'not found');
     try {
-      // Single-page fallback, the same as Pages serving 200.html.
       return send(response, 200, await readFile(join(ROOT, 'index.html')), 'text/html');
     } catch {
       return send(response, 404, 'not found');

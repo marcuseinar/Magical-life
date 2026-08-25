@@ -192,6 +192,31 @@ describe('player panel', () => {
     expect(screen.getByText('1st')).toBeInTheDocument();
   });
 
+  it('lights up when the spotlight lands on it', () => {
+    const { container } = render(PlayerPanel, {
+      props: {
+        player: player(),
+        spotlit: true,
+        onLifeChange: vi.fn(),
+        onOpenCounters: vi.fn(),
+        onElimination: vi.fn()
+      }
+    });
+    expect(container.querySelector('article')?.dataset.spotlit).toBe('true');
+  });
+
+  it('is dark while the spotlight is elsewhere', () => {
+    const { container } = render(PlayerPanel, {
+      props: {
+        player: player(),
+        onLifeChange: vi.fn(),
+        onOpenCounters: vi.fn(),
+        onElimination: vi.fn()
+      }
+    });
+    expect(container.querySelector('article')?.dataset.spotlit).toBe('false');
+  });
+
   it('marks nobody by default', () => {
     mount();
     expect(screen.queryByText('1st')).not.toBeInTheDocument();
