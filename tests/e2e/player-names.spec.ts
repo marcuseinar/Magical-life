@@ -7,6 +7,20 @@ const rename = async (page: Page, from: string, to: string) => {
   const sheet = page.getByRole('form', { name: new RegExp(`rename ${from}`, 'i') });
   await sheet.getByRole('textbox').fill(to);
   await sheet.getByRole('button', { name: 'Save' }).click();
+
+  /*
+   * Saving is asynchronous all the way down: the use case awaits the append to
+   * IndexedDB, and only then does the store publish new state and the sheet
+   * close. So the sheet being gone is the proof that the write landed.
+   *
+   * Returning on the click alone let a following `page.reload()` race a write
+   * still in flight, which is what made the reload test fail on a loaded CI
+   * runner and pass twelve times out of twelve on a quiet laptop.
+   *
+   * Waiting on the closed sheet rather than on the new name, because a name
+   * too long for a plate is saved clamped and never appears as it was typed.
+   */
+  await expect(sheet).toBeHidden();
 };
 
 test('names a player, and the whole app calls them that', async ({ page }) => {
