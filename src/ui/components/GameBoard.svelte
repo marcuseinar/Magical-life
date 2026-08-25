@@ -7,6 +7,7 @@
     players,
     firstPlayer = null,
     spotlight = null,
+    celebrating = null,
     onLifeChange,
     onOpenCounters,
     onElimination
@@ -15,6 +16,8 @@
     firstPlayer?: PlayerId | null;
     /** Seat index under the travelling spotlight, if one is running. */
     spotlight?: number | null;
+    /** Player who has just won the roll, blinking to announce it. */
+    celebrating?: PlayerId | null;
     onLifeChange: (player: PlayerState, delta: number) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
@@ -46,6 +49,7 @@
         rotated={isRotated(index)}
         isFirstPlayer={player.id === firstPlayer}
         spotlit={index === spotlight}
+        celebrating={player.id === celebrating}
         dimmed={spotlight !== null && index !== spotlight}
         onLifeChange={(delta) => onLifeChange(player, delta)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}

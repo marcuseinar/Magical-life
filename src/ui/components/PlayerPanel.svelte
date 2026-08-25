@@ -17,6 +17,7 @@
     isFirstPlayer = false,
     spotlit = false,
     dimmed = false,
+    celebrating = false,
     onLifeChange,
     onOpenCounters,
     onElimination
@@ -26,6 +27,8 @@
     isFirstPlayer?: boolean;
     /** Under the travelling spotlight while first player is being decided. */
     spotlit?: boolean;
+    /** Just won the roll — blinks to make the result unmissable. */
+    celebrating?: boolean;
     /** A spin is running and the light is on somebody else. */
     dimmed?: boolean;
     onLifeChange: (delta: number) => void;
@@ -116,6 +119,7 @@
   data-rotated={rotated}
   data-eliminated={player.eliminated}
   data-spotlit={spotlit}
+  data-celebrating={celebrating}
   data-dimmed={dimmed}
 >
   <Filigree />
@@ -224,6 +228,30 @@
 
   .panel[data-rotated='true'] {
     --panel-turn: 180deg;
+  }
+
+  /* Three hard blinks the moment the spotlight settles, so a table of six
+     people all see which card was chosen without being told. */
+  .panel[data-celebrating='true'] {
+    animation: chosen 300ms linear 3;
+  }
+
+  @keyframes chosen {
+    0%,
+    49% {
+      box-shadow:
+        inset 0 0 0 2px var(--frame-rule-strong),
+        inset 0 0 60px -12px var(--accent),
+        var(--shadow-float);
+    }
+
+    50%,
+    100% {
+      box-shadow:
+        inset 0 1px 0 var(--frame-highlight),
+        inset 0 0 0 1px var(--frame-rule),
+        var(--shadow-panel);
+    }
   }
 
   /* The spotlight travelling round the table while first player is decided. */
@@ -431,6 +459,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .panel[data-threat='lethal'],
+    .panel[data-celebrating='true'],
     .first {
       animation: none;
     }

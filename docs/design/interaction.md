@@ -167,6 +167,34 @@ which matters when the person watching is sitting opposite.
 Under `prefers-reduced-motion` the schedule collapses to a single step: the
 answer, immediately.
 
+## Choosing who goes first
+
+The winner is decided by the use case and written to the log _before_ anything
+moves. The animation is presentation only: it reveals an answer that already
+exists, so the drama can never change the result, and the schedule stays a pure
+function with no randomness of its own.
+
+The reveal is two phases, because that is what the eye reads as a spin:
+
+1. **A flurry** — ten flat 60 ms flicks round the table, about 600 ms of even,
+   readable alternation.
+2. **A ramp** — steeply decelerating into a pause of half a second or more on
+   the winner.
+
+Then the winner's panel **blinks three times**, so a table of six all see the
+result without anyone having to announce it.
+
+A single smooth deceleration curve was tried first and was wrong. Spread across
+twenty-odd steps it flattens into a uniform drift; spread across few enough
+steps to have a real tail, it makes the opening frames 1–40 ms — shorter than a
+frame, so the fast phase is not fast, it is invisible. Separating the phases
+lets both halves be right, and a floor of `MIN_STEP_MS` guarantees no step is
+ever too short to see.
+
+Total duration is fixed regardless of seat count or winner, so the length of the
+spin never hints at the answer. Under `prefers-reduced-motion` there is no spin
+and no blink: the result appears at once.
+
 ## The app is a surface, not a document
 
 Nothing scrolls and nothing zooms. A life counter lives face-up on a table

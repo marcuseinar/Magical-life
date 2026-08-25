@@ -1,8 +1,10 @@
 <script lang="ts">
   import { FORMATS } from '$domain/rules';
   import type { CounterKind } from '$domain/rules';
+  import type { PlayerId } from '$domain/ids';
   import type { PlayerState } from '$domain/state';
   import { createGameStore } from '$lib/gameStore.svelte';
+  import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
   import { createSpinController } from '$ui/interaction/spinController.svelte';
   import CounterSheet from '$ui/components/CounterSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
@@ -19,6 +21,9 @@
   /** Covers the whole roll, including the storage write before the spin starts,
    *  so the winner is never revealed a frame early. */
   let rolling = $state(false);
+  /** The winner, while their panel is blinking. */
+  let celebrating = $state<PlayerId | null>(null);
+  let blinkTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
     void store.hydrate();
@@ -47,6 +52,11 @@
 
       await spin.run(players.length, seat);
       rolled = players[seat]?.name ?? null;
+
+      // Blink the winner so a table of six all see it without being told.
+      clearTimeout(blinkTimer);
+      celebrating = result.value;
+      blinkTimer = setTimeout(() => (celebrating = null), WINNER_BLINK_MS);
     } finally {
       rolling = false;
     }
@@ -57,6 +67,8 @@
     confirming = null;
     rolled = null;
     spin.stop();
+    clearTimeout(blinkTimer);
+    celebrating = null;
     if (action === 'rematch') await store.rematch();
     if (action === 'new-game') await store.abandon();
   }
@@ -81,6 +93,7 @@
       players={store.state.players}
       firstPlayer={rolling ? null : store.state.firstPlayer}
       spotlight={spin.spotlight}
+      {celebrating}
       onLifeChange={(player, delta) => store.changeLife(player.id, delta)}
       onOpenCounters={(player, rotated) => (counters = { player, rotated })}
       onElimination={(player, eliminated) => store.setEliminated(player.id, eliminated)}

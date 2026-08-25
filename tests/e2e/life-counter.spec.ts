@@ -169,6 +169,36 @@ test('spins round the table before landing on who goes first', async ({ page }) 
   await expect(page.getByRole('button', { name: /choose who goes first/i })).toBeEnabled();
 });
 
+test('blinks the winner once the spotlight stops', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await page.getByRole('button', { name: /choose who goes first/i }).click();
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1, { timeout: 8000 });
+
+  // Blinking, and only the winner.
+  const blinking = await page.evaluate(() => {
+    const panels = [...document.querySelectorAll('article')] as HTMLElement[];
+    const lit = panels.filter((panel) => panel.dataset.celebrating === 'true');
+    return {
+      count: lit.length,
+      isTheWinner: lit[0]?.textContent?.includes('1st') ?? false
+    };
+  });
+  expect(blinking).toEqual({ count: 1, isTheWinner: true });
+
+  // And it stops, rather than nagging for the rest of the game.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          [...document.querySelectorAll('article')].filter(
+            (panel) => (panel as HTMLElement).dataset.celebrating === 'true'
+          ).length
+      )
+    )
+    .toBe(0);
+  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+});
+
 test('can be rolled again, and still marks only one player', async ({ page }) => {
   await startGame(page, /commander/i, 4);
 
