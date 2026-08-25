@@ -97,6 +97,9 @@
 
   const blamed = $derived(seats.find((seat) => seat.id === attributedTo) ?? null);
 
+  /* Which place in the row the reel has to bring to the middle. */
+  const blamedIndex = $derived(Math.max(0, blame.indexOf(attributedTo)));
+
   let blameRow = $state<HTMLElement | null>(null);
 
   /* Only worth asking on a loss, in a format where it counts, with someone to blame. */
@@ -242,36 +245,37 @@
           <div class="blame">
             <div
               bind:this={blameRow}
-              class="blame__row"
-              style="--slots: {blame.length}"
+              class="blame__stage"
               role="group"
               aria-label="Whose commander dealt this to {player.name}?"
             >
-              {#each blame as candidate (candidate ?? 'nobody')}
-                <button
-                  class="blame__chip"
-                  data-selected={attributedTo === candidate}
-                  aria-pressed={attributedTo === candidate}
-                  aria-label={candidate === null
-                    ? 'Not commander damage'
-                    : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
-                  data-colour={seats.find((s) => s.id === candidate)?.colour}
-                  onclick={() => (attributedTo = candidate)}
-                >
-                  <span class="blame__badge">
-                    <!-- The badge you are aiming at carries the number. It is
+              <div class="blame__reel" style="--index: {blamedIndex}">
+                {#each blame as candidate (candidate ?? 'nobody')}
+                  <button
+                    class="blame__chip"
+                    data-selected={attributedTo === candidate}
+                    aria-pressed={attributedTo === candidate}
+                    aria-label={candidate === null
+                      ? 'Not commander damage'
+                      : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
+                    data-colour={seats.find((s) => s.id === candidate)?.colour}
+                    onclick={() => (attributedTo = candidate)}
+                  >
+                    <span class="blame__badge">
+                      <!-- The badge you are aiming at carries the number. It is
                          the one place on the card that is guaranteed to be both
                          where you are looking and above your thumb. -->
-                    {#if attributedTo === candidate}
-                      <span class="blame__amount" aria-hidden="true">{controller.pending}</span>
-                    {:else if candidate === null}
-                      <span class="blame__none" aria-hidden="true">–</span>
-                    {:else}
-                      <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={40} />
-                    {/if}
-                  </span>
-                </button>
-              {/each}
+                      {#if attributedTo === candidate}
+                        <span class="blame__amount" aria-hidden="true">{controller.pending}</span>
+                      {:else if candidate === null}
+                        <span class="blame__none" aria-hidden="true">–</span>
+                      {:else}
+                        <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={40} />
+                      {/if}
+                    </span>
+                  </button>
+                {/each}
+              </div>
             </div>
 
             <!--
@@ -537,6 +541,10 @@
    * sliding in from off the top of the card.
    */
   .blame {
+    /* One badge plus the gap after it: the reel's arithmetic and the badges
+       both measure in these, so they cannot drift apart. */
+    --blame-step: calc(2.75rem + var(--space-1));
+
     display: grid;
     gap: var(--space-1);
     justify-items: center;
@@ -548,28 +556,35 @@
     pointer-events: auto;
   }
 
-  .blame__row {
-    /* Every candidate visible at once, each owning an equal column of the row.
-       Nothing scrolls and nothing is off screen: the card is 194px wide at six
-       players, so a fixed 44px chip could never have fitted six of them, and
-       panning to reach a badge you cannot see is not aiming. Equal columns are
-       also what makes the drag readable — the badge you are over is the badge
-       under your finger. */
-    display: grid;
-    grid-template-columns: repeat(var(--slots), 1fr);
-    gap: 2px;
+  /* A reel, not a row.
+   *
+   * The number stays put and the candidates travel: whoever is blamed slides
+   * into the middle and the badge there takes their colour. With nobody blamed
+   * the opponents queue to one side; blame the middle one and they sit either
+   * side of it; blame the last and they are all behind it.
+   *
+   * Aiming still reads position off this stage, which never moves — the finger
+   * chooses an *index* and the reel brings that index to the middle. Pointing
+   * at a badge could not work once badges travel: the one you aimed at would
+   * slide out from under you and hand your finger to its neighbour. */
+  .blame__stage {
+    position: relative;
+    height: calc(var(--blame-step) + var(--space-3));
     width: 100%;
+    overflow: hidden;
+  }
 
-    /* Only as wide as the badges need. Spanning the whole card put two players
-       in opposite corners with a void between them; the aiming reads this
-       element's own box, so a narrower row is simply a shorter sweep. */
-    max-width: min(100%, calc(var(--slots) * 3.25rem));
-    margin-inline: auto;
+  .blame__reel {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    display: flex;
+    gap: var(--space-1);
+    align-items: flex-start;
 
-    /* Room for the aimed badge to grow into. It scales rather than reflows, so
-       nothing reserves this space for it and without the padding it printed
-       over the caption underneath. */
-    padding-bottom: var(--space-2);
+    /* Bring the blamed place to the middle of the stage. */
+    transform: translateX(calc(-1 * (var(--index) + 0.5) * var(--blame-step)));
+    transition: transform var(--duration-base) var(--ease-out);
   }
 
   .blame__chip {
@@ -577,8 +592,11 @@
        the row it owns — the badge drawn inside it is the mark, not the mark's
        hit area. Full height keeps it a real target where the column is narrow. */
     display: grid;
+    flex: none;
     place-items: center;
-    min-width: 0;
+
+    /* Exactly one step, so the reel's arithmetic and the badges agree. */
+    width: calc(var(--blame-step) - var(--space-1));
     min-height: 2.75rem;
     padding: 0;
     border: 0;
@@ -846,6 +864,12 @@
     .blame,
     .first {
       animation: none;
+    }
+
+    /* The reel still has to arrive at the right place; it just gets there
+       without travelling. */
+    .blame__reel {
+      transition: none;
     }
 
     .readout {

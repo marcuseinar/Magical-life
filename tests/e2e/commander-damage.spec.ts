@@ -70,36 +70,11 @@ test('offers a target big enough to hit', async ({ page }) => {
   }
 });
 
-/* Asked for at the table: all of them on screen at once, no scrolling. */
-test('shows every candidate at once, inside the card, at six players', async ({ page }) => {
-  await startGame(page, /commander/i, 6);
-
-  const panel = page.locator('article[data-rotated="false"]').first();
-  await panel.getByRole('button', { name: /lose one life/i }).click();
-
-  const fit = await panel.evaluate((article) => {
-    const card = article.getBoundingClientRect();
-    const row = article.querySelector('.blame__row')!;
-    const badges = [...article.querySelectorAll('.blame__chip')];
-    return {
-      count: badges.length,
-      scrolls: row.scrollWidth > row.clientWidth + 1,
-      allInside: badges.every((badge) => {
-        const box = badge.getBoundingClientRect();
-        return box.left >= card.left - 1 && box.right <= card.right + 1;
-      })
-    };
-  });
-
-  expect(fit.count).toBe(6);
-  expect(fit.scrolls).toBe(false);
-  expect(fit.allInside).toBe(true);
-});
-
-/* The damage was hard to read on the caption line, so it moved into the badge
-   being aimed at — the one place guaranteed to be both where you are looking
-   and above your thumb. */
-test('shows the pending damage inside the badge being aimed at', async ({ page }) => {
+/* The reel: the blamed place is brought to the middle and stays there while the
+   others queue either side of it. The cost, stated plainly rather than hidden:
+   not all six are on screen at once, because centring the blamed one pushes the
+   far ends off the card. */
+test('brings the blamed badge to the middle and queues the rest around it', async ({ page }) => {
   await startGame(page, /commander/i, 6);
 
   const panel = page.locator('article[data-rotated="false"]').first();
@@ -113,25 +88,63 @@ test('shows the pending damage inside the badge being aimed at', async ({ page }
   await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
 
   const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
-  const badges = await group.getByRole('button').all();
+  const stage = (await group.boundingBox())!;
+  const aimAt = (index: number, steps = 5) =>
+    page.mouse.move(stage.x + (stage.width / 6) * (index + 0.5), y + 100, { steps });
+  const settle = () =>
+    group.evaluate((element) =>
+      Promise.all(
+        element.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))
+      )
+    );
+
+  const middleOf = (rect: { x: number; width: number }) => rect.x + rect.width / 2;
+
+  for (const index of [0, 2, 5]) {
+    await aimAt(index);
+    await expect(group.getByRole('button').nth(index)).toHaveAttribute('aria-pressed', 'true');
+    await settle();
+
+    const aimed = (await group.getByRole('button').nth(index).boundingBox())!;
+    expect(Math.abs(middleOf(aimed) - middleOf(stage))).toBeLessThan(4);
+  }
+
+  await page.mouse.up();
+});
+
+/* The number stays in the middle and the candidates travel through it. */
+test('keeps the pending damage in the badge at the middle', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
+  const box = (await loseZone.boundingBox())!;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
+
+  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+  const stage = (await group.boundingBox())!;
+  const aimAt = (index: number, steps = 5) =>
+    page.mouse.move(stage.x + (stage.width / 6) * (index + 0.5), y + 100, { steps });
 
   // Before aiming at anybody, the number rides on "not commander damage".
-  await expect(badges[0]!.locator('.blame__amount')).toHaveText(/^-\d+$/);
+  await expect(group.getByRole('button').nth(0).locator('.blame__amount')).toHaveText(/^-\d+$/);
 
-  // It follows the aim, and only one badge ever holds it.
-  const target = (await badges[3]!.boundingBox())!;
-  await page.mouse.move(target.x + target.width / 2, y + 100, { steps: 6 });
-
-  await expect(badges[3]!.locator('.blame__amount')).toHaveText(/^-\d+$/);
+  await aimAt(3);
+  await expect(group.getByRole('button').nth(3).locator('.blame__amount')).toHaveText(/^-\d+$/);
   await expect(group.locator('.blame__amount')).toHaveCount(1);
 
   await page.mouse.up();
 });
 
-/* The badge grows by painting, never by reflowing. The columns are the hit
-   zones the absolute aiming reads: if choosing one resized them, the targets
-   would move under the finger that is choosing between them. */
-test('growing the aimed badge does not move any of the targets', async ({ page }) => {
+/* The badges travel now, so the thing that must hold still is the frame the
+   aiming reads. If the stage moved or resized as the reel slid, the finger's
+   meaning would change under it and the reel would chase itself. */
+test('the stage the aiming reads never moves as the reel slides', async ({ page }) => {
   await startGame(page, /commander/i, 6);
 
   const panel = page.locator('article[data-rotated="false"]').first();
@@ -145,21 +158,19 @@ test('growing the aimed badge does not move any of the targets', async ({ page }
   await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
 
   const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
-  const columns = () =>
-    group.getByRole('button').evaluateAll((buttons) =>
-      buttons.map((button) => {
-        const rect = button.getBoundingClientRect();
-        return `${Math.round(rect.left)}:${Math.round(rect.width)}`;
-      })
-    );
+  const stage = (await group.boundingBox())!;
+  const aimAt = (index: number, steps = 5) =>
+    page.mouse.move(stage.x + (stage.width / 6) * (index + 0.5), y + 100, { steps });
 
-  const before = await columns();
+  const frame = async () => {
+    const rect = (await group.boundingBox())!;
+    return `${Math.round(rect.x)}:${Math.round(rect.width)}`;
+  };
 
-  // Aim at each badge in turn; the columns must not budge for any of them.
-  for (const badge of await group.getByRole('button').all()) {
-    const target = (await badge.boundingBox())!;
-    await page.mouse.move(target.x + target.width / 2, y + 100, { steps: 3 });
-    expect(await columns()).toEqual(before);
+  const before = await frame();
+  for (const index of [0, 1, 2, 3, 4, 5]) {
+    await aimAt(index, 3);
+    expect(await frame()).toBe(before);
   }
 
   await page.mouse.up();
@@ -258,28 +269,34 @@ test('leaves the player themselves out of the row', async ({ page }) => {
 /* The bug the table hit: a fixed 44px step per candidate wanted more travel
    than the card is wide once six people are playing, so the far end of the row
    could not be reached by the gesture at all. */
-/* Absolute, not relative: the badge chosen is the one under the finger. */
-test('picks the badge the finger is over, at six players', async ({ page }) => {
+/* Absolute: a place on the stage means a place in the row, whatever the reel is
+   showing. The finger chooses an index; the reel brings that index to the
+   middle. Aiming at a badge could not work once badges travel — the one you
+   aimed at would slide out from under you and hand your finger to its
+   neighbour. */
+test('maps each place on the stage to its own candidate, at six players', async ({ page }) => {
   await startGame(page, /commander/i, 6);
 
-  // A near-row seat, so down the screen is down from that player's seat too.
   const panel = page.locator('article[data-rotated="false"]').first();
   const loseZone = panel.getByRole('button', { name: /lose one life/i });
   const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
   const box = (await loseZone.boundingBox())!;
+  const y = box.y + box.height / 2;
 
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2, y);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 90, { steps: 8 });
+  await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
 
   const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+  const stage = (await group.boundingBox())!;
+  const aimAt = (index: number, steps = 5) =>
+    page.mouse.move(stage.x + (stage.width / 6) * (index + 0.5), y + 100, { steps });
+
   const badges = await group.getByRole('button').all();
   expect(badges).toHaveLength(6);
 
-  // Every badge in turn, aimed at by its own position on screen.
-  for (const badge of badges) {
-    const target = (await badge.boundingBox())!;
-    await page.mouse.move(target.x + target.width / 2, box.y + box.height / 2 + 90, { steps: 4 });
+  for (const [index, badge] of badges.entries()) {
+    await aimAt(index);
     await expect(badge).toHaveAttribute('aria-pressed', 'true');
   }
 
@@ -300,15 +317,14 @@ test('picks the same badge wherever the drag started', async ({ page }) => {
 
   const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
 
-  /** Aim at a fixed point on screen, having started the drag somewhere else. */
   const aimedFrom = async (startX: number) => {
     await page.mouse.move(startX, y);
     await page.mouse.down();
     await page.mouse.move(startX, y + 90, { steps: 6 });
 
-    // The same absolute target every time: the middle of the fifth column.
-    const target = (await group.getByRole('button').nth(4).boundingBox())!;
-    await page.mouse.move(target.x + target.width / 2, y + 90, { steps: 6 });
+    // The same absolute place on the stage every time: the fifth of six.
+    const stage = (await group.boundingBox())!;
+    await page.mouse.move(stage.x + (stage.width / 6) * 4.5, y + 90, { steps: 6 });
 
     const pressed = await group
       .getByRole('button')
@@ -319,11 +335,8 @@ test('picks the same badge wherever the drag started', async ({ page }) => {
     return pressed;
   };
 
-  const fromLeft = await aimedFrom(card.x + 8);
-  const fromRight = await aimedFrom(card.x + card.width - 8);
-
-  expect(fromLeft).toBe(4);
-  expect(fromRight).toBe(4);
+  expect(await aimedFrom(card.x + 8)).toBe(4);
+  expect(await aimedFrom(card.x + card.width - 8)).toBe(4);
 });
 
 /* A straight drag down must not quietly blame whoever sits under the thumb. */
