@@ -52,6 +52,12 @@
   .pip {
     display: block;
     flex: none;
+
+    /* Callers that need the pip to size with its container set `--pip-width`;
+       everybody else keeps the width the `size` attribute gave it. A custom
+       property crosses the component boundary where a selector cannot. */
+    width: var(--pip-width, auto);
+    height: auto;
     filter: drop-shadow(0 1px 1px var(--frame-shadow));
   }
 

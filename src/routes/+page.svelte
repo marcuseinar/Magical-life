@@ -6,6 +6,7 @@
   import { createGameStore } from '$lib/gameStore.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
   import { createSpinController } from '$ui/interaction/spinController.svelte';
+  import CommanderSheet from '$ui/components/CommanderSheet.svelte';
   import CounterSheet from '$ui/components/CounterSheet.svelte';
   import RenameSheet from '$ui/components/RenameSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
@@ -18,6 +19,7 @@
 
   let confirming = $state<Confirmation | null>(null);
   let counters = $state<{ player: PlayerState; rotated: boolean } | null>(null);
+  let commander = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let renaming = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let rolled = $state<string | null>(null);
   /** Covers the whole roll, including the storage write before the spin starts,
@@ -31,12 +33,12 @@
     void store.hydrate();
   });
 
-  /* The sheet holds a snapshot, so it has to follow the live player. */
-  const openPlayer = $derived(
-    counters === null
-      ? null
-      : (store.state?.players.find((player) => player.id === counters?.player.id) ?? null)
-  );
+  /* A sheet holds a snapshot, so it has to follow the live player. */
+  const live = (id: PlayerId | undefined) =>
+    id === undefined ? null : (store.state?.players.find((player) => player.id === id) ?? null);
+
+  const openPlayer = $derived(live(counters?.player.id));
+  const commanderPlayer = $derived(live(commander?.player.id));
 
   const renamingPlayer = $derived(
     renaming === null
@@ -102,8 +104,10 @@
       firstPlayer={rolling ? null : store.state.firstPlayer}
       spotlight={spin.spotlight}
       {celebrating}
-      onLifeChange={(player, delta) => store.changeLife(player.id, delta)}
+      onLifeChange={(player, delta, from) => store.changeLife(player.id, delta, from)}
+      tracksCommanderDamage={store.state.config.tracksCommanderDamage}
       onOpenCounters={(player, rotated) => (counters = { player, rotated })}
+      onOpenCommander={(player, rotated) => (commander = { player, rotated })}
       onRename={(player, rotated) => (renaming = { player, rotated })}
       onElimination={(player, eliminated) => store.setEliminated(player.id, eliminated)}
     />
@@ -131,6 +135,17 @@
       onchange={(counter: CounterKind, delta: number) =>
         store.changeCounter(openPlayer.id, counter, delta)}
       onclose={() => (counters = null)}
+    />
+  {/if}
+
+  {#if commanderPlayer !== null && commander !== null}
+    <CommanderSheet
+      player={commanderPlayer}
+      opponents={(store.state?.players ?? []).filter((other) => other.id !== commanderPlayer.id)}
+      rotated={commander.rotated}
+      onchange={(from: PlayerId, delta: number) =>
+        store.changeCommanderDamage(commanderPlayer.id, from, delta)}
+      onclose={() => (commander = null)}
     />
   {/if}
 

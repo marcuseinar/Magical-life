@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import NewGameSheet from './NewGameSheet.svelte';
 
 const mount = () => {
@@ -43,6 +43,24 @@ describe('new game sheet', () => {
       { name: 'Player 2', colour: 'blue' },
       { name: 'Player 3', colour: 'black' }
     ]);
+  });
+
+  /* The row of badges that attributes commander damage identifies people by
+     colour, so two seats sharing one makes it unanswerable. Cycling five
+     colours meant Player 6 was another white; there are seven to draw on. */
+  it('gives every seat a colour of its own, at every size a table comes in', async () => {
+    for (const count of [2, 3, 4, 5, 6]) {
+      const { onstart } = mount();
+      await fireEvent.click(screen.getByRole('button', { name: String(count) }));
+      await fireEvent.click(screen.getByRole('button', { name: /begin at 40/i }));
+
+      const colours = (onstart.mock.calls[0]![1] as { colour: string }[]).map(
+        (seat) => seat.colour
+      );
+      expect(colours, `${count} players`).toHaveLength(count);
+      expect(new Set(colours).size, `${count} players`).toBe(count);
+      cleanup();
+    }
   });
 
   it('never offers more seats than the format allows', async () => {

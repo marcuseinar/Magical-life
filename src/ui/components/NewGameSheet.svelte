@@ -14,11 +14,14 @@
 
   let count = $state(FORMATS.commander.defaultPlayers);
 
-  /* Colours are assigned in order so a four-player pod is never two blues. */
+  /* Colours are assigned in order so a pod is never two blues. All seven are in
+     play, not just the five true colours: six people cycling five of them made
+     Player 6 another white, and the badges that attribute commander damage
+     identify people by colour — two the same makes the question unanswerable. */
   const seats = $derived(
     Array.from({ length: count }, (_, index) => ({
       name: `Player ${index + 1}`,
-      colour: MANA_COLOURS[index % 5] as ManaColour
+      colour: MANA_COLOURS[index % MANA_COLOURS.length] as ManaColour
     }))
   );
 

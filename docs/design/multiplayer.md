@@ -131,6 +131,104 @@ One row per opposing commander, sorted by damage descending so the threat you
 care about is at the top. Rows appear only for opponents in the current game, so
 the sheet is exactly as long as it needs to be.
 
+### Picking who dealt it
+
+Two axes of one gesture. Dragging **down** sets how much life was lost; dragging
+**sideways** moves along the list of who dealt it, one seat per 44 px, starting
+from "nobody in particular". Both are measured from the press point, so dragging
+back always undoes exactly — the same rule the life scrub follows. Release
+commits both numbers together.
+
+Tapping works too: the strip is a row of real buttons.
+
+Three things the first attempt got wrong, all reported from a real game:
+
+- **Too small to hit.** They were 20 px mana pips. Now 44 px chips.
+- **They read as disabled.** Unselected sat at 55% opacity, which says "broken"
+  rather than "not chosen". Now full contrast, with the selection filled.
+- **Mana symbols were the wrong signal.** A player's identity colour looked like
+  it meant the _colour of the damage_, which is a thing Magic already has an
+  opinion about. Seat numbers instead — unambiguous, and they match the seating.
+
+The strip drops in from **above the top edge** of the card and stays there. The
+gesture that opens it is a downward drag, which puts the hand over the bottom of
+the card — so the bottom is the one place these must not be.
+
+At six players the card is 248 px tall: the strip needs 67 and the life total 53,
+which leaves no room for a separate floating badge above the number it would
+cover. So while the strip is open the pending amount moves onto the caption line
+— `−13 · Björn's commander` — which is also the control that cancels. Measured
+rather than guessed, and asserted by a test at four and six players.
+
+The strip and the life total sit in **separate grid rows**, not as two boxes
+floating over the same space kept apart by a margin.
+
+That margin was the whole problem. It was six pixels on Chromium and negative on
+WebKit, whose font metrics differ, and two attempts to widen it by measurement
+both failed there. A row each makes overlap geometrically impossible in any
+engine, with nothing left to measure.
+
+Three CI cycles were spent on that because the sandbox was believed not to be
+able to run WebKit. It can: the browser downloads fine and only the system
+libraries are missing, which `npx playwright install-deps webkit` supplies. Run
+that before reasoning about engine-specific layout — a guess verified only in CI
+costs four minutes a try and is how the same test failed three times running.
+
+The row collapses when nothing is pending, so the resting layout is unchanged.
+
+The row shows **every candidate at once**, as equal columns spanning the card.
+Nothing scrolls and nothing is hidden.
+
+It did scroll, once, and it was wrong twice over. The card is 194 px wide at six
+players and a 44 px chip needs 264 px for six of them, so two of the badges were
+always off screen — and reaching them meant panning a row to find a badge you
+could not see. Panning to locate a target is not aiming. Equal columns fit
+because the badge is drawn _inside_ the column rather than sizing it: at six
+players each column is about 29 px, and the circle drawn in it is smaller again.
+
+The badges are round. A square chip eats the width its neighbours need for the
+same visual weight, and the damage sheet already identifies people with a disc.
+
+Only opponents appear. The row briefly listed every seat, on the reasoning that a
+stolen commander still deals its owner's damage — and the table reported it as
+noise straight away. Your own badge is one more thing to aim past mid-gesture,
+for a case that needs somebody to have stolen your commander. The domain still
+records self-damage faithfully; the sheet is where you correct it.
+
+Each badge is the owner's mana pip rather than their seat number. Seat numbers
+were tried first, because mana colour already means something else in Magic — but
+the pip is standing in for a player portrait, which is what will identify a
+player here eventually, and the damage sheet already identifies people that way.
+A number would have to be unlearned twice.
+
+That only works if no two seats share a colour, and they did: seats cycled the
+five true colours, so Player 6 was another white and two badges in the row were
+indistinguishable. All seven colours are now in play, which covers the six seats
+a table can have.
+
+### Aiming: absolute, not relative
+
+**The badge chosen is the one under the finger.** Position is read from the row's
+own box, not from how far the finger has travelled since the press.
+
+Travel was the first design and it could not be aimed. The same point on screen
+selected different players depending on where the drag began — and the player can
+see the badges but cannot see the point they started from, so there is no way to
+predict what a movement will do. Sizing that travel against the room available
+made every candidate _reachable_ without making any of them _findable_: the
+complaint that followed was that the interaction still felt wrong.
+
+`blameSlot` is a pure function of position, row box, and count, with property
+tests asserting that sweeping across the row visits every slot exactly once in
+order, that the answer never depends on anything but position, and that a
+rotated panel mirrors.
+
+One guard: the row does not take over until the finger has moved sideways ten
+pixels on purpose. Reading position absolutely from the moment of the press would
+blame whoever happens to sit under the thumb — and a loss is pressed on the minus
+zone, which on a crowded card is nowhere near the "nobody" badge. A straight drag
+down therefore blames nobody, which an end-to-end test asserts.
+
 ### The flow that actually happens at a table
 
 The important insight: **commander damage is nearly always life loss too.** So
