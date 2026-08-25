@@ -259,7 +259,12 @@
                   onclick={() => (attributedTo = candidate)}
                 >
                   <span class="blame__badge">
-                    {#if candidate === null}
+                    <!-- The badge you are aiming at carries the number. It is
+                         the one place on the card that is guaranteed to be both
+                         where you are looking and above your thumb. -->
+                    {#if attributedTo === candidate}
+                      <span class="blame__amount" aria-hidden="true">{controller.pending}</span>
+                    {:else if candidate === null}
                       <span class="blame__none" aria-hidden="true">–</span>
                     {:else}
                       <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={40} />
@@ -283,7 +288,6 @@
                 ? `+${controller.pending}`
                 : controller.pending}"
             >
-              <span class="blame__delta" aria-hidden="true">{controller.pending}</span>
               <span aria-live="polite"
                 >{blamed === null ? 'not commander damage' : `${blamed.name}'s commander`}</span
               >
@@ -555,6 +559,17 @@
     grid-template-columns: repeat(var(--slots), 1fr);
     gap: 2px;
     width: 100%;
+
+    /* Only as wide as the badges need. Spanning the whole card put two players
+       in opposite corners with a void between them; the aiming reads this
+       element's own box, so a narrower row is simply a shorter sweep. */
+    max-width: min(100%, calc(var(--slots) * 3.25rem));
+    margin-inline: auto;
+
+    /* Room for the aimed badge to grow into. It scales rather than reflows, so
+       nothing reserves this space for it and without the padding it printed
+       over the caption underneath. */
+    padding-bottom: var(--space-2);
   }
 
   .blame__chip {
@@ -596,13 +611,46 @@
       transform var(--duration-fast) var(--ease-out);
   }
 
+  /* The aimed badge grows and holds the pending number.
+   *
+   * `transform` and never the grid: the column widths are the hit zones the
+   * absolute aiming reads, so resizing them would move the targets under the
+   * finger that is choosing between them. Scaling paints outside the column
+   * without changing where anything *is* — the badge overlaps its neighbours
+   * the way a pressed key on a phone keyboard pops over the ones beside it. */
   .blame__chip[data-selected='true'] .blame__badge {
-    border-color: var(--frame-rule-strong);
-    background: var(--accent);
+    z-index: 1;
 
-    /* The badge is small where the table is big, so the selection has to read
-       at a glance without needing more room than the column has. */
-    transform: scale(1.12);
+    /* The pip gives way to the number, so identity moves to the ring. It is the
+       ring and not the fill because filling with the player colour put cream
+       digits on white and on colourless, where they could not be read; a bright
+       ring on the sunken surface stays legible whichever of the seven it is. */
+    border-width: 2px;
+    border-color: var(--player-glow, var(--frame-rule-strong));
+    box-shadow: 0 0 0 1px var(--frame-shadow);
+    transform: scale(1.5);
+  }
+
+  .blame__chip[data-selected='true'] {
+    /* Above the siblings it now overlaps. */
+    z-index: 1;
+  }
+
+  /* "Nobody" has no colour of its own, and `--player-glow` is inherited from
+     the panel — so without this the badge for *no* commander damage was ringed
+     in the colour of the player being damaged, which reads as blaming them. */
+  .blame__chip:not([data-colour])[data-selected='true'] .blame__badge {
+    border-color: var(--frame-rule-strong);
+  }
+
+  .blame__amount {
+    color: var(--text-primary);
+    font-family: var(--font-numeric);
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
   }
 
   .blame__none {
@@ -622,13 +670,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     pointer-events: auto;
-  }
-
-  .blame__delta {
-    color: var(--loss);
-    font-family: var(--font-numeric);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
   }
 
   .crown {

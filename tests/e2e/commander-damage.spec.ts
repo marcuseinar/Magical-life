@@ -96,6 +96,89 @@ test('shows every candidate at once, inside the card, at six players', async ({ 
   expect(fit.allInside).toBe(true);
 });
 
+/* The damage was hard to read on the caption line, so it moved into the badge
+   being aimed at — the one place guaranteed to be both where you are looking
+   and above your thumb. */
+test('shows the pending damage inside the badge being aimed at', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
+  const box = (await loseZone.boundingBox())!;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
+
+  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+  const badges = await group.getByRole('button').all();
+
+  // Before aiming at anybody, the number rides on "not commander damage".
+  await expect(badges[0]!.locator('.blame__amount')).toHaveText(/^-\d+$/);
+
+  // It follows the aim, and only one badge ever holds it.
+  const target = (await badges[3]!.boundingBox())!;
+  await page.mouse.move(target.x + target.width / 2, y + 100, { steps: 6 });
+
+  await expect(badges[3]!.locator('.blame__amount')).toHaveText(/^-\d+$/);
+  await expect(group.locator('.blame__amount')).toHaveCount(1);
+
+  await page.mouse.up();
+});
+
+/* The badge grows by painting, never by reflowing. The columns are the hit
+   zones the absolute aiming reads: if choosing one resized them, the targets
+   would move under the finger that is choosing between them. */
+test('growing the aimed badge does not move any of the targets', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
+  const box = (await loseZone.boundingBox())!;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, y + 100, { steps: 8 });
+
+  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+  const columns = () =>
+    group.getByRole('button').evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return `${Math.round(rect.left)}:${Math.round(rect.width)}`;
+      })
+    );
+
+  const before = await columns();
+
+  // Aim at each badge in turn; the columns must not budge for any of them.
+  for (const badge of await group.getByRole('button').all()) {
+    const target = (await badge.boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, y + 100, { steps: 3 });
+    expect(await columns()).toEqual(before);
+  }
+
+  await page.mouse.up();
+});
+
+/* It has to be bigger than its neighbours, or the number has nowhere to go. */
+test('draws the aimed badge larger than the rest', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+  await zone(page, 'Player 1', 'lose').click();
+
+  const painted = await page
+    .getByRole('group', { name: /whose commander/i })
+    .locator('.blame__badge')
+    .evaluateAll((badges) => badges.map((badge) => badge.getBoundingClientRect().width));
+
+  const [aimed, ...rest] = painted;
+  for (const other of rest) expect(aimed!).toBeGreaterThan(other * 1.2);
+});
+
 /* Round, because a square badge eats the width its neighbours need. */
 test('draws the badges as circles', async ({ page }) => {
   await startGame(page, /commander/i, 6);
