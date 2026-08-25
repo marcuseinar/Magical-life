@@ -8,8 +8,10 @@
     firstPlayer = null,
     spotlight = null,
     celebrating = null,
+    tracksCommanderDamage = false,
     onLifeChange,
     onOpenCounters,
+    onOpenCommander,
     onRename,
     onElimination
   }: {
@@ -19,13 +21,19 @@
     spotlight?: number | null;
     /** Player who has just won the roll, blinking to announce it. */
     celebrating?: PlayerId | null;
-    onLifeChange: (player: PlayerState, delta: number) => void;
+    tracksCommanderDamage?: boolean;
+    onLifeChange: (player: PlayerState, delta: number, from: PlayerId | null) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
+    onOpenCommander: (player: PlayerState, rotated: boolean) => void;
     onRename: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
   } = $props();
 
   /* One and two players read best stacked; three and up want a grid. */
+  /* Every seat, in order: the panel needs them all, since a stolen commander
+     can hit its own owner. */
+  const seats = $derived(players);
+
   const columns = $derived(players.length <= 2 ? 1 : 2);
   const rows = $derived(Math.ceil(players.length / columns));
 
@@ -53,8 +61,11 @@
         spotlit={index === spotlight}
         celebrating={player.id === celebrating}
         dimmed={spotlight !== null && index !== spotlight}
-        onLifeChange={(delta) => onLifeChange(player, delta)}
+        {tracksCommanderDamage}
+        {seats}
+        onLifeChange={(delta, from) => onLifeChange(player, delta, from)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}
+        onOpenCommander={() => onOpenCommander(player, isRotated(index))}
         onRename={() => onRename(player, isRotated(index))}
         onElimination={(eliminated) => onElimination(player, eliminated)}
       />

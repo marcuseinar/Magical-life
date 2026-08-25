@@ -15,6 +15,8 @@ import { renamePlayer, tidyName } from './renamePlayer';
 import { MAX_PLAYER_NAME } from '$domain/rules';
 import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
+import { recordCommanderDamage } from './recordCommanderDamage';
+import { commanderDamageFrom } from '$domain/selectors';
 import type { Rng } from '../ports/rng';
 
 /** A dealt sequence of "random" numbers, so a roll is a fact and not a coin toss. */
@@ -410,6 +412,74 @@ describe('use cases', () => {
 
     it('is empty for nothing but whitespace', () => {
       expect(tidyName('  \n ')).toBe('');
+    });
+  });
+
+  describe('recordCommanderDamage', () => {
+    const damage = () => recordCommanderDamage({ session });
+
+    it('records damage against the commander that dealt it', async () => {
+      expect(await damage()(seats[0]!, seats[1]!, 7)).toEqual({ ok: true, value: undefined });
+      expect(commanderDamageFrom(session.state!.players[0]!, seats[1]!)).toBe(7);
+    });
+
+    it('leaves life alone — the caller decides whether it was life loss too', async () => {
+      await damage()(seats[0]!, seats[1]!, 7);
+      expect(session.state?.players[0]?.life).toBe(40);
+    });
+
+    it('corrects downwards', async () => {
+      await damage()(seats[0]!, seats[1]!, 7);
+      await damage()(seats[0]!, seats[1]!, -3);
+      expect(commanderDamageFrom(session.state!.players[0]!, seats[1]!)).toBe(4);
+    });
+
+    it('refuses to correct below zero when there is nothing recorded', async () => {
+      expect(await damage()(seats[0]!, seats[1]!, -1)).toEqual({ ok: false, error: 'no-change' });
+      expect(session.events.filter((e) => e.kind === 'commander/damaged')).toHaveLength(0);
+    });
+
+    it('refuses a delta of zero', async () => {
+      expect(await damage()(seats[0]!, seats[1]!, 0)).toEqual({ ok: false, error: 'no-change' });
+    });
+
+    it('refuses a fractional delta', async () => {
+      expect(await damage()(seats[0]!, seats[1]!, 1.5)).toEqual({
+        ok: false,
+        error: 'not-an-integer'
+      });
+    });
+
+    it('refuses an unknown victim', async () => {
+      expect(await damage()(playerId('ghost'), seats[1]!, 5)).toEqual({
+        ok: false,
+        error: 'unknown-player'
+      });
+    });
+
+    it('refuses an unknown attacker', async () => {
+      expect(await damage()(seats[0]!, playerId('ghost'), 5)).toEqual({
+        ok: false,
+        error: 'unknown-source'
+      });
+    });
+
+    it('refuses when no game has started', async () => {
+      const empty = createGameSession({
+        clock: fakeClock(),
+        log: createMemoryEventLog(),
+        authorId: HOST
+      });
+      expect(await recordCommanderDamage({ session: empty })(seats[0]!, seats[1]!, 5)).toEqual({
+        ok: false,
+        error: 'no-game'
+      });
+    });
+
+    it('is cleared by a rematch', async () => {
+      await damage()(seats[0]!, seats[1]!, 13);
+      await rematch({ session })();
+      expect(session.state?.players[0]?.commanderDamage).toEqual({});
     });
   });
 

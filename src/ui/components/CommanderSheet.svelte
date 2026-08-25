@@ -1,38 +1,37 @@
 <script lang="ts">
-  import { COUNTER_KINDS } from '$domain/rules';
-  import type { CounterKind } from '$domain/rules';
+  import type { PlayerId } from '$domain/ids';
+  import { LETHAL_COMMANDER_DAMAGE } from '$domain/rules';
+  import { commanderDamageFrom } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
+  import ManaPip from './ManaPip.svelte';
 
   let {
     player,
-    /** Matches the player's panel, so the sheet reads right way up from their seat. */
+    opponents,
     rotated = false,
     onchange,
     onclose
   }: {
     player: PlayerState;
+    /** Everyone whose commander could have hit this player — including them,
+     *  since a stolen commander still deals its owner's damage. */
+    opponents: readonly PlayerState[];
     rotated?: boolean;
-    onchange: (counter: CounterKind, delta: number) => void;
+    onchange: (from: PlayerId, delta: number) => void;
     onclose: () => void;
   } = $props();
 
-  const LABELS: Record<CounterKind, string> = {
-    poison: 'Poison',
-    energy: 'Energy',
-    experience: 'Experience',
-    rad: 'Rad',
-    ticket: 'Ticket'
-  };
-
   let closeButton = $state<HTMLButtonElement | null>(null);
   $effect(() => closeButton?.focus());
+
+  /* Worst first: the commander about to kill you is the one you are looking for. */
+  const rows = $derived(
+    [...opponents]
+      .map((opponent) => ({ opponent, total: commanderDamageFrom(player, opponent.id) }))
+      .sort((a, b) => b.total - a.total || (a.opponent.name < b.opponent.name ? -1 : 1))
+  );
 </script>
 
-<!--
-  Lives at the page level rather than inside the panel. A panel is small, and it
-  clips its own overflow, so an editor rendered inside one spills off the card at
-  four players and off the screen at six.
--->
 <svelte:window
   onkeydown={(event) => {
     if (event.key === 'Escape') onclose();
@@ -49,37 +48,48 @@
     data-colour={player.colour}
     role="dialog"
     aria-modal="true"
-    aria-label="Counters for {player.name}"
+    aria-label="Commander damage to {player.name}"
   >
     <header class="head">
-      <h2 class="title">{player.name}</h2>
-      <button class="close" bind:this={closeButton} onclick={onclose} aria-label="Close counters"
-        >×</button
+      <h2 class="title">Commander damage to {player.name}</h2>
+      <button
+        class="close"
+        bind:this={closeButton}
+        onclick={onclose}
+        aria-label="Close commander damage">×</button
       >
     </header>
 
     <ul class="rows">
-      {#each COUNTER_KINDS as kind (kind)}
-        <li class="row" data-kind={kind}>
-          <span class="row__label">{LABELS[kind]}</span>
-          <button
-            class="step"
-            aria-label="Remove one {LABELS[kind].toLowerCase()} counter from {player.name}"
-            disabled={player.counters[kind] === 0}
-            onclick={() => onchange(kind, -1)}>−</button
-          >
-          <span class="row__value" aria-live="polite">
-            <span aria-hidden="true">{player.counters[kind]}</span>
-            <span class="sr-only">{player.counters[kind]} {LABELS[kind].toLowerCase()}</span>
+      {#each rows as { opponent, total } (opponent.id)}
+        <li class="row" data-lethal={total >= LETHAL_COMMANDER_DAMAGE}>
+          <span class="row__who" data-colour={opponent.colour}>
+            <ManaPip colour={opponent.colour} size={18} />
+            <span class="row__name">{opponent.name}</span>
           </span>
           <button
             class="step"
-            aria-label="Add one {LABELS[kind].toLowerCase()} counter to {player.name}"
-            onclick={() => onchange(kind, 1)}>+</button
+            aria-label="Remove one commander damage to {player.name} from {opponent.name}"
+            disabled={total === 0}
+            onclick={() => onchange(opponent.id, -1)}>−</button
+          >
+          <!-- The digit and the spoken phrase are separate: interpolating a
+               leading space inside the hidden span gets trimmed away, and the
+               screen reader hears "1from Player 2". -->
+          <span class="row__total" aria-live="polite">
+            <span aria-hidden="true">{total}</span>
+            <span class="sr-only">{total} from {opponent.name}</span>
+          </span>
+          <button
+            class="step"
+            aria-label="Add one commander damage to {player.name} from {opponent.name}"
+            onclick={() => onchange(opponent.id, 1)}>+</button
           >
         </li>
       {/each}
     </ul>
+
+    <p class="foot">Twenty-one from any single commander is lethal.</p>
   </div>
 </div>
 
@@ -103,7 +113,7 @@
     position: relative;
     display: grid;
     gap: var(--space-3);
-    width: min(22rem, 100%);
+    width: min(24rem, 100%);
     max-height: 100%;
     padding: var(--space-4);
     overflow-y: auto;
@@ -111,8 +121,6 @@
     border-radius: var(--radius-lg);
     background: linear-gradient(175deg, var(--player-ink), var(--surface-panel) 85%);
     box-shadow: var(--shadow-float);
-
-    /* The sheet scrolls even though the page cannot. */
     touch-action: pan-y;
   }
 
@@ -131,17 +139,15 @@
   .title {
     flex: 1;
     margin: 0;
-    overflow: hidden;
     color: var(--text-gold);
     font-family: var(--font-display);
-    font-size: 1.05rem;
+    font-size: 1rem;
     letter-spacing: var(--tracking-display);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .close {
     display: grid;
+    flex: none;
     place-items: center;
     width: 2.2rem;
     height: 2.2rem;
@@ -167,13 +173,22 @@
     align-items: center;
   }
 
-  .row__label {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    text-align: left;
+  .row__who {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    min-width: 0;
   }
 
-  .row__value {
+  .row__name {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row__total {
     font-family: var(--font-numeric);
     font-size: 1.1rem;
     font-weight: 700;
@@ -181,15 +196,13 @@
     text-align: center;
   }
 
-  .row[data-kind='poison'] .row__value {
-    color: var(--poison);
+  .row[data-lethal='true'] .row__total {
+    color: var(--danger);
   }
 
   .step {
     display: grid;
     place-items: center;
-
-    /* Comfortable touch target, even one-handed in a dim room. */
     min-width: 2.75rem;
     min-height: 2.75rem;
     border: 1px solid var(--frame-rule);
@@ -202,5 +215,12 @@
   .step:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+
+  .foot {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 0.8rem;
+    text-align: center;
   }
 </style>
