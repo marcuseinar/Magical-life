@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import PlayerPanel from './PlayerPanel.svelte';
 import { COMMIT_WINDOW_MS } from '$ui/interaction/pendingDelta';
 import { playerId } from '$domain/ids';
@@ -11,7 +11,6 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   colour: 'green',
   life: 40,
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
-  commanderDamage: {},
   eliminated: false,
   ...over
 });
@@ -30,19 +29,8 @@ const mount = (over: Partial<PlayerState> = {}) => {
 const decrease = () => screen.getByRole('button', { name: /lose one life/i });
 const increase = () => screen.getByRole('button', { name: /gain one life/i });
 
-const touch = (
-  element: Element,
-  event: 'pointerDown' | 'pointerMove' | 'pointerUp',
-  y = 0,
-  x = 0
-) =>
-  fireEvent[event](element, {
-    pointerId: 1,
-    pointerType: 'touch',
-    clientY: y,
-    clientX: x,
-    button: 0
-  });
+const touch = (element: Element, event: 'pointerDown' | 'pointerMove' | 'pointerUp', y = 0) =>
+  fireEvent[event](element, { pointerId: 1, pointerType: 'touch', clientY: y, button: 0 });
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -80,7 +68,7 @@ describe('player panel', () => {
     await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
 
     expect(onLifeChange).toHaveBeenCalledTimes(1);
-    expect(onLifeChange).toHaveBeenCalledWith(-3, null);
+    expect(onLifeChange).toHaveBeenCalledWith(-3);
   });
 
   it('counts gains and losses against each other', async () => {
@@ -123,7 +111,7 @@ describe('player panel', () => {
     expect(onLifeChange).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(400);
-    expect(onLifeChange).toHaveBeenCalledWith(-2, null);
+    expect(onLifeChange).toHaveBeenCalledWith(-2);
   });
 
   it('repeats while a zone is held down', async () => {
@@ -159,7 +147,7 @@ describe('player panel', () => {
     await touch(zone, 'pointerUp', 295);
     await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
 
-    expect(onLifeChange).toHaveBeenCalledWith(-1, null);
+    expect(onLifeChange).toHaveBeenCalledWith(-1);
   });
 
   it('reverses the drag direction for a panel facing across the table', async () => {
@@ -275,184 +263,12 @@ describe('player panel', () => {
     expect(screen.getByRole('heading', { name: 'Anna' })).toBeInTheDocument();
   });
 
-  describe('commander damage', () => {
-    const bjorn = (): PlayerState => ({
-      ...player(),
-      id: playerId('bjorn'),
-      name: 'Björn',
-      colour: 'blue'
-    });
-
-    const mountCommander = (over: Partial<PlayerState> = {}) => {
-      const onLifeChange = vi.fn();
-      const onOpenCommander = vi.fn();
-      render(PlayerPanel, {
-        props: {
-          player: player(over),
-          tracksCommanderDamage: true,
-          seats: [player(), bjorn()],
-          onLifeChange,
-          onOpenCounters: vi.fn(),
-          onOpenCommander,
-          onElimination: vi.fn()
-        }
-      });
-      return { onLifeChange, onOpenCommander };
-    };
-
-    it('asks who dealt it only once life is being lost', async () => {
-      mountCommander();
-      expect(screen.queryByRole('group', { name: /whose commander/i })).not.toBeInTheDocument();
-
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-      expect(screen.getByRole('group', { name: /whose commander/i })).toBeInTheDocument();
-    });
-
-    it('does not ask when life is being gained', async () => {
-      mountCommander();
-      await touch(increase(), 'pointerDown');
-      expect(screen.queryByRole('group', { name: /whose commander/i })).not.toBeInTheDocument();
-    });
-
-    it('does not ask in a format where it does not count', async () => {
-      mount();
-      await touch(decrease(), 'pointerDown');
-      expect(screen.queryByRole('group', { name: /whose commander/i })).not.toBeInTheDocument();
-    });
-
-    it('tags the loss with the commander that dealt it, in one gesture', async () => {
-      const { onLifeChange } = mountCommander();
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-      await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
-
-      await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
-      expect(onLifeChange).toHaveBeenCalledWith(-1, 'bjorn');
-    });
-
-    it('lets the blame be taken back before it commits', async () => {
-      const { onLifeChange } = mountCommander();
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-
-      await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
-      await fireEvent.click(screen.getByRole('button', { name: /not commander damage/i }));
-
-      await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
-      expect(onLifeChange).toHaveBeenCalledWith(-1, null);
-    });
-
-    it('identifies each commander by its owner\u2019s colour', async () => {
-      mountCommander();
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-
-      const group = screen.getByRole('group', { name: /whose commander/i });
-      // The pip stands in for a portrait later, so the chip has to carry the
-      // player's identity rather than their position in the seating order.
-      const pip = within(group)
-        .getByRole('button', { name: /bj\u00f6rn's commander/i })
-        .querySelector('[data-colour]');
-      expect(pip).toHaveAttribute('data-colour', 'blue');
-    });
-
-    it('says out loud whose commander is currently blamed', async () => {
-      mountCommander();
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-      expect(screen.getByText('not commander damage')).toBeInTheDocument();
-
-      await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
-      expect(screen.getByText("Björn's commander")).toBeInTheDocument();
-    });
-
-    /* Reported from the table: your own chip in the row is noise. You cannot be
-       dealt commander damage by your own commander in any ordinary game, and
-       the one case that allows it \u2014 somebody stealing it \u2014 is rare enough to
-       correct in the sheet afterwards rather than to carry in every gesture. */
-    it('leaves the player themselves out of the row', async () => {
-      mountCommander();
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-
-      const group = screen.getByRole('group', { name: /whose commander/i });
-      expect(
-        within(group).queryByRole('button', { name: /anna's commander/i })
-      ).not.toBeInTheDocument();
-      expect(within(group).getAllByRole('button')).toHaveLength(2);
-    });
-
-    it('picks who dealt it from the same drag that sets how much', async () => {
-      const { onLifeChange } = mountCommander();
-      const zone = decrease();
-
-      await touch(zone, 'pointerDown', 300, 100);
-      // Down the screen for the damage, sideways for the commander: one gesture,
-      // both numbers.
-      await touch(zone, 'pointerMove', 400, 190);
-      await touch(zone, 'pointerUp', 400, 190);
-
-      const [delta, from] = onLifeChange.mock.calls[0]!;
-      expect(delta).toBeLessThan(-5);
-      expect(from).toBe('bjorn');
-    });
-
-    it('is reversible — dragging back drops the blame again', async () => {
-      const { onLifeChange } = mountCommander();
-      const zone = decrease();
-
-      await touch(zone, 'pointerDown', 300, 100);
-      await touch(zone, 'pointerMove', 400, 190);
-      await touch(zone, 'pointerMove', 400, 100);
-      await touch(zone, 'pointerUp', 400, 100);
-
-      expect(onLifeChange.mock.calls[0]![1]).toBeNull();
-    });
-
-    it('forgets the blame once the change is committed', async () => {
-      const { onLifeChange } = mountCommander();
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-      await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
-      await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
-
-      await touch(decrease(), 'pointerDown');
-      await touch(decrease(), 'pointerUp');
-      await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
-
-      expect(onLifeChange).toHaveBeenNthCalledWith(1, -1, 'bjorn');
-      expect(onLifeChange).toHaveBeenNthCalledWith(2, -1, null);
-    });
-
-    it('offers the damage sheet, and shows the worst commander once there is any', () => {
-      const { onOpenCommander } = mountCommander({ commanderDamage: { bjorn: 13, cara: 4 } });
-      const crown = screen.getByRole('button', { name: /commander damage to anna/i });
-      expect(crown).toHaveTextContent('13');
-      crown.click();
-      expect(onOpenCommander).toHaveBeenCalled();
-    });
-
-    it('shows no number before anything has landed', () => {
-      mountCommander();
-      expect(
-        screen.getByRole('button', { name: /commander damage to anna/i })
-      ).not.toHaveTextContent(/\d/);
-    });
-
-    it('treats twenty-one from one commander as lethal, on full life', () => {
-      const { onLifeChange } = mountCommander({ commanderDamage: { bjorn: 21 } });
-      void onLifeChange;
-      expect(screen.getByRole('button', { name: 'Out' })).toBeInTheDocument();
-    });
-  });
-
   it('is fully operable from the keyboard', async () => {
     const { onLifeChange } = mount();
     // A keyboard-activated click carries no pointer detail.
     await fireEvent.click(decrease(), { detail: 0 });
     await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
 
-    expect(onLifeChange).toHaveBeenCalledWith(-1, null);
+    expect(onLifeChange).toHaveBeenCalledWith(-1);
   });
 });

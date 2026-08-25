@@ -82,14 +82,6 @@ Real journeys, on real mobile viewports, in Chromium **and** WebKit — WebKit i
 not optional when a large share of Magic players are on iPhones and Safari's
 IndexedDB and WebRTC behaviour differs.
 
-WebKit runs in the development sandbox, but only after
-`npx playwright install-deps webkit` — the browser itself downloads fine and it
-is the system libraries that are missing. Do that rather than pushing a layout
-fix to see whether CI likes it; three consecutive CI failures on one WebKit
-geometry test were paid for by assuming it could not be run locally. Locally
-WebKit is opt-in behind `CI=1`, which is what enables the `mobile-safari`
-project.
-
 Journeys:
 
 1. Cold open → 20 life showing → tap down to 0. The core path; runs on every commit.
