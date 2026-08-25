@@ -17,6 +17,8 @@ export type PlayerSeat = {
 export type PlayerState = PlayerSeat & {
   readonly life: number;
   readonly counters: Readonly<Record<CounterKind, number>>;
+  /** Damage taken, keyed by the commander's owner. Absent means none. */
+  readonly commanderDamage: Readonly<Record<string, number>>;
   readonly eliminated: boolean;
 };
 

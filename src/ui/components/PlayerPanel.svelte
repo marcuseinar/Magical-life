@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { lethalReasons, threatLevel } from '$domain/selectors';
+  import type { PlayerId } from '$domain/ids';
+  import { highestCommanderDamage, lethalReasons, threatLevel } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
+  import { MAX_BLAME_STEP_PX, blameIndex, blameStepPx } from '$ui/interaction/blameStep';
   import { scrubPoints } from '$ui/interaction/pendingDelta';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
   import CounterTray from './CounterTray.svelte';
@@ -18,8 +20,11 @@
     spotlit = false,
     dimmed = false,
     celebrating = false,
+    seats = [],
+    tracksCommanderDamage = false,
     onLifeChange,
     onOpenCounters,
+    onOpenCommander,
     onRename,
     onElimination
   }: {
@@ -32,23 +37,80 @@
     celebrating?: boolean;
     /** A spin is running and the light is on somebody else. */
     dimmed?: boolean;
-    onLifeChange: (delta: number) => void;
+    /** Every seat in the game, in order. The panel filters itself out of the
+     *  attribution row; the seating order is what gives each chip its colour. */
+    seats?: readonly PlayerState[];
+    tracksCommanderDamage?: boolean;
+    /** `from` names the commander blamed for this loss, when one was picked. */
+    onLifeChange: (delta: number, from: PlayerId | null) => void;
+    onOpenCommander?: () => void;
     onRename?: () => void;
     onOpenCounters: () => void;
     onElimination: (eliminated: boolean) => void;
   } = $props();
 
+  /** Sized against the room the finger has, once the press point is known. */
+  let blameStep = $state(MAX_BLAME_STEP_PX);
+  let field = $state<HTMLElement | null>(null);
+
   /** Far enough to be a deliberate drag rather than the wobble of a tap. */
   const SCRUB_THRESHOLD_PX = 12;
+
+  /** Sideways travel per step along the list of who dealt it. */
   const REPEAT_DELAY_MS = 500;
   const REPEAT_MS = 250;
   const REPEAT_FAST_MS = 83;
   const REPEAT_ACCELERATES_AFTER = 4;
 
-  const controller = createDeltaController((delta) => onLifeChange(delta));
+  /** Which commander this pending loss is being blamed on, if any. */
+  let attributedTo = $state<PlayerId | null>(null);
+
+  const controller = createDeltaController((delta) => {
+    onLifeChange(delta, attributedTo);
+    attributedTo = null;
+  });
+
+  // Cancelling the pending change drops the attribution with it.
+  $effect(() => {
+    if (controller.pending === 0 && attributedTo !== null) attributedTo = null;
+  });
+
+  const commanderTaken = $derived(highestCommanderDamage(player));
+
+  /**
+   * Who could have dealt it: nobody in particular, then every seat in order.
+   * `null` first because most life loss is not commander damage, and opponents
+   * only: your own chip is one more thing to aim past mid-gesture, for a case
+   * that needs somebody to have stolen your commander. The domain still records
+   * self-damage; the sheet is where you correct it.
+   */
+  const blame = $derived<readonly (PlayerId | null)[]>([
+    null,
+    ...seats.filter((seat) => seat.id !== player.id).map((seat) => seat.id)
+  ]);
+
+  const blamed = $derived(seats.find((seat) => seat.id === attributedTo) ?? null);
+
+  let blameRow = $state<HTMLElement | null>(null);
+
+  /* The strip is one scrolling row, so the chip the drag has landed on has to be
+     brought into view or the selection happens off screen. */
+  $effect(() => {
+    void attributedTo;
+    // Optional call: this is presentation polish, and it must not throw where
+    // the API is missing — jsdom has no `scrollIntoView`.
+    const selected = blameRow?.querySelector('[data-selected="true"]');
+    selected?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+  });
+
+  /* Only worth asking on a loss, in a format where it counts, with someone to blame. */
+  const askingWhoDealtIt = $derived(
+    tracksCommanderDamage && controller.pending < 0 && seats.length > 0
+  );
 
   let scrubbing = $state(false);
   let origin = 0;
+  let originX = 0;
   let scrubBase = 0;
   let repeat: ReturnType<typeof setTimeout> | undefined;
 
@@ -77,6 +139,15 @@
     // Respond on touch-down, not on release: a life counter that waits feels broken.
     controller.nudge(sign);
     origin = event.clientY;
+    originX = event.clientX;
+
+    /* Whichever side of the press point has more room is the side the row will
+       run in, so the step is sized against that one. */
+    const card = field?.getBoundingClientRect();
+    const room = card
+      ? Math.max(event.clientX - card.left, card.right - event.clientX)
+      : MAX_BLAME_STEP_PX;
+    blameStep = blameStepPx(room, blame.length);
     scrubBase = controller.pending;
     scrubbing = false;
     startRepeating(sign);
@@ -85,6 +156,17 @@
   function drag(event: PointerEvent) {
     const target = event.currentTarget as HTMLElement;
     if (!target.hasPointerCapture(event.pointerId)) return;
+
+    /*
+     * Two axes, one gesture: down sets how much was lost, sideways sets whose
+     * commander did it. Sideways is handled first and independently of the
+     * vertical threshold, so blame can be picked during a drag that has not yet
+     * become a scrub — and both are measured from the press point, so dragging
+     * back always undoes exactly.
+     */
+    if (askingWhoDealtIt) {
+      attributedTo = blame[blameIndex(event.clientX - originX, blameStep, blame.length)] ?? null;
+    }
 
     const travelled = (origin - event.clientY) * (rotated ? -1 : 1);
     if (!scrubbing && Math.abs(travelled) < SCRUB_THRESHOLD_PX) return;
@@ -126,7 +208,7 @@
 >
   <Filigree />
 
-  <div class="field">
+  <div class="field" bind:this={field} data-attributing={askingWhoDealtIt}>
     <button
       class="zone zone--minus"
       aria-label="{player.name}, lose one life"
@@ -151,18 +233,75 @@
       <span class="zone__glyph" aria-hidden="true">+</span>
     </button>
 
-    <div class="readout">
-      <LifeTotal life={player.life} {threat} label={player.name} />
-      {#if controller.pending !== 0}
-        <div class="badge-slot">
-          <DeltaBadge
-            value={controller.pending}
-            progress={controller.progress}
-            label={player.name}
-            oncancel={() => controller.cancel()}
-          />
-        </div>
-      {/if}
+    <div class="overlay">
+      <div class="top-stack">
+        {#if askingWhoDealtIt}
+          <!-- One gesture writes both numbers: drag down for how much, sideways
+               for whose commander. Tapping works too. The pip is the player's
+               own colour, standing in for the portrait that will replace it. -->
+          <div class="blame">
+            <div
+              bind:this={blameRow}
+              class="blame__row"
+              role="group"
+              aria-label="Whose commander dealt this to {player.name}?"
+            >
+              {#each blame as candidate (candidate ?? 'nobody')}
+                <button
+                  class="blame__chip"
+                  data-selected={attributedTo === candidate}
+                  aria-pressed={attributedTo === candidate}
+                  aria-label={candidate === null
+                    ? 'Not commander damage'
+                    : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
+                  data-colour={seats.find((s) => s.id === candidate)?.colour}
+                  onclick={() => (attributedTo = candidate)}
+                >
+                  {#if candidate === null}
+                    <span class="blame__none" aria-hidden="true">–</span>
+                  {:else}
+                    <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={26} />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+
+            <!--
+              The pending number lives on this line while the strip is open rather
+              than in its own badge above it. Measured at six players: the card is
+              248px, the strip needs 65 and the life total 53, which leaves no room
+              for a third floating element above the number it would cover.
+              Tapping the line still cancels, as the badge does.
+            -->
+            <button
+              class="blame__caption"
+              onclick={() => controller.cancel()}
+              aria-label="{player.name}, cancel pending change of {controller.pending > 0
+                ? `+${controller.pending}`
+                : controller.pending}"
+            >
+              <span class="blame__delta" aria-hidden="true">{controller.pending}</span>
+              <span aria-live="polite"
+                >{blamed === null ? 'not commander damage' : `${blamed.name}'s commander`}</span
+              >
+            </button>
+          </div>
+        {/if}
+
+        {#if controller.pending !== 0 && !askingWhoDealtIt}
+          <div class="badge-slot">
+            <DeltaBadge
+              value={controller.pending}
+              progress={controller.progress}
+              label={player.name}
+              oncancel={() => controller.cancel()}
+            />
+          </div>
+        {/if}
+      </div>
+      <div class="readout">
+        <LifeTotal life={player.life} {threat} label={player.name} />
+      </div>
     </div>
   </div>
 
@@ -183,6 +322,17 @@
     {/if}
 
     <div class="plate__end">
+      {#if tracksCommanderDamage}
+        <button
+          class="crown"
+          data-lethal={commanderTaken >= 21}
+          aria-label="Commander damage to {player.name}"
+          onclick={() => onOpenCommander?.()}
+        >
+          <span aria-hidden="true">♛</span>
+          {#if commanderTaken > 0}<span class="crown__total">{commanderTaken}</span>{/if}
+        </button>
+      {/if}
       {#if reasons.length > 0 || player.eliminated}
         <button
           class="out"
@@ -345,25 +495,190 @@
     opacity: 0.5;
   }
 
-  .readout {
+  /*
+   * Two rows, not two overlays.
+   *
+   * The strip and the life total used to be separately positioned boxes floating
+   * over the same space, kept apart by a margin. That margin was six pixels on
+   * Chromium and negative on WebKit, and two attempts to widen it by measurement
+   * both failed there — WebKit cannot be run in this sandbox, so every fix was a
+   * guess. Giving them a row each makes overlap geometrically impossible, in any
+   * engine, with nothing to measure.
+   */
+  .overlay {
     position: absolute;
     inset: 0;
     display: grid;
-    place-items: center;
+    grid-template-rows: auto minmax(0, 1fr);
 
-    /* The zones underneath must stay tappable through the readout. */
+    /* The zones underneath must stay tappable through it. */
     pointer-events: none;
   }
 
-  .badge-slot {
-    position: absolute;
+  .readout {
+    display: grid;
+    min-height: 0;
+    place-items: center;
+  }
 
-    /* Above the total, in the empty upper third — never over the number it
-       describes, whatever size that number happens to be. */
-    top: 10%;
-    left: 50%;
-    transform: translateX(-50%);
+  /*
+   * Pinned to the top edge and dropped in from above it. The gesture that opens
+   * this strip is a downward drag, which puts the hand over the bottom of the
+   * card — so the bottom is the one place these must not be.
+   *
+   * The card clips its own overflow, so translating from -100% reads as the row
+   * sliding in from off the top of the card.
+   */
+  .blame {
+    display: grid;
+    gap: var(--space-1);
+    justify-items: center;
+    width: 100%;
+    animation: drop-in var(--duration-base) var(--ease-out);
+
+    /* The stack itself is transparent to pointers so it never blocks the tap
+       zones behind it; anything interactive inside has to opt back in. */
     pointer-events: auto;
+  }
+
+  .blame__row {
+    display: flex;
+    gap: var(--space-1);
+    justify-content: safe center;
+    max-width: 100%;
+
+    /* One row, always. Wrapping put three rows of chips over the life total at
+       six players; scrolling keeps the height fixed and the selected chip is
+       brought into view as the drag moves through the list. */
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    /* Rule 10 says nothing scrolls; this is the local opt-in it allows. The row
+       is the one thing in the app whose length is set by the size of the table,
+       so at six players it outruns the card and has to be pannable by hand.
+       The life drag is unaffected: it starts on a zone underneath and takes
+       pointer capture, so it never reaches this element. */
+    touch-action: pan-x;
+  }
+
+  .blame__row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .blame__chip {
+    display: grid;
+    flex: none;
+    place-items: center;
+
+    /* A proper touch target. The first version was a 20px pip at 55% opacity,
+       which read as disabled rather than unselected. */
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    font-family: var(--font-numeric);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+    transition:
+      background-color var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+  }
+
+  .blame__chip[data-selected='true'] {
+    border-color: var(--frame-rule-strong);
+    background: var(--accent);
+    color: var(--text-on-accent);
+  }
+
+  .blame__none {
+    /* "Not commander damage" has no colour to show, so it keeps the dash. */
+    font-size: 1.2rem;
+  }
+
+  .blame__caption {
+    display: flex;
+    gap: var(--space-1);
+    align-items: baseline;
+    justify-content: center;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--size-chip);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: auto;
+  }
+
+  .blame__delta {
+    color: var(--loss);
+    font-family: var(--font-numeric);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .crown {
+    display: inline-flex;
+    flex: none;
+    gap: var(--space-1);
+    align-items: center;
+    padding: 2px var(--space-2);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-pill);
+    color: var(--text-muted);
+    font-size: var(--size-chip);
+    line-height: 1.4;
+  }
+
+  .crown__total {
+    font-family: var(--font-numeric);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .crown[data-lethal='true'] {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  /*
+   * Everything transient lives in one stack at the top of the card.
+   *
+   * The gesture that opens the strip is a downward drag, which puts the hand
+   * over the bottom — so the bottom is the one place these must not be. Stacking
+   * rather than positioning each by percentage means they cannot collide with
+   * each other, and the block's height is bounded by what is in it.
+   */
+  .top-stack {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: center;
+    padding-block-start: var(--space-3);
+    padding-inline: var(--space-2);
+    pointer-events: none;
+  }
+
+  /* Nothing pending: the row collapses and the total sits where it always did. */
+  .top-stack:empty {
+    display: none;
+  }
+
+  .badge-slot {
+    pointer-events: auto;
+  }
+
+  @keyframes drop-in {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 
   .plate {
@@ -475,8 +790,17 @@
   @media (prefers-reduced-motion: reduce) {
     .panel[data-threat='lethal'],
     .panel[data-celebrating='true'],
+    .blame,
     .first {
       animation: none;
+    }
+
+    .readout {
+      transition: none;
+    }
+
+    .badge-slot {
+      transition: none;
     }
   }
 </style>
