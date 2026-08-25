@@ -20,6 +20,7 @@ const mount = (count: number) => {
       players: Array.from({ length: count }, (_, index) => seat(index)),
       onLifeChange: vi.fn(),
       onOpenCounters: vi.fn(),
+      onRename: vi.fn(),
       onElimination: vi.fn()
     }
   });

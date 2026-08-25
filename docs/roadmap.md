@@ -23,10 +23,12 @@ The whole product for most users. If this is not excellent, nothing later matter
 **Done when**: a full Commander game can be played on one phone without touching
 anything but life totals, and closing the app mid-game loses nothing.
 
-Shipped. Not yet built and deliberately deferred: a visible game log view (the
-log exists and drives undo, but has no screen yet), a first-run hint for the
-drag gesture, and editable player names — the last of these is why the name on a
-crowded plate can truncate to "Play…" at six players.
+Shipped, including editable player names: tap a name to change it, tidied and
+clamped to sixteen characters so a plate stays readable at six players.
+
+Not yet built and deliberately deferred: a visible game log view (the log exists
+and drives undo, but has no screen yet), a first-run hint for the drag gesture,
+and naming players during setup rather than once the game has started.
 
 ## M2 — Commander depth
 
