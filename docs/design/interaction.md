@@ -195,6 +195,26 @@ Total duration is fixed regardless of seat count or winner, so the length of the
 spin never hints at the answer. Under `prefers-reduced-motion` there is no spin
 and no blink: the result appears at once.
 
+### It names the first player, not the player who chooses
+
+The rules do not work the way this feature does, and that is deliberate.
+
+Under the Comprehensive Rules the random method decides _who chooses_; that
+player then decides whether to play or draw. In a match, after the first game it
+is the loser of the previous game who chooses, with no roll at all. This applies
+in multiplayer too, not only in one-on-one.
+
+The app skips that step and names a first player outright. Weighed and rejected:
+a prompt after the spin — "Play" or "Draw" in a duel, tap a panel in a pod —
+would be rules-accurate at the cost of one extra tap before every single game.
+For a counter whose defining requirement is being instant to start, the tap
+costs more than the accuracy buys. Players who care about play-or-draw already
+know they are choosing, and can roll again or simply agree.
+
+Revisit if: tournament support arrives (M5), where the distinction is real and
+a judge may need the log to show who won the roll separately from who started —
+or if the previous-game-loser rule becomes worth automating between rematches.
+
 ## The app is a surface, not a document
 
 Nothing scrolls and nothing zooms. A life counter lives face-up on a table
