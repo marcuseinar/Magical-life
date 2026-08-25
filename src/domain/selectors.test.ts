@@ -11,7 +11,6 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   colour: 'green',
   life: 40,
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
-  commanderDamage: {},
   eliminated: false,
   ...over
 });
@@ -40,16 +39,8 @@ describe('lethalReasons', () => {
   });
 
   it('names every reason that applies at once', () => {
-    const doomed = player({
-      life: 0,
-      counters: { ...player().counters, poison: 12 },
-      commanderDamage: { bjorn: 21 }
-    });
-    expect(lethalReasons(doomed)).toEqual(['life', 'poison', 'commander']);
-  });
-
-  it('names commander damage at twenty-one, on full life', () => {
-    expect(lethalReasons(player({ commanderDamage: { bjorn: 21 } }))).toEqual(['commander']);
+    const doomed = player({ life: 0, counters: { ...player().counters, poison: 12 } });
+    expect(lethalReasons(doomed)).toEqual(['life', 'poison']);
   });
 });
 
@@ -78,15 +69,6 @@ describe('threatLevel', () => {
 
   it('is lethal at zero life', () => {
     expect(threatLevel(player({ life: 0 }))).toBe('lethal');
-  });
-
-  it('warns as a commander closes in, before it is lethal', () => {
-    expect(threatLevel(player({ commanderDamage: { bjorn: 17 } }))).toBe('warning');
-    expect(threatLevel(player({ commanderDamage: { bjorn: 16 } }))).toBe('safe');
-  });
-
-  it('is lethal at twenty-one from one commander, on full life', () => {
-    expect(threatLevel(player({ commanderDamage: { bjorn: 21 } }))).toBe('lethal');
   });
 
   it('is lethal at ten poison even on full life', () => {

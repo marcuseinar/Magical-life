@@ -68,10 +68,9 @@
             disabled={player.counters[kind] === 0}
             onclick={() => onchange(kind, -1)}>−</button
           >
-          <span class="row__value" aria-live="polite">
-            <span aria-hidden="true">{player.counters[kind]}</span>
-            <span class="sr-only">{player.counters[kind]} {LABELS[kind].toLowerCase()}</span>
-          </span>
+          <span class="row__value" aria-live="polite"
+            >{player.counters[kind]}<span class="sr-only"> {LABELS[kind].toLowerCase()}</span></span
+          >
           <button
             class="step"
             aria-label="Add one {LABELS[kind].toLowerCase()} counter to {player.name}"

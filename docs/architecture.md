@@ -133,6 +133,8 @@ Why events and not a state object:
 - Merging two peers' logs is set union, because of the ownership rule below.
 - Replay makes bugs reproducible: attach the log to a bug report and re-fold it.
 
+`commander/damaged` joins this union in M2; it is deliberately absent until then.
+
 `CounterKind` covers poison, energy, experience, rad and ticket. Adding one is a data change, not a code change.
 `FlagKind` covers monarch, the initiative, city's blessing, and the day/night
 designator — states that exactly one player (or nobody) holds at a time.

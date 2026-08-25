@@ -12,7 +12,6 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   colour: 'green',
   life: 40,
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
-  commanderDamage: {},
   eliminated: false,
   ...over
 });
