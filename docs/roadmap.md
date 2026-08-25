@@ -42,6 +42,11 @@ and naming players during setup rather than once the game has started.
   devices to ask, so this waits on the transport.
 - Elimination detection across all three lethal conditions
 - Post-game summary: elimination order, damage sources, game length
+- **A real landscape layout for six players** — three seats upside down, three
+  regular, so nobody reads their total sideways. Requested from the table.
+  Landscape is locked out entirely until this exists (`RotatePrompt`,
+  `docs/design/interaction.md`); a cramped, unplanned grid is worse than
+  asking for portrait back.
 
 ## M3 — The table (P2P)
 

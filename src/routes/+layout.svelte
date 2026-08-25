@@ -3,6 +3,7 @@
   import '@fontsource/cinzel/latin-700.css';
   import '@fontsource/cinzel/latin-900.css';
   import '$ui/tokens/base.css';
+  import RotatePrompt from '$ui/components/RotatePrompt.svelte';
 
   let { children } = $props();
 
@@ -31,6 +32,8 @@
 <div class="app">
   {@render children()}
 </div>
+
+<RotatePrompt />
 
 <style>
   .app {

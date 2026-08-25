@@ -233,6 +233,24 @@ Deliberately **not** used: `user-scalable=no` / `maximum-scale=1` in the viewpor
 meta. Safari on iOS has ignored both since iOS 10 — they would not have worked
 on the device this was reported from — and they fail the accessibility gate.
 
+### Locked to portrait, for now
+
+The manifest declares `orientation: portrait-primary`. An installed app honours
+it; a page open in an ordinary browser tab cannot be rotated by any API without
+first entering fullscreen, so `RotatePrompt` covers the board and asks instead,
+for a phone turned sideways specifically — `@media (orientation: landscape) and
+(width < 60rem)`.
+
+The width term is what keeps this from firing on a tablet or a desktop window
+that is merely wide and short: those already get their own grid, from
+`GameBoard`'s `width >= 60rem` breakpoint. The two conditions are deliberately
+not the same query.
+
+This is a placeholder, not a design: a real landscape layout for six players
+(three seats upside down, three regular, so nobody reads their total sideways)
+is future work, filed in `docs/roadmap.md`. Asking for portrait back is better
+than showing a grid nobody has designed for the shape the screen is actually in.
+
 ## Counters live in a sheet, not in the card
 
 The counter editor is rendered at page level and opened over the board, not
