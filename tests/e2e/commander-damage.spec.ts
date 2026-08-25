@@ -58,7 +58,11 @@ test('offers a target big enough to hit', async ({ page }) => {
     })
   );
   expect(sizes.length).toBeGreaterThan(1);
-  for (const size of sizes) expect(size).toBeGreaterThanOrEqual(44);
+
+  /* 44px is the touch target; the slack is for sub-pixel layout arithmetic, not
+     for a smaller chip. WebKit measures a 2.75rem box as 43.99998474121094. */
+  const SUB_PIXEL = 0.01;
+  for (const size of sizes) expect(size).toBeGreaterThanOrEqual(44 - SUB_PIXEL);
 });
 
 for (const count of [4, 6]) {

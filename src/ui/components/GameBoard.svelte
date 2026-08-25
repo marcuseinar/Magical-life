@@ -12,6 +12,7 @@
     onLifeChange,
     onOpenCounters,
     onOpenCommander,
+    onRename,
     onElimination
   }: {
     players: readonly PlayerState[];
@@ -24,6 +25,7 @@
     onLifeChange: (player: PlayerState, delta: number, from: PlayerId | null) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
     onOpenCommander: (player: PlayerState, rotated: boolean) => void;
+    onRename: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
   } = $props();
 
@@ -64,6 +66,7 @@
         onLifeChange={(delta, from) => onLifeChange(player, delta, from)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}
         onOpenCommander={() => onOpenCommander(player, isRotated(index))}
+        onRename={() => onRename(player, isRotated(index))}
         onElimination={(eliminated) => onElimination(player, eliminated)}
       />
     </div>

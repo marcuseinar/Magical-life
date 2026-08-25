@@ -22,6 +22,7 @@ const mount = (count: number) => {
       onLifeChange: vi.fn(),
       onOpenCounters: vi.fn(),
       onOpenCommander: vi.fn(),
+      onRename: vi.fn(),
       onElimination: vi.fn()
     }
   });

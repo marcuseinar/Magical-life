@@ -25,6 +25,7 @@
     onLifeChange,
     onOpenCounters,
     onOpenCommander,
+    onRename,
     onElimination
   }: {
     player: PlayerState;
@@ -40,8 +41,10 @@
      *  attribution row; the seating order is what gives each chip its colour. */
     seats?: readonly PlayerState[];
     tracksCommanderDamage?: boolean;
+    /** `from` names the commander blamed for this loss, when one was picked. */
     onLifeChange: (delta: number, from: PlayerId | null) => void;
     onOpenCommander?: () => void;
+    onRename?: () => void;
     onOpenCounters: () => void;
     onElimination: (eliminated: boolean) => void;
   } = $props();
@@ -304,7 +307,13 @@
 
   <footer class="plate">
     <ManaPip colour={player.colour} />
-    <h2 class="name">{player.name}</h2>
+    <!-- Still a heading, so the panel keeps its place in the document outline;
+         the button inside is what makes the name editable. -->
+    <h2 class="name">
+      <button class="name__edit" aria-label="Rename {player.name}" onclick={() => onRename?.()}>
+        {player.name}
+      </button>
+    </h2>
 
     {#if isFirstPlayer}
       <!-- Purely visual: the page-level status message announces the roll once,
@@ -687,15 +696,22 @@
 
   .name {
     flex: 1;
-    overflow: hidden;
+    min-width: 0;
     margin: 0;
+    font-size: var(--size-name);
+  }
+
+  .name__edit {
+    display: block;
+    width: 100%;
+    overflow: hidden;
     color: var(--text-gold);
     font-family: var(--font-display);
-    font-size: var(--size-name);
+    font-size: inherit;
     font-weight: 700;
     letter-spacing: var(--tracking-display);
-    text-overflow: ellipsis;
     text-align: left;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

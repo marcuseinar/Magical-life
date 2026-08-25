@@ -19,11 +19,12 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
 const mount = (over: Partial<PlayerState> = {}) => {
   const onLifeChange = vi.fn();
   const onOpenCounters = vi.fn();
+  const onRename = vi.fn();
   const onElimination = vi.fn();
   render(PlayerPanel, {
-    props: { player: player(over), onLifeChange, onOpenCounters, onElimination }
+    props: { player: player(over), onLifeChange, onOpenCounters, onRename, onElimination }
   });
-  return { onLifeChange, onOpenCounters, onElimination };
+  return { onLifeChange, onOpenCounters, onRename, onElimination };
 };
 
 const decrease = () => screen.getByRole('button', { name: /lose one life/i });
@@ -261,6 +262,17 @@ describe('player panel', () => {
   it('treats ten poison as lethal even on full life', () => {
     mount({ counters: { poison: 10, energy: 0, experience: 0, rad: 0, ticket: 0 } });
     expect(screen.getByRole('button', { name: 'Out' })).toBeInTheDocument();
+  });
+
+  it('offers the name for renaming', async () => {
+    const { onRename } = mount();
+    await fireEvent.click(screen.getByRole('button', { name: 'Rename Anna' }));
+    expect(onRename).toHaveBeenCalled();
+  });
+
+  it('keeps the name a heading, so the panel stays in the document outline', () => {
+    mount();
+    expect(screen.getByRole('heading', { name: 'Anna' })).toBeInTheDocument();
   });
 
   describe('commander damage', () => {

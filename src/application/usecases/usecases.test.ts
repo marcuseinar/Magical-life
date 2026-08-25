@@ -11,6 +11,8 @@ import { changeCounter } from './changeCounter';
 import { moveFlag } from './moveFlag';
 import { setElimination } from './setElimination';
 import { undoLast } from './undoLast';
+import { renamePlayer, tidyName } from './renamePlayer';
+import { MAX_PLAYER_NAME } from '$domain/rules';
 import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
 import { recordCommanderDamage } from './recordCommanderDamage';
@@ -330,6 +332,86 @@ describe('use cases', () => {
         authorId: HOST
       });
       expect(await rematch({ session: empty })()).toEqual({ ok: false, error: 'no-game' });
+    });
+  });
+
+  describe('renamePlayer', () => {
+    const rename = () => renamePlayer({ session });
+
+    it('renames the player', async () => {
+      expect(await rename()(seats[0]!, 'Marcus')).toEqual({ ok: true, value: 'Marcus' });
+      expect(session.state?.players[0]?.name).toBe('Marcus');
+    });
+
+    it('leaves everybody else alone', async () => {
+      await rename()(seats[0]!, 'Marcus');
+      expect(session.state?.players[1]?.name).toBe('Björn');
+    });
+
+    it('trims the stray spaces people type on a phone', async () => {
+      await rename()(seats[0]!, '  Marcus  ');
+      expect(session.state?.players[0]?.name).toBe('Marcus');
+    });
+
+    it('collapses runs of whitespace', async () => {
+      await rename()(seats[0]!, 'Marcus   the   Third');
+      expect(session.state?.players[0]?.name).toBe('Marcus the Third');
+    });
+
+    it('clamps a name too long for a plate rather than refusing it', async () => {
+      const result = await rename()(seats[0]!, 'x'.repeat(MAX_PLAYER_NAME + 20));
+      expect(result).toEqual({ ok: true, value: 'x'.repeat(MAX_PLAYER_NAME) });
+    });
+
+    it('refuses a name that is only whitespace', async () => {
+      expect(await rename()(seats[0]!, '   ')).toEqual({ ok: false, error: 'empty' });
+      expect(session.state?.players[0]?.name).toBe('Anna');
+    });
+
+    it('refuses a name that changes nothing, once tidied', async () => {
+      expect(await rename()(seats[0]!, '  Anna ')).toEqual({ ok: false, error: 'no-change' });
+      expect(session.events.filter((e) => e.kind === 'player/renamed')).toHaveLength(0);
+    });
+
+    it('refuses an unknown player', async () => {
+      expect(await rename()(playerId('ghost'), 'Marcus')).toEqual({
+        ok: false,
+        error: 'unknown-player'
+      });
+    });
+
+    it('refuses when no game has started', async () => {
+      const empty = createGameSession({
+        clock: fakeClock(),
+        log: createMemoryEventLog(),
+        authorId: HOST
+      });
+      expect(await renamePlayer({ session: empty })(seats[0]!, 'Marcus')).toEqual({
+        ok: false,
+        error: 'no-game'
+      });
+    });
+
+    it('carries the new name into a rematch', async () => {
+      await rename()(seats[0]!, 'Marcus');
+      await rematch({ session })();
+      expect(session.state?.players[0]?.name).toBe('Marcus');
+    });
+
+    it('can be undone', async () => {
+      await rename()(seats[0]!, 'Marcus');
+      await undoLast({ session })();
+      expect(session.state?.players[0]?.name).toBe('Anna');
+    });
+  });
+
+  describe('tidyName', () => {
+    it('leaves an ordinary name alone', () => {
+      expect(tidyName('Marcus')).toBe('Marcus');
+    });
+
+    it('is empty for nothing but whitespace', () => {
+      expect(tidyName('  \n ')).toBe('');
     });
   });
 

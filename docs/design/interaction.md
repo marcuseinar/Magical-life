@@ -243,6 +243,23 @@ the life total with it as the plate grows.
 The sheet rotates to match its player's panel, so it reads the right way up from
 that seat.
 
+## Names
+
+A name is a `player/renamed` event like anything else, so it survives a reload,
+carries into a rematch, and can be undone.
+
+Tapping the name on the plate opens a sheet rather than editing in place: the
+plate is the most crowded strip in the app, a caret there would be a tiny target,
+and on a panel facing across the table an inline field would be upside down under
+the keyboard. The sheet rotates to that player's seat and selects the existing
+text, because a default name is almost always being replaced rather than edited.
+
+Tidying — trimming, collapsing runs of whitespace, clamping to sixteen characters
+— happens in the use case, not the domain. Those are judgements about what a
+person meant to type; the domain stores the name it is given. Sixteen keeps a
+plate readable at six players, and a longer name is clamped rather than refused,
+because refusing what someone just typed is worse than shortening it.
+
 ## Accessibility
 
 Not an afterthought, because it is also what makes UI testing possible.

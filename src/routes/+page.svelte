@@ -8,6 +8,7 @@
   import { createSpinController } from '$ui/interaction/spinController.svelte';
   import CommanderSheet from '$ui/components/CommanderSheet.svelte';
   import CounterSheet from '$ui/components/CounterSheet.svelte';
+  import RenameSheet from '$ui/components/RenameSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
   import NewGameSheet from '$ui/components/NewGameSheet.svelte';
 
@@ -19,6 +20,7 @@
   let confirming = $state<Confirmation | null>(null);
   let counters = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let commander = $state<{ player: PlayerState; rotated: boolean } | null>(null);
+  let renaming = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let rolled = $state<string | null>(null);
   /** Covers the whole roll, including the storage write before the spin starts,
    *  so the winner is never revealed a frame early. */
@@ -37,6 +39,12 @@
 
   const openPlayer = $derived(live(counters?.player.id));
   const commanderPlayer = $derived(live(commander?.player.id));
+
+  const renamingPlayer = $derived(
+    renaming === null
+      ? null
+      : (store.state?.players.find((player) => player.id === renaming?.player.id) ?? null)
+  );
 
   async function roll() {
     if (rolling) return;
@@ -100,6 +108,7 @@
       tracksCommanderDamage={store.state.config.tracksCommanderDamage}
       onOpenCounters={(player, rotated) => (counters = { player, rotated })}
       onOpenCommander={(player, rotated) => (commander = { player, rotated })}
+      onRename={(player, rotated) => (renaming = { player, rotated })}
       onElimination={(player, eliminated) => store.setEliminated(player.id, eliminated)}
     />
 
@@ -137,6 +146,18 @@
       onchange={(from: PlayerId, delta: number) =>
         store.changeCommanderDamage(commanderPlayer.id, from, delta)}
       onclose={() => (commander = null)}
+    />
+  {/if}
+
+  {#if renamingPlayer !== null && renaming !== null}
+    <RenameSheet
+      player={renamingPlayer}
+      rotated={renaming.rotated}
+      onrename={async (name: string) => {
+        await store.rename(renamingPlayer.id, name);
+        renaming = null;
+      }}
+      onclose={() => (renaming = null)}
     />
   {/if}
 
