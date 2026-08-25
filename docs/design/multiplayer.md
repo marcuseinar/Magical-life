@@ -150,6 +150,16 @@ Three things the first attempt got wrong, all reported from a real game:
   it meant the _colour of the damage_, which is a thing Magic already has an
   opinion about. Seat numbers instead — unambiguous, and they match the seating.
 
+The strip drops in from **above the top edge** of the card and stays there. The
+gesture that opens it is a downward drag, which puts the hand over the bottom of
+the card — so the bottom is the one place these must not be.
+
+At six players the card is 248 px tall: the strip needs 67 and the life total 53,
+which leaves no room for a separate floating badge above the number it would
+cover. So while the strip is open the pending amount moves onto the caption line
+— `−13 · Björn's commander` — which is also the control that cancels. Measured
+rather than guessed, and asserted by a test at four and six players.
+
 The strip is one horizontally scrolling row, never wrapping. Wrapping put three
 rows of chips over the life total at six players and the caption over the name
 plate; a fixed-height row cannot. The selected chip is scrolled into view as the

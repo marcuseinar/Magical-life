@@ -350,7 +350,7 @@ describe('player panel', () => {
       mountCommander();
       await touch(decrease(), 'pointerDown');
       await touch(decrease(), 'pointerUp');
-      expect(screen.getByText('Not commander damage')).toBeInTheDocument();
+      expect(screen.getByText('not commander damage')).toBeInTheDocument();
 
       await fireEvent.click(screen.getByRole('button', { name: /björn's commander/i }));
       expect(screen.getByText("Björn's commander")).toBeInTheDocument();

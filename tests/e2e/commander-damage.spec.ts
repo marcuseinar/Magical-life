@@ -62,9 +62,16 @@ test('offers a target big enough to hit', async ({ page }) => {
 });
 
 for (const count of [4, 6]) {
-  test(`the strip stays clear of the total and the plate at ${count} players`, async ({ page }) => {
+  test(`the strip sits at the top, clear of the total, at ${count} players`, async ({ page }) => {
     await startGame(page, /commander/i, count);
     await zone(page, `Player ${count - 1}`, 'lose').click();
+
+    // The strip drops in from above the card, so measure once it has landed
+    // rather than after a guessed pause.
+    await page
+      .locator('.blame')
+      .first()
+      .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
 
     const geometry = await page.evaluate((n) => {
       const panel = [...document.querySelectorAll('article')][n - 2]!;
@@ -77,13 +84,19 @@ for (const count of [4, 6]) {
       return {
         insideCard: blame.top >= card.top && blame.bottom <= card.bottom + 1,
         clearsTotal: !overlaps(blame, total),
-        clearsPlate: !overlaps(blame, plate)
+        clearsPlate: !overlaps(blame, plate),
+        // The gesture that opens this is a downward drag, so the hand is over
+        // the bottom of the card. These must be above the total, not below it.
+        aboveTheTotal: blame.bottom <= total.top
       };
     }, count);
 
-    // Wrapping the chips put three rows over the life total at six players, and
-    // the caption over the name plate. One scrolling row keeps the height fixed.
-    expect(geometry).toEqual({ insideCard: true, clearsTotal: true, clearsPlate: true });
+    expect(geometry).toEqual({
+      insideCard: true,
+      clearsTotal: true,
+      clearsPlate: true,
+      aboveTheTotal: true
+    });
   });
 }
 

@@ -193,7 +193,7 @@
 >
   <Filigree />
 
-  <div class="field">
+  <div class="field" data-attributing={askingWhoDealtIt}>
     <button
       class="zone zone--minus"
       aria-label="{player.name}, lose one life"
@@ -220,21 +220,13 @@
 
     <div class="readout">
       <LifeTotal life={player.life} {threat} label={player.name} />
-      {#if controller.pending !== 0}
-        <div class="badge-slot">
-          <DeltaBadge
-            value={controller.pending}
-            progress={controller.progress}
-            label={player.name}
-            oncancel={() => controller.cancel()}
-          />
-        </div>
-      {/if}
+    </div>
 
+    <div class="top-stack">
       {#if askingWhoDealtIt}
         <!-- One gesture writes both numbers: drag down for how much, sideways
-                 for whose commander. Tapping works too. Seat numbers rather than
-                 mana symbols, which already mean something else in Magic. -->
+             for whose commander. Tapping works too. Seat numbers rather than
+             mana symbols, which already mean something else in Magic. -->
         <div class="blame">
           <div
             bind:this={blameRow}
@@ -257,9 +249,36 @@
             {/each}
           </div>
 
-          <p class="blame__caption" aria-live="polite">
-            {blamed === null ? 'Not commander damage' : `${blamed.name}'s commander`}
-          </p>
+          <!--
+            The pending number lives on this line while the strip is open rather
+            than in its own badge above it. Measured at six players: the card is
+            248px, the strip needs 65 and the life total 53, which leaves no room
+            for a third floating element above the number it would cover.
+            Tapping the line still cancels, as the badge does.
+          -->
+          <button
+            class="blame__caption"
+            onclick={() => controller.cancel()}
+            aria-label="{player.name}, cancel pending change of {controller.pending > 0
+              ? `+${controller.pending}`
+              : controller.pending}"
+          >
+            <span class="blame__delta" aria-hidden="true">{controller.pending}</span>
+            <span aria-live="polite"
+              >{blamed === null ? 'not commander damage' : `${blamed.name}'s commander`}</span
+            >
+          </button>
+        </div>
+      {/if}
+
+      {#if controller.pending !== 0 && !askingWhoDealtIt}
+        <div class="badge-slot">
+          <DeltaBadge
+            value={controller.pending}
+            progress={controller.progress}
+            label={player.name}
+            oncancel={() => controller.cancel()}
+          />
         </div>
       {/if}
     </div>
@@ -459,18 +478,23 @@
     pointer-events: none;
   }
 
-  /* Below the total rather than above it: the badge already owns the space above,
-     and at six players a strip that grows downward from there covers the number
-     it is describing. */
+  /*
+   * Pinned to the top edge and dropped in from above it. The gesture that opens
+   * this strip is a downward drag, which puts the hand over the bottom of the
+   * card — so the bottom is the one place these must not be.
+   *
+   * The card clips its own overflow, so translating from -100% reads as the row
+   * sliding in from off the top of the card.
+   */
   .blame {
-    position: absolute;
-    bottom: var(--space-2);
-    left: 0;
     display: grid;
     gap: var(--space-1);
     justify-items: center;
     width: 100%;
-    padding-inline: var(--space-2);
+    animation: drop-in var(--duration-base) var(--ease-out);
+
+    /* The stack itself is transparent to pointers so it never blocks the tap
+       zones behind it; anything interactive inside has to opt back in. */
     pointer-events: auto;
   }
 
@@ -525,14 +549,24 @@
   }
 
   .blame__caption {
-    margin: 0;
+    display: flex;
+    gap: var(--space-1);
+    align-items: baseline;
+    justify-content: center;
     max-width: 100%;
     overflow: hidden;
     color: var(--text-muted);
     font-size: var(--size-chip);
-    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
+    pointer-events: auto;
+  }
+
+  .blame__delta {
+    color: var(--loss);
+    font-family: var(--font-numeric);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
   }
 
   .crown {
@@ -559,15 +593,46 @@
     color: var(--danger);
   }
 
-  .badge-slot {
+  /*
+   * Everything transient lives in one stack at the top of the card.
+   *
+   * The gesture that opens the strip is a downward drag, which puts the hand
+   * over the bottom — so the bottom is the one place these must not be. Stacking
+   * rather than positioning each by percentage means they cannot collide with
+   * each other, and the block's height is bounded by what is in it.
+   */
+  .top-stack {
     position: absolute;
+    top: 0;
+    left: 0;
+    display: grid;
+    gap: var(--space-2);
+    justify-items: center;
+    width: 100%;
+    padding-block-start: 8%;
+    padding-inline: var(--space-2);
+    pointer-events: none;
+  }
 
-    /* Above the total, in the empty upper third — never over the number it
-       describes, whatever size that number happens to be. */
-    top: 8%;
-    left: 50%;
-    transform: translateX(-50%);
+  .field[data-attributing='true'] .top-stack {
+    gap: var(--space-1);
+    padding-block-start: var(--space-1);
+  }
+
+  .badge-slot {
     pointer-events: auto;
+  }
+
+  @keyframes drop-in {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 
   .plate {
@@ -672,8 +737,13 @@
   @media (prefers-reduced-motion: reduce) {
     .panel[data-threat='lethal'],
     .panel[data-celebrating='true'],
+    .blame,
     .first {
       animation: none;
+    }
+
+    .badge-slot {
+      transition: none;
     }
   }
 </style>
