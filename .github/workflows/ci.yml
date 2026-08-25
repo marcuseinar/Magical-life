@@ -2,13 +2,21 @@ name: CI
 
 # Every push and every pull request is checked. Publishing is decided per event:
 # the default branch goes to production, a pull request gets its own preview.
+#
+# Branches are checked through their pull request, not through their pushes.
+# Running on both produced two runs per commit; the concurrency rule below
+# cancelled one, and the cancelled check runs stayed on the commit — showing as
+# failures on the pull request and leaving it permanently "unstable", which a
+# branch ruleset requiring these checks would also trip over.
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  # Keyed on the branch, so a push and its pull request share one run.
+  # Keyed on the branch, so pushing twice in quick succession supersedes rather
+  # than queues.
   group: ci-${{ github.head_ref || github.ref_name }}
   # Literal rather than the env below: workflow-level keys cannot read `env`.
   cancel-in-progress: ${{ (github.head_ref || github.ref_name) != 'main' }}

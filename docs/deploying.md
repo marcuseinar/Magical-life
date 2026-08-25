@@ -28,6 +28,23 @@ Do these in order — the second depends on the first having happened.
    appear in that list once each job has run at least once. Do **not** require
    the cleanup workflow's job — it runs on close, not on the pull request.
 
+### What triggers a run
+
+| Event                    | Runs        | Publishes                  |
+| ------------------------ | ----------- | -------------------------- |
+| Pull request             | Every check | Preview at `/pr-<number>/` |
+| Push to `main`           | Every check | Production, at the root    |
+| Push to any other branch | Nothing     | Nothing                    |
+| Manual dispatch          | Every check | Only from `main`           |
+
+A branch is checked through its pull request rather than through its pushes.
+Running on both produced two runs per commit; the concurrency rule cancelled
+one, and the cancelled check runs stayed on the commit — showing as failures on
+the pull request and leaving it permanently `unstable`. A branch ruleset
+requiring those checks would have tripped over the same thing.
+
+So open the pull request early: until there is one, a branch gets no CI at all.
+
 ### The default branch does not matter
 
 Production publishes from **`main` by name** (`PRODUCTION_BRANCH` in the
