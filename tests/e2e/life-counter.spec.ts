@@ -211,16 +211,39 @@ test('can be rolled again, and still marks only one player', async ({ page }) =>
 });
 
 test('skips the spin entirely when motion is unwelcome', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await startGame(page, /commander/i, 4);
+  /*
+   * Measured against a normal roll rather than a fixed number of milliseconds.
+   * An absolute bound is flaky by construction here: the same work costs 463ms
+   * on local Chromium and 1402ms on WebKit under CI load, so a threshold
+   * calibrated on one browser fails on the other for reasons that have nothing
+   * to do with the animation. Comparing the two paths cancels that overhead out,
+   * because both pay it.
+   */
+  const timeRoll = async () => {
+    const badge = page.getByText('1st', { exact: true });
+    await expect(badge).toHaveCount(0);
+    const started = Date.now();
+    await page.getByRole('button', { name: /choose who goes first/i }).click();
+    await expect(badge).toHaveCount(1, { timeout: 15_000 });
+    return Date.now() - started;
+  };
 
-  const started = Date.now();
-  await page.getByRole('button', { name: /choose who goes first/i }).click();
-  await expect(page.getByText('1st', { exact: true })).toHaveCount(1);
+  await startGame(page, /commander/i, 4);
+  const animated = await timeRoll();
+
+  // A rematch clears the marker, so the second measurement starts from zero.
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const instant = await timeRoll();
 
   // The schedule has a reduced-motion path of its own; this covers the wiring
   // that reads the preference, which unit tests cannot reach.
-  expect(Date.now() - started).toBeLessThan(1200);
+  expect(
+    animated - instant,
+    `animated ${animated}ms vs reduced-motion ${instant}ms`
+  ).toBeGreaterThan(1500);
 });
 
 test('keeps every action on one row on a phone', async ({ page }) => {
