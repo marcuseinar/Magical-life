@@ -473,9 +473,21 @@
     inset: 0;
     display: grid;
     place-items: center;
+    transition: transform var(--duration-base) var(--ease-out);
 
     /* The zones underneath must stay tappable through the readout. */
     pointer-events: none;
+  }
+
+  /*
+   * The total steps down while the strip is open rather than the strip trying to
+   * fit above a fixed centre. At six players the clearance was six pixels on
+   * Chromium — and WebKit, whose font metrics differ, overlapped. A proportional
+   * shift is clearance by construction rather than by a margin that happens to
+   * survive one engine's line box.
+   */
+  .field[data-attributing='true'] .readout {
+    transform: translateY(16%);
   }
 
   /*
@@ -740,6 +752,10 @@
     .blame,
     .first {
       animation: none;
+    }
+
+    .readout {
+      transition: none;
     }
 
     .badge-slot {

@@ -160,6 +160,13 @@ cover. So while the strip is open the pending amount moves onto the caption line
 — `−13 · Björn's commander` — which is also the control that cancels. Measured
 rather than guessed, and asserted by a test at four and six players.
 
+The life total also **steps down** while the strip is open. Fitting the strip
+above a fixed centre left six pixels of clearance on Chromium and none at all on
+WebKit, whose font metrics differ — the test caught it there and nowhere else. A
+proportional shift gives clearance by construction rather than by a margin that
+happens to survive one engine's line box; it is 38 px or more at every seat
+count.
+
 The strip is one horizontally scrolling row, never wrapping. Wrapping put three
 rows of chips over the life total at six players and the caption over the name
 plate; a fixed-height row cannot. The selected chip is scrolled into view as the
