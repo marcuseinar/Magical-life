@@ -47,22 +47,76 @@ test('picks the commander from the same drag that sets the damage', async ({ pag
 });
 
 test('offers a target big enough to hit', async ({ page }) => {
-  await startGame(page, /commander/i, 4);
+  await startGame(page, /commander/i, 6);
   await zone(page, 'Player 1', 'lose').click();
 
   const group = page.getByRole('group', { name: /whose commander/i });
-  const sizes = await group.getByRole('button').evaluateAll((buttons) =>
-    buttons.map((button) => {
-      const box = button.getBoundingClientRect();
-      return Math.min(box.width, box.height);
-    })
-  );
-  expect(sizes.length).toBeGreaterThan(1);
+  const boxes = await group
+    .getByRole('button')
+    .evaluateAll((buttons) => buttons.map((b) => b.getBoundingClientRect()))
+    .then((rects) => rects.map((r) => ({ w: r.width, h: r.height })));
 
-  /* 44px is the touch target; the slack is for sub-pixel layout arithmetic, not
-     for a smaller chip. WebKit measures a 2.75rem box as 43.99998474121094. */
+  expect(boxes).toHaveLength(6);
+
+  /* The button is a full column of the row, so its width is the share of the
+     card it owns — 194px between six people does not leave 44px each, and a
+     badge you have to pan to reach is worse than a small one you can see. The
+     height carries the touch target instead. The slack is for sub-pixel layout
+     arithmetic: WebKit measures a 2.75rem box as 43.99998474121094. */
   const SUB_PIXEL = 0.01;
-  for (const size of sizes) expect(size).toBeGreaterThanOrEqual(44 - SUB_PIXEL);
+  for (const box of boxes) {
+    expect(box.h).toBeGreaterThanOrEqual(44 - SUB_PIXEL);
+    expect(box.w).toBeGreaterThan(24);
+  }
+});
+
+/* Asked for at the table: all of them on screen at once, no scrolling. */
+test('shows every candidate at once, inside the card, at six players', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  await panel.getByRole('button', { name: /lose one life/i }).click();
+
+  const fit = await panel.evaluate((article) => {
+    const card = article.getBoundingClientRect();
+    const row = article.querySelector('.blame__row')!;
+    const badges = [...article.querySelectorAll('.blame__chip')];
+    return {
+      count: badges.length,
+      scrolls: row.scrollWidth > row.clientWidth + 1,
+      allInside: badges.every((badge) => {
+        const box = badge.getBoundingClientRect();
+        return box.left >= card.left - 1 && box.right <= card.right + 1;
+      })
+    };
+  });
+
+  expect(fit.count).toBe(6);
+  expect(fit.scrolls).toBe(false);
+  expect(fit.allInside).toBe(true);
+});
+
+/* Round, because a square badge eats the width its neighbours need. */
+test('draws the badges as circles', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+  await zone(page, 'Player 1', 'lose').click();
+
+  const radii = await page
+    .getByRole('group', { name: /whose commander/i })
+    .locator('.blame__badge')
+    .evaluateAll((badges) =>
+      badges.map((badge) => {
+        const style = getComputedStyle(badge);
+        const box = badge.getBoundingClientRect();
+        return { radius: parseFloat(style.borderRadius), half: box.width / 2, box };
+      })
+    );
+
+  expect(radii.length).toBe(6);
+  for (const { radius, half, box } of radii) {
+    expect(radius).toBeGreaterThanOrEqual(half - 0.5);
+    expect(Math.abs(box.width - box.height)).toBeLessThan(1);
+  }
 });
 
 for (const count of [4, 6]) {
@@ -121,58 +175,91 @@ test('leaves the player themselves out of the row', async ({ page }) => {
 /* The bug the table hit: a fixed 44px step per candidate wanted more travel
    than the card is wide once six people are playing, so the far end of the row
    could not be reached by the gesture at all. */
-test('can reach the far end of the row by drag, at six players', async ({ page }) => {
+/* Absolute, not relative: the badge chosen is the one under the finger. */
+test('picks the badge the finger is over, at six players', async ({ page }) => {
   await startGame(page, /commander/i, 6);
 
   // A near-row seat, so down the screen is down from that player's seat too.
   const panel = page.locator('article[data-rotated="false"]').first();
-  const name = (await panel
-    .getByRole('button', { name: /lose one life/i })
-    .getAttribute('aria-label'))!.split(',')[0]!;
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
+  const box = (await loseZone.boundingBox())!;
 
-  const box = (await panel.getByRole('button', { name: /lose one life/i }).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 90, { steps: 8 });
+
+  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+  const badges = await group.getByRole('button').all();
+  expect(badges).toHaveLength(6);
+
+  // Every badge in turn, aimed at by its own position on screen.
+  for (const badge of badges) {
+    const target = (await badge.boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, box.y + box.height / 2 + 90, { steps: 4 });
+    await expect(badge).toHaveAttribute('aria-pressed', 'true');
+  }
+
+  await page.mouse.up();
+});
+
+/* The complaint from the table: the same place on screen picked a different
+   player depending on where the drag began. */
+test('picks the same badge wherever the drag started', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
+  const box = (await loseZone.boundingBox())!;
   const card = (await panel.boundingBox())!;
+  const y = box.y + box.height / 2;
+
+  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+
+  /** Aim at a fixed point on screen, having started the drag somewhere else. */
+  const aimedFrom = async (startX: number) => {
+    await page.mouse.move(startX, y);
+    await page.mouse.down();
+    await page.mouse.move(startX, y + 90, { steps: 6 });
+
+    // The same absolute target every time: the middle of the fifth column.
+    const target = (await group.getByRole('button').nth(4).boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, y + 90, { steps: 6 });
+
+    const pressed = await group
+      .getByRole('button')
+      .evaluateAll((buttons) =>
+        buttons.findIndex((button) => button.getAttribute('aria-pressed') === 'true')
+      );
+    await page.mouse.up();
+    return pressed;
+  };
+
+  const fromLeft = await aimedFrom(card.x + 8);
+  const fromRight = await aimedFrom(card.x + card.width - 8);
+
+  expect(fromLeft).toBe(4);
+  expect(fromRight).toBe(4);
+});
+
+/* A straight drag down must not quietly blame whoever sits under the thumb. */
+test('blames nobody for a drag that never moves sideways', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const loseZone = panel.getByRole('button', { name: /lose one life/i });
+  const name = (await loseZone.getAttribute('aria-label'))!.split(',')[0]!;
+  const box = (await loseZone.boundingBox())!;
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
 
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await page.mouse.move(x, y + 90, { steps: 8 });
-
-  // As far sideways as this card physically allows, and no further.
-  await page.mouse.move(card.x + card.width - 1, y + 90, { steps: 12 });
-
-  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
-  const last = (await group.getByRole('button').all()).at(-1)!;
-  await expect(last).toHaveAttribute('aria-pressed', 'true');
-
+  await page.mouse.move(x, y + 120, { steps: 10 });
   await page.mouse.up();
-});
 
-/* Rule 10 says nothing scrolls; the row is the sanctioned local exception,
-   because its length is set by the size of the table rather than the screen. */
-test('the row can be panned by hand when it outruns the card', async ({ page }) => {
-  await startGame(page, /commander/i, 6);
-
-  const panel = page.locator('article[data-rotated="false"]').first();
-  await panel.getByRole('button', { name: /lose one life/i }).click();
-
-  const row = panel.locator('.blame__row');
-  await expect(row).toBeVisible();
-
-  const panned = await row.evaluate((element) => {
-    const style = getComputedStyle(element);
-    element.scrollLeft = 999;
-    return {
-      touchAction: style.touchAction,
-      overflows: element.scrollWidth > element.clientWidth,
-      moved: element.scrollLeft > 0
-    };
-  });
-
-  expect(panned.touchAction).toBe('pan-x');
-  // If it ever stops overflowing the panning is moot, but it must not be stuck.
-  if (panned.overflows) expect(panned.moved).toBe(true);
+  await expect(crown(page, name)).not.toHaveText(/\d/);
 });
 
 test('leaves life loss untagged when nobody is blamed', async ({ page }) => {

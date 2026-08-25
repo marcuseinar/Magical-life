@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import PlayerPanel from './PlayerPanel.svelte';
 import { COMMIT_WINDOW_MS } from '$ui/interaction/pendingDelta';
 import { playerId } from '$domain/ids';
@@ -383,6 +383,14 @@ describe('player panel', () => {
       expect(within(group).getAllByRole('button')).toHaveLength(2);
     });
 
+    /* jsdom has no layout, and the row is read by measurement now. Two equal
+       columns over 0..200: the left half is nobody, the right half is Björn. */
+    const layOutRow = (left = 0, width = 200) => {
+      const row = screen.getByRole('group', { name: /whose commander/i });
+      row.getBoundingClientRect = () => ({ left, width, right: left + width }) as DOMRect;
+      return row;
+    };
+
     it('picks who dealt it from the same drag that sets how much', async () => {
       const { onLifeChange } = mountCommander();
       const zone = decrease();
@@ -390,22 +398,64 @@ describe('player panel', () => {
       await touch(zone, 'pointerDown', 300, 100);
       // Down the screen for the damage, sideways for the commander: one gesture,
       // both numbers.
-      await touch(zone, 'pointerMove', 400, 190);
-      await touch(zone, 'pointerUp', 400, 190);
+      await touch(zone, 'pointerMove', 400, 100);
+      layOutRow();
+      await touch(zone, 'pointerMove', 400, 150);
+      await touch(zone, 'pointerUp', 400, 150);
 
       const [delta, from] = onLifeChange.mock.calls[0]!;
       expect(delta).toBeLessThan(-5);
       expect(from).toBe('bjorn');
     });
 
-    it('is reversible — dragging back drops the blame again', async () => {
+    it('is reversible — sliding back to the first badge drops the blame', async () => {
       const { onLifeChange } = mountCommander();
       const zone = decrease();
 
       await touch(zone, 'pointerDown', 300, 100);
-      await touch(zone, 'pointerMove', 400, 190);
       await touch(zone, 'pointerMove', 400, 100);
-      await touch(zone, 'pointerUp', 400, 100);
+      layOutRow();
+      await touch(zone, 'pointerMove', 400, 150);
+      await touch(zone, 'pointerMove', 400, 20);
+      await touch(zone, 'pointerUp', 400, 20);
+
+      expect(onLifeChange.mock.calls[0]![1]).toBeNull();
+    });
+
+    /* The bug reported from the table: the same place on screen picked a
+       different player depending on where the drag began, which cannot be
+       aimed — you can see the badges, not the point you started from. */
+    it('picks the same badge wherever the drag started', async () => {
+      const results: (string | null)[] = [];
+
+      for (const startX of [10, 120, 195]) {
+        const { onLifeChange } = mountCommander();
+        const zone = decrease();
+
+        await touch(zone, 'pointerDown', 300, startX);
+        await touch(zone, 'pointerMove', 400, startX);
+        layOutRow();
+        await touch(zone, 'pointerMove', 400, 150);
+        await touch(zone, 'pointerUp', 400, 150);
+
+        results.push(onLifeChange.mock.calls[0]![1]);
+        cleanup();
+      }
+
+      expect(results).toEqual(['bjorn', 'bjorn', 'bjorn']);
+    });
+
+    /* A straight drag down must not quietly blame whoever sits under the thumb;
+       the minus zone is nowhere near the "nobody" badge on a crowded card. */
+    it('blames nobody for a drag that never moves sideways', async () => {
+      const { onLifeChange } = mountCommander();
+      const zone = decrease();
+
+      await touch(zone, 'pointerDown', 300, 150);
+      await touch(zone, 'pointerMove', 400, 150);
+      layOutRow();
+      await touch(zone, 'pointerMove', 460, 150);
+      await touch(zone, 'pointerUp', 460, 150);
 
       expect(onLifeChange.mock.calls[0]![1]).toBeNull();
     });

@@ -176,48 +176,58 @@ costs four minutes a try and is how the same test failed three times running.
 
 The row collapses when nothing is pending, so the resting layout is unchanged.
 
-The strip is one horizontally scrolling row, never wrapping. Wrapping put three
-rows of chips over the life total at six players and the caption over the name
-plate; a fixed-height row cannot. The selected chip is scrolled into view as the
-drag moves through the list, and an end-to-end test asserts the strip clears both
-the total and the plate at four and six players.
+The row shows **every candidate at once**, as equal columns spanning the card.
+Nothing scrolls and nothing is hidden.
+
+It did scroll, once, and it was wrong twice over. The card is 194 px wide at six
+players and a 44 px chip needs 264 px for six of them, so two of the badges were
+always off screen — and reaching them meant panning a row to find a badge you
+could not see. Panning to locate a target is not aiming. Equal columns fit
+because the badge is drawn _inside_ the column rather than sizing it: at six
+players each column is about 29 px, and the circle drawn in it is smaller again.
+
+The badges are round. A square chip eats the width its neighbours need for the
+same visual weight, and the damage sheet already identifies people with a disc.
 
 Only opponents appear. The row briefly listed every seat, on the reasoning that a
 stolen commander still deals its owner's damage — and the table reported it as
-noise straight away. Your own chip is one more thing to aim past mid-gesture, for
-a case that needs somebody to have stolen your commander. The domain still
+noise straight away. Your own badge is one more thing to aim past mid-gesture,
+for a case that needs somebody to have stolen your commander. The domain still
 records self-damage faithfully; the sheet is where you correct it.
 
-Each chip is the owner's mana pip rather than their seat number. Seat numbers
+Each badge is the owner's mana pip rather than their seat number. Seat numbers
 were tried first, because mana colour already means something else in Magic — but
 the pip is standing in for a player portrait, which is what will identify a
 player here eventually, and the damage sheet already identifies people that way.
 A number would have to be unlearned twice.
 
-### Reaching the far end of the row
+That only works if no two seats share a colour, and they did: seats cycled the
+five true colours, so Player 6 was another white and two badges in the row were
+indistinguishable. All seven colours are now in play, which covers the six seats
+a table can have.
 
-One place along the row is a fixed 44 px of sideways travel — until the row is
-longer than the card, which is exactly when it matters. Six players needed 264 px
-of travel inside a 248 px card, so the last seats could not be reached by the
-gesture at all: the table found this as "I can't scroll to player 6".
+### Aiming: absolute, not relative
 
-The step is now measured against the room the finger actually has, from the press
-point to the far edge of the card, capped at 44 px when there is room to spare.
-Sideways distance is unsigned, because a loss is usually pressed on the minus
-zone and dragged right, but a scrub down from the plus zone starts on the other
-side of the card and has to work too.
+**The badge chosen is the one under the finger.** Position is read from the row's
+own box, not from how far the finger has travelled since the press.
 
-There is deliberately no minimum step. A floor and a guarantee that every
-candidate is reachable are the same trade made twice — any floor above
-`room / gaps` puts the far end out of reach again, which is the bug. In practice
-it costs nothing: the room is never less than half a card, so six seats on a
-320 px screen still leave 14 px a step. `blameStepPx` is a pure function with a
-property test asserting that every candidate is reachable and none is skipped.
+Travel was the first design and it could not be aimed. The same point on screen
+selected different players depending on where the drag began — and the player can
+see the badges but cannot see the point they started from, so there is no way to
+predict what a movement will do. Sizing that travel against the room available
+made every candidate _reachable_ without making any of them _findable_: the
+complaint that followed was that the interaction still felt wrong.
 
-The row is also pannable by hand (`touch-action: pan-x`) once it outruns the
-card. Rule 10 says nothing scrolls; this is the local opt-in that rule allows,
-and the row is the one element in the app whose length is set by the size of the
-table rather than the size of the screen.
+`blameSlot` is a pure function of position, row box, and count, with property
+tests asserting that sweeping across the row visits every slot exactly once in
+order, that the answer never depends on anything but position, and that a
+rotated panel mirrors.
+
+One guard: the row does not take over until the finger has moved sideways ten
+pixels on purpose. Reading position absolutely from the moment of the press would
+blame whoever happens to sit under the thumb — and a loss is pressed on the minus
+zone, which on a crowded card is nowhere near the "nobody" badge. A straight drag
+down therefore blames nobody, which an end-to-end test asserts.
 
 ### The flow that actually happens at a table
 

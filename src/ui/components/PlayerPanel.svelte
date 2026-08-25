@@ -2,7 +2,7 @@
   import type { PlayerId } from '$domain/ids';
   import { highestCommanderDamage, lethalReasons, threatLevel } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
-  import { MAX_BLAME_STEP_PX, blameIndex, blameStepPx } from '$ui/interaction/blameStep';
+  import { NO_SLOT, blameSlot } from '$ui/interaction/blameSlot';
   import { scrubPoints } from '$ui/interaction/pendingDelta';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
   import CounterTray from './CounterTray.svelte';
@@ -49,9 +49,15 @@
     onElimination: (eliminated: boolean) => void;
   } = $props();
 
-  /** Sized against the room the finger has, once the press point is known. */
-  let blameStep = $state(MAX_BLAME_STEP_PX);
-  let field = $state<HTMLElement | null>(null);
+  /**
+   * The row does not take over until the finger has moved sideways on purpose.
+   * Reading position absolutely from the moment of the press would blame
+   * whoever happens to sit under the thumb — and a loss is pressed on the minus
+   * zone, which is nowhere near the "nobody" badge on a crowded card.
+   */
+  const SIDEWAYS_WAKE_PX = 10;
+
+  let aiming = $state(false);
 
   /** Far enough to be a deliberate drag rather than the wobble of a tap. */
   const SCRUB_THRESHOLD_PX = 12;
@@ -93,16 +99,6 @@
 
   let blameRow = $state<HTMLElement | null>(null);
 
-  /* The strip is one scrolling row, so the chip the drag has landed on has to be
-     brought into view or the selection happens off screen. */
-  $effect(() => {
-    void attributedTo;
-    // Optional call: this is presentation polish, and it must not throw where
-    // the API is missing — jsdom has no `scrollIntoView`.
-    const selected = blameRow?.querySelector('[data-selected="true"]');
-    selected?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
-  });
-
   /* Only worth asking on a loss, in a format where it counts, with someone to blame. */
   const askingWhoDealtIt = $derived(
     tracksCommanderDamage && controller.pending < 0 && seats.length > 0
@@ -141,15 +137,9 @@
     origin = event.clientY;
     originX = event.clientX;
 
-    /* Whichever side of the press point has more room is the side the row will
-       run in, so the step is sized against that one. */
-    const card = field?.getBoundingClientRect();
-    const room = card
-      ? Math.max(event.clientX - card.left, card.right - event.clientX)
-      : MAX_BLAME_STEP_PX;
-    blameStep = blameStepPx(room, blame.length);
     scrubBase = controller.pending;
     scrubbing = false;
+    aiming = false;
     startRepeating(sign);
   }
 
@@ -161,11 +151,21 @@
      * Two axes, one gesture: down sets how much was lost, sideways sets whose
      * commander did it. Sideways is handled first and independently of the
      * vertical threshold, so blame can be picked during a drag that has not yet
-     * become a scrub — and both are measured from the press point, so dragging
-     * back always undoes exactly.
+     * become a scrub.
+     *
+     * Which badge is chosen is read from where the finger is over the row, not
+     * from how far it has come. You can see the badges; you cannot see the
+     * point you started from.
      */
     if (askingWhoDealtIt) {
-      attributedTo = blame[blameIndex(event.clientX - originX, blameStep, blame.length)] ?? null;
+      if (Math.abs(event.clientX - originX) >= SIDEWAYS_WAKE_PX) aiming = true;
+      if (aiming) {
+        const row = blameRow?.getBoundingClientRect();
+        const slot = row
+          ? blameSlot(event.clientX, row.left, row.width, blame.length, rotated)
+          : NO_SLOT;
+        attributedTo = slot === NO_SLOT ? null : (blame[slot] ?? null);
+      }
     }
 
     const travelled = (origin - event.clientY) * (rotated ? -1 : 1);
@@ -208,7 +208,7 @@
 >
   <Filigree />
 
-  <div class="field" bind:this={field} data-attributing={askingWhoDealtIt}>
+  <div class="field" data-attributing={askingWhoDealtIt}>
     <button
       class="zone zone--minus"
       aria-label="{player.name}, lose one life"
@@ -243,6 +243,7 @@
             <div
               bind:this={blameRow}
               class="blame__row"
+              style="--slots: {blame.length}"
               role="group"
               aria-label="Whose commander dealt this to {player.name}?"
             >
@@ -257,11 +258,13 @@
                   data-colour={seats.find((s) => s.id === candidate)?.colour}
                   onclick={() => (attributedTo = candidate)}
                 >
-                  {#if candidate === null}
-                    <span class="blame__none" aria-hidden="true">–</span>
-                  {:else}
-                    <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={26} />
-                  {/if}
+                  <span class="blame__badge">
+                    {#if candidate === null}
+                      <span class="blame__none" aria-hidden="true">–</span>
+                    {:else}
+                      <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={40} />
+                    {/if}
+                  </span>
                 </button>
               {/each}
             </div>
@@ -542,55 +545,64 @@
   }
 
   .blame__row {
-    display: flex;
-    gap: var(--space-1);
-    justify-content: safe center;
-    max-width: 100%;
-
-    /* One row, always. Wrapping put three rows of chips over the life total at
-       six players; scrolling keeps the height fixed and the selected chip is
-       brought into view as the drag moves through the list. */
-    overflow-x: auto;
-    scrollbar-width: none;
-
-    /* Rule 10 says nothing scrolls; this is the local opt-in it allows. The row
-       is the one thing in the app whose length is set by the size of the table,
-       so at six players it outruns the card and has to be pannable by hand.
-       The life drag is unaffected: it starts on a zone underneath and takes
-       pointer capture, so it never reaches this element. */
-    touch-action: pan-x;
-  }
-
-  .blame__row::-webkit-scrollbar {
-    display: none;
+    /* Every candidate visible at once, each owning an equal column of the row.
+       Nothing scrolls and nothing is off screen: the card is 194px wide at six
+       players, so a fixed 44px chip could never have fitted six of them, and
+       panning to reach a badge you cannot see is not aiming. Equal columns are
+       also what makes the drag readable — the badge you are over is the badge
+       under your finger. */
+    display: grid;
+    grid-template-columns: repeat(var(--slots), 1fr);
+    gap: 2px;
+    width: 100%;
   }
 
   .blame__chip {
+    /* The button is the whole column, so the target is as wide as the share of
+       the row it owns — the badge drawn inside it is the mark, not the mark's
+       hit area. Full height keeps it a real target where the column is narrow. */
     display: grid;
-    flex: none;
     place-items: center;
-
-    /* A proper touch target. The first version was a 20px pip at 55% opacity,
-       which read as disabled rather than unselected. */
-    min-width: 2.75rem;
+    min-width: 0;
     min-height: 2.75rem;
-    border: 1px solid var(--frame-rule);
-    border-radius: var(--radius-md);
-    background: var(--surface-sunken);
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--text-muted);
     font-family: var(--font-numeric);
     font-size: 1.05rem;
     font-weight: 700;
     line-height: 1;
-    transition:
-      background-color var(--duration-fast) var(--ease-out),
-      border-color var(--duration-fast) var(--ease-out);
   }
 
-  .blame__chip[data-selected='true'] {
+  .blame__badge {
+    /* The pip sizes with the badge, which sizes with the column. */
+    --pip-width: 78%;
+
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 2.5rem;
+    aspect-ratio: 1;
+    border: 1px solid var(--frame-rule);
+
+    /* Round, always: a square badge eats the width its neighbours need, and the
+       damage sheet already identifies people with a disc. */
+    border-radius: 50%;
+    background: var(--surface-sunken);
+    transition:
+      background-color var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out),
+      transform var(--duration-fast) var(--ease-out);
+  }
+
+  .blame__chip[data-selected='true'] .blame__badge {
     border-color: var(--frame-rule-strong);
     background: var(--accent);
-    color: var(--text-on-accent);
+
+    /* The badge is small where the table is big, so the selection has to read
+       at a glance without needing more room than the column has. */
+    transform: scale(1.12);
   }
 
   .blame__none {
