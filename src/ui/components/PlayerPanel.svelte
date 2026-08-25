@@ -218,69 +218,70 @@
       <span class="zone__glyph" aria-hidden="true">+</span>
     </button>
 
-    <div class="readout">
-      <LifeTotal life={player.life} {threat} label={player.name} />
-    </div>
-
-    <div class="top-stack">
-      {#if askingWhoDealtIt}
-        <!-- One gesture writes both numbers: drag down for how much, sideways
-             for whose commander. Tapping works too. Seat numbers rather than
-             mana symbols, which already mean something else in Magic. -->
-        <div class="blame">
-          <div
-            bind:this={blameRow}
-            class="blame__row"
-            role="group"
-            aria-label="Whose commander dealt this to {player.name}?"
-          >
-            {#each blame as candidate (candidate ?? 'nobody')}
-              <button
-                class="blame__chip"
-                data-selected={attributedTo === candidate}
-                aria-pressed={attributedTo === candidate}
-                aria-label={candidate === null
-                  ? 'Not commander damage'
-                  : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
-                onclick={() => (attributedTo = candidate)}
-              >
-                {candidate === null ? '–' : seatNumber(candidate)}
-              </button>
-            {/each}
-          </div>
-
-          <!--
-            The pending number lives on this line while the strip is open rather
-            than in its own badge above it. Measured at six players: the card is
-            248px, the strip needs 65 and the life total 53, which leaves no room
-            for a third floating element above the number it would cover.
-            Tapping the line still cancels, as the badge does.
-          -->
-          <button
-            class="blame__caption"
-            onclick={() => controller.cancel()}
-            aria-label="{player.name}, cancel pending change of {controller.pending > 0
-              ? `+${controller.pending}`
-              : controller.pending}"
-          >
-            <span class="blame__delta" aria-hidden="true">{controller.pending}</span>
-            <span aria-live="polite"
-              >{blamed === null ? 'not commander damage' : `${blamed.name}'s commander`}</span
+    <div class="overlay">
+      <div class="top-stack">
+        {#if askingWhoDealtIt}
+          <!-- One gesture writes both numbers: drag down for how much, sideways
+               for whose commander. Tapping works too. Seat numbers rather than
+               mana symbols, which already mean something else in Magic. -->
+          <div class="blame">
+            <div
+              bind:this={blameRow}
+              class="blame__row"
+              role="group"
+              aria-label="Whose commander dealt this to {player.name}?"
             >
-          </button>
-        </div>
-      {/if}
+              {#each blame as candidate (candidate ?? 'nobody')}
+                <button
+                  class="blame__chip"
+                  data-selected={attributedTo === candidate}
+                  aria-pressed={attributedTo === candidate}
+                  aria-label={candidate === null
+                    ? 'Not commander damage'
+                    : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
+                  onclick={() => (attributedTo = candidate)}
+                >
+                  {candidate === null ? '–' : seatNumber(candidate)}
+                </button>
+              {/each}
+            </div>
 
-      {#if controller.pending !== 0 && !askingWhoDealtIt}
-        <div class="badge-slot">
-          <DeltaBadge
-            value={controller.pending}
-            progress={controller.progress}
-            label={player.name}
-            oncancel={() => controller.cancel()}
-          />
-        </div>
-      {/if}
+            <!--
+              The pending number lives on this line while the strip is open rather
+              than in its own badge above it. Measured at six players: the card is
+              248px, the strip needs 65 and the life total 53, which leaves no room
+              for a third floating element above the number it would cover.
+              Tapping the line still cancels, as the badge does.
+            -->
+            <button
+              class="blame__caption"
+              onclick={() => controller.cancel()}
+              aria-label="{player.name}, cancel pending change of {controller.pending > 0
+                ? `+${controller.pending}`
+                : controller.pending}"
+            >
+              <span class="blame__delta" aria-hidden="true">{controller.pending}</span>
+              <span aria-live="polite"
+                >{blamed === null ? 'not commander damage' : `${blamed.name}'s commander`}</span
+              >
+            </button>
+          </div>
+        {/if}
+
+        {#if controller.pending !== 0 && !askingWhoDealtIt}
+          <div class="badge-slot">
+            <DeltaBadge
+              value={controller.pending}
+              progress={controller.progress}
+              label={player.name}
+              oncancel={() => controller.cancel()}
+            />
+          </div>
+        {/if}
+      </div>
+      <div class="readout">
+        <LifeTotal life={player.life} {threat} label={player.name} />
+      </div>
     </div>
   </div>
 
@@ -468,26 +469,30 @@
     opacity: 0.5;
   }
 
-  .readout {
+  /*
+   * Two rows, not two overlays.
+   *
+   * The strip and the life total used to be separately positioned boxes floating
+   * over the same space, kept apart by a margin. That margin was six pixels on
+   * Chromium and negative on WebKit, and two attempts to widen it by measurement
+   * both failed there — WebKit cannot be run in this sandbox, so every fix was a
+   * guess. Giving them a row each makes overlap geometrically impossible, in any
+   * engine, with nothing to measure.
+   */
+  .overlay {
     position: absolute;
     inset: 0;
     display: grid;
-    place-items: center;
-    transition: transform var(--duration-base) var(--ease-out);
+    grid-template-rows: auto minmax(0, 1fr);
 
-    /* The zones underneath must stay tappable through the readout. */
+    /* The zones underneath must stay tappable through it. */
     pointer-events: none;
   }
 
-  /*
-   * The total steps down while the strip is open rather than the strip trying to
-   * fit above a fixed centre. At six players the clearance was six pixels on
-   * Chromium — and WebKit, whose font metrics differ, overlapped. A proportional
-   * shift is clearance by construction rather than by a margin that happens to
-   * survive one engine's line box.
-   */
-  .field[data-attributing='true'] .readout {
-    transform: translateY(16%);
+  .readout {
+    display: grid;
+    min-height: 0;
+    place-items: center;
   }
 
   /*
@@ -614,21 +619,17 @@
    * each other, and the block's height is bounded by what is in it.
    */
   .top-stack {
-    position: absolute;
-    top: 0;
-    left: 0;
     display: grid;
     gap: var(--space-2);
     justify-items: center;
-    width: 100%;
-    padding-block-start: 8%;
+    padding-block-start: var(--space-3);
     padding-inline: var(--space-2);
     pointer-events: none;
   }
 
-  .field[data-attributing='true'] .top-stack {
-    gap: var(--space-1);
-    padding-block-start: var(--space-1);
+  /* Nothing pending: the row collapses and the total sits where it always did. */
+  .top-stack:empty {
+    display: none;
   }
 
   .badge-slot {

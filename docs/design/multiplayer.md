@@ -160,12 +160,16 @@ cover. So while the strip is open the pending amount moves onto the caption line
 — `−13 · Björn's commander` — which is also the control that cancels. Measured
 rather than guessed, and asserted by a test at four and six players.
 
-The life total also **steps down** while the strip is open. Fitting the strip
-above a fixed centre left six pixels of clearance on Chromium and none at all on
-WebKit, whose font metrics differ — the test caught it there and nowhere else. A
-proportional shift gives clearance by construction rather than by a margin that
-happens to survive one engine's line box; it is 38 px or more at every seat
-count.
+The strip and the life total sit in **separate grid rows**, not as two boxes
+floating over the same space kept apart by a margin.
+
+That margin was the whole problem. It was six pixels on Chromium and negative on
+WebKit, whose font metrics differ, and two attempts to widen it by measurement
+both failed there — WebKit cannot be installed in the development sandbox, so
+each fix was a guess checked only in CI. A row each makes overlap geometrically
+impossible in any engine, with nothing left to measure.
+
+The row collapses when nothing is pending, so the resting layout is unchanged.
 
 The strip is one horizontally scrolling row, never wrapping. Wrapping put three
 rows of chips over the life total at six players and the caption over the name
