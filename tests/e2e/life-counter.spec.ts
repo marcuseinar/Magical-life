@@ -44,14 +44,21 @@ test('takes a big swing from a drag rather than twenty taps', async ({ page }) =
   await expectLife(page, 'Player 2').toBeGreaterThan(-20);
 });
 
-test('reads the drag from the seat, not the screen, for the far panel', async ({ page }) => {
-  await startGame(page, /commander/i, 2);
+/* Two players now sit side by side rather than across from each other, so
+   neither panel is rotated (see game-board.spec.ts) — this needs a player
+   count where a seat actually is upside down. Four gives one of each: the top
+   row sits across the table, the bottom row sits with you. */
+test('reads the drag from the seat, not the screen, for a panel facing across the table', async ({
+  page
+}) => {
+  await startGame(page, /commander/i, 4);
 
-  // Player 1 sits across the table and their panel is upside down, so the same
-  // physical drag means the opposite thing.
-  await scrub(page, 'Player 2', -150);
-  await expectLife(page, 'Player 2').toBeLessThan(40);
+  // Player 3 is in the bottom row, right way up: down means down.
+  await scrub(page, 'Player 3', -150);
+  await expectLife(page, 'Player 3').toBeLessThan(40);
 
+  // Player 1 is in the top row, upside down, so the same physical drag means
+  // the opposite thing.
   await scrub(page, 'Player 1', -150);
   await expectLife(page, 'Player 1').toBeGreaterThan(40);
 });
@@ -340,6 +347,41 @@ test('works with no network at all', async ({ page, context, browserName }) => {
   await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
   await zone(page, 'Player 1', 'lose').click();
   await expect(page.getByLabel('Player 1: 39 life')).toBeVisible({ timeout: COMMITTED });
+});
+
+/* Reported from the table: at 320px the name plate had so little room that a
+   rotated (upside-down) panel's name truncated to a single stray character —
+   worse than merely short, actively unreadable. The plate's other chrome
+   (the pip, the crown, elimination, the counter tray) was taking a fixed
+   share regardless of how little was left for the one thing meant to be
+   read. This asserts the name keeps a real minimum, not just "some". */
+test('keeps room to read a name at 320 pixels, even at six players', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await startGame(page, /commander/i, 6);
+
+  const width = await page
+    .getByRole('button', { name: /^Rename Player \d/i })
+    .first()
+    .evaluate((element) => element.getBoundingClientRect().width);
+
+  expect(width).toBeGreaterThan(40);
+});
+
+/* Reported from the table: stacked top/bottom forced one of two players to
+   read their own total upside down, which makes sense only if they are
+   genuinely sitting across a table from the phone. Two players now sit side
+   by side instead — this is the end-to-end shape of that, as distinct from
+   game-board.spec.ts's check that neither panel carries the rotated flag. */
+test('sits two players side by side rather than stacked', async ({ page }) => {
+  await startGame(page, /commander/i, 2);
+
+  const [first, second] = await page
+    .locator('article h2')
+    .evaluateAll((headings) => headings.map((h) => h.getBoundingClientRect()));
+
+  // Side by side: roughly the same row, and apart horizontally.
+  expect(Math.abs(first!.top - second!.top)).toBeLessThan(4);
+  expect(Math.abs(first!.left - second!.left)).toBeGreaterThan(100);
 });
 
 test('fits a 320 pixel screen', async ({ page }) => {

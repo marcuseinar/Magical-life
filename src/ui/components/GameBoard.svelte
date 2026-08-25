@@ -29,16 +29,23 @@
     onElimination: (player: PlayerState, eliminated: boolean) => void;
   } = $props();
 
-  /* One and two players read best stacked; three and up want a grid. */
   /* Every seat, in order: the panel needs them all, since a stolen commander
      can hit its own owner. */
   const seats = $derived(players);
 
-  const columns = $derived(players.length <= 2 ? 1 : 2);
+  /* Solo is the one seat count that reads best full-screen; everyone else gets
+     a grid, including two — reported from the table: stacked top/bottom forces
+     one player to read upside down even when nobody is actually sitting across
+     a table from the phone. Side by side, both upright, is the shape two
+     people sitting next to each other actually want. */
+  const columns = $derived(players.length === 1 ? 1 : 2);
   const rows = $derived(Math.ceil(players.length / columns));
 
-  /** Everyone in the top row is sitting opposite, so their panel is upside down. */
-  const isRotated = (index: number) => players.length > 1 && index < columns;
+  /* Only the top of *more than one row* is "across the table" — a single row
+     is everyone sitting together, and nobody there should read upside down.
+     This is what makes two players fall out of the same rule as everyone
+     else, rather than needing a rotation case of their own. */
+  const isRotated = (index: number) => rows > 1 && index < columns;
 
   /** An odd player out takes the whole width rather than leaving a hole. */
   const spansRow = (index: number) =>

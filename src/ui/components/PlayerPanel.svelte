@@ -735,12 +735,20 @@
   }
 
   .plate {
+    /* Sized down from the pip component's own 22px default. At two columns
+       the plate is the tightest strip in the app — the crown, the elimination
+       toggle and the counter tray all compete with the name for the same
+       row, and the name is what actually needs the room: reported from the
+       table as truncating to nothing at 320px, the app's own documented
+       minimum. */
+    --pip-width: 1.15rem;
+
     display: flex;
     flex: none;
-    gap: var(--space-2);
+    gap: var(--space-1);
     align-items: center;
     min-width: 0;
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-2);
     border-top: 1px solid var(--frame-rule);
 
     /* The type line of a card. */
@@ -770,7 +778,7 @@
 
   .plate__end {
     display: flex;
-    gap: var(--space-2);
+    gap: var(--space-1);
     align-items: center;
     justify-content: flex-end;
 

@@ -115,15 +115,30 @@ neither can steal the other's input.
 
 ## Panel layout by player count
 
-Every player must be able to read their own total right-way-up, so panels rotate.
+Every player must be able to read their own total right-way-up, so panels
+rotate — but only where rotation means something. A panel is rotated when it
+sits in a row above at least one other row (`rows > 1 && index < columns`):
+that is what "across the table" means when there's a table to be across.
 
-| Players | Layout                                                             |
-| ------- | ------------------------------------------------------------------ |
-| 1       | Full screen                                                        |
-| 2       | Stacked halves, top panel rotated 180°                             |
-| 3       | Two rotated on the left, one on the right (or 3-up rows on tablet) |
-| 4       | 2×2, top row rotated 180°                                          |
-| 5–6     | 2×3, top row rotated 180°                                          |
+| Players | Layout                                                                   |
+| ------- | ------------------------------------------------------------------------ |
+| 1       | Full screen                                                              |
+| 2       | Side by side, neither rotated                                            |
+| 3       | Two rotated on top, one spanning the bottom row (or 3-up rows on tablet) |
+| 4       | 2×2, top row rotated 180°                                                |
+| 5–6     | 2×3, top row rotated 180°                                                |
+
+**Two players used to be stacked top/bottom, with the top panel rotated
+180°** — the same "across the table" convention as everyone else. Reported
+from the table: that only makes sense if the two players are genuinely
+sitting across from each other with the phone flat on the table between
+them, and forces the other one to read their own life total upside down
+whenever they aren't. Side by side, both upright, is what two people sitting
+together actually want, and it falls out of the same one-line rule as every
+other count — a single row is never "across the table" from itself, so
+nobody in it gets rotated. No special case for two players; the rule already
+covered it once rotation stopped depending on player count directly and
+started depending on whether there's more than one row.
 
 Rotation is a CSS transform on the panel, not a separate component. The
 component does not know it is upside down.

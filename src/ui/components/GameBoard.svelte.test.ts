@@ -43,9 +43,15 @@ describe('game board', () => {
     expect(panels(container)[0]?.dataset.rotated).toBe('false');
   });
 
-  it('turns the opposing panel around for two players', () => {
+  /* Reported from the table: stacked top/bottom forced one of two players to
+     read upside down even when nobody was actually sitting across a table
+     from the phone. Side by side, neither rotated, is what two people sitting
+     together actually want — and it falls out of the same rule as everyone
+     else: only the top of *more than one row* is "across the table", and two
+     players are a single row. */
+  it('sits two players side by side, neither rotated', () => {
     const container = mount(2);
-    expect(panels(container).map((p) => p.dataset.rotated)).toEqual(['true', 'false']);
+    expect(panels(container).map((p) => p.dataset.rotated)).toEqual(['false', 'false']);
   });
 
   it('turns the whole top row around for a four-player pod', () => {
