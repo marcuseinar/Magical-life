@@ -8,8 +8,10 @@
     firstPlayer = null,
     spotlight = null,
     celebrating = null,
+    tracksCommanderDamage = false,
     onLifeChange,
     onOpenCounters,
+    onOpenCommander,
     onElimination
   }: {
     players: readonly PlayerState[];
@@ -18,8 +20,10 @@
     spotlight?: number | null;
     /** Player who has just won the roll, blinking to announce it. */
     celebrating?: PlayerId | null;
-    onLifeChange: (player: PlayerState, delta: number) => void;
+    tracksCommanderDamage?: boolean;
+    onLifeChange: (player: PlayerState, delta: number, from: PlayerId | null) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
+    onOpenCommander: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
   } = $props();
 
@@ -51,8 +55,11 @@
         spotlit={index === spotlight}
         celebrating={player.id === celebrating}
         dimmed={spotlight !== null && index !== spotlight}
-        onLifeChange={(delta) => onLifeChange(player, delta)}
+        {tracksCommanderDamage}
+        opponents={players.filter((other) => other.id !== player.id)}
+        onLifeChange={(delta, from) => onLifeChange(player, delta, from)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}
+        onOpenCommander={() => onOpenCommander(player, isRotated(index))}
         onElimination={(eliminated) => onElimination(player, eliminated)}
       />
     </div>

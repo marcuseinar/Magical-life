@@ -11,6 +11,7 @@ const seat = (index: number): PlayerState => ({
   colour: MANA_COLOURS[index % 5]!,
   life: 40,
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
+  commanderDamage: {},
   eliminated: false
 });
 
@@ -20,6 +21,7 @@ const mount = (count: number) => {
       players: Array.from({ length: count }, (_, index) => seat(index)),
       onLifeChange: vi.fn(),
       onOpenCounters: vi.fn(),
+      onOpenCommander: vi.fn(),
       onElimination: vi.fn()
     }
   });

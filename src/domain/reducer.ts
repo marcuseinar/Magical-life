@@ -14,6 +14,7 @@ const seatPlayer = (seat: PlayerSeat, life: number): PlayerState => ({
   ...seat,
   life,
   counters: zeroCounters(),
+  commanderDamage: {},
   eliminated: false
 });
 
@@ -68,6 +69,20 @@ export function reduce(state: GameState | null, event: GameEvent): GameState | n
           [event.counter]: Math.max(0, player.counters[event.counter] + event.delta)
         }
       }));
+
+    case 'commander/damaged': {
+      // Both ends must be at the table: an unknown attacker is as meaningless
+      // as an unknown victim.
+      if (!state.players.some((player) => player.id === event.from)) return state;
+
+      return mapPlayer(state, event.target, (player) => ({
+        ...player,
+        commanderDamage: {
+          ...player.commanderDamage,
+          [event.from]: Math.max(0, (player.commanderDamage[event.from] ?? 0) + event.delta)
+        }
+      }));
+    }
 
     case 'flag/moved':
       return { ...state, flags: { ...state.flags, [event.flag]: event.to } };

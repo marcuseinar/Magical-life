@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { lethalReasons, threatLevel } from '$domain/selectors';
+  import type { PlayerId } from '$domain/ids';
+  import { highestCommanderDamage, lethalReasons, threatLevel } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import { scrubPoints } from '$ui/interaction/pendingDelta';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
@@ -18,8 +19,11 @@
     spotlit = false,
     dimmed = false,
     celebrating = false,
+    opponents = [],
+    tracksCommanderDamage = false,
     onLifeChange,
     onOpenCounters,
+    onOpenCommander,
     onElimination
   }: {
     player: PlayerState;
@@ -31,7 +35,11 @@
     celebrating?: boolean;
     /** A spin is running and the light is on somebody else. */
     dimmed?: boolean;
-    onLifeChange: (delta: number) => void;
+    /** Everyone whose commander could have dealt the damage, this player included. */
+    opponents?: readonly PlayerState[];
+    tracksCommanderDamage?: boolean;
+    onLifeChange: (delta: number, from: PlayerId | null) => void;
+    onOpenCommander?: () => void;
     onOpenCounters: () => void;
     onElimination: (eliminated: boolean) => void;
   } = $props();
@@ -43,7 +51,25 @@
   const REPEAT_FAST_MS = 83;
   const REPEAT_ACCELERATES_AFTER = 4;
 
-  const controller = createDeltaController((delta) => onLifeChange(delta));
+  /** Which commander this pending loss is being blamed on, if any. */
+  let attributedTo = $state<PlayerId | null>(null);
+
+  const controller = createDeltaController((delta) => {
+    onLifeChange(delta, attributedTo);
+    attributedTo = null;
+  });
+
+  // Cancelling the pending change drops the attribution with it.
+  $effect(() => {
+    if (controller.pending === 0 && attributedTo !== null) attributedTo = null;
+  });
+
+  const commanderTaken = $derived(highestCommanderDamage(player));
+
+  /* Only worth asking on a loss, in a format where it counts, with someone to blame. */
+  const askingWhoDealtIt = $derived(
+    tracksCommanderDamage && controller.pending < 0 && opponents.length > 0
+  );
 
   let scrubbing = $state(false);
   let origin = 0;
@@ -159,6 +185,28 @@
             label={player.name}
             oncancel={() => controller.cancel()}
           />
+
+          {#if askingWhoDealtIt}
+            <!-- One tap turns this life loss into commander damage as well, so
+                 the two numbers are written together and cannot drift apart. -->
+            <div
+              class="blame"
+              role="group"
+              aria-label="Whose commander dealt this to {player.name}?"
+            >
+              {#each opponents as opponent (opponent.id)}
+                <button
+                  class="blame__pip"
+                  data-colour={opponent.colour}
+                  aria-pressed={attributedTo === opponent.id}
+                  aria-label="{opponent.name}'s commander"
+                  onclick={() => (attributedTo = attributedTo === opponent.id ? null : opponent.id)}
+                >
+                  <ManaPip colour={opponent.colour} size={20} />
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/if}
     </div>
@@ -175,6 +223,17 @@
     {/if}
 
     <div class="plate__end">
+      {#if tracksCommanderDamage}
+        <button
+          class="crown"
+          data-lethal={commanderTaken >= 21}
+          aria-label="Commander damage to {player.name}"
+          onclick={() => onOpenCommander?.()}
+        >
+          <span aria-hidden="true">♛</span>
+          {#if commanderTaken > 0}<span class="crown__total">{commanderTaken}</span>{/if}
+        </button>
+      {/if}
       {#if reasons.length > 0 || player.eliminated}
         <button
           class="out"
@@ -345,6 +404,55 @@
 
     /* The zones underneath must stay tappable through the readout. */
     pointer-events: none;
+  }
+
+  .blame {
+    display: flex;
+    gap: var(--space-1);
+    justify-content: center;
+    margin-top: var(--space-2);
+  }
+
+  .blame__pip {
+    display: grid;
+    place-items: center;
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    opacity: 0.55;
+    transition:
+      opacity var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+  }
+
+  .blame__pip[aria-pressed='true'] {
+    border-color: var(--frame-rule-strong);
+    background: var(--surface-sunken);
+    opacity: 1;
+  }
+
+  .crown {
+    display: inline-flex;
+    flex: none;
+    gap: var(--space-1);
+    align-items: center;
+    padding: 2px var(--space-2);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-pill);
+    color: var(--text-muted);
+    font-size: var(--size-chip);
+    line-height: 1.4;
+  }
+
+  .crown__total {
+    font-family: var(--font-numeric);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .crown[data-lethal='true'] {
+    border-color: var(--danger);
+    color: var(--danger);
   }
 
   .badge-slot {

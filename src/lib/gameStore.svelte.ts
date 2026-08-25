@@ -7,6 +7,7 @@ import type { Rng } from '$application/ports/rng';
 import { applyLifeDelta } from '$application/usecases/applyLifeDelta';
 import { changeCounter } from '$application/usecases/changeCounter';
 import { chooseFirstPlayer } from '$application/usecases/chooseFirstPlayer';
+import { recordCommanderDamage } from '$application/usecases/recordCommanderDamage';
 import { rematch } from '$application/usecases/rematch';
 import { setElimination } from '$application/usecases/setElimination';
 import { startGame } from '$application/usecases/startGame';
@@ -78,8 +79,21 @@ export function createGameStore(
       sync();
     },
 
-    async changeLife(target: PlayerId, delta: number) {
+    /**
+     * `from` names the commander that dealt it, when the player tagged the
+     * change. One gesture then writes both events with the same number, so the
+     * life total and the commander damage cannot drift apart.
+     */
+    async changeLife(target: PlayerId, delta: number, from: PlayerId | null = null) {
       await applyLifeDelta({ session })(target, delta);
+      if (from !== null && delta < 0) {
+        await recordCommanderDamage({ session })(target, from, -delta);
+      }
+      sync();
+    },
+
+    async changeCommanderDamage(target: PlayerId, from: PlayerId, delta: number) {
+      await recordCommanderDamage({ session })(target, from, delta);
       sync();
     },
 

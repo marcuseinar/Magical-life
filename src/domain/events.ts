@@ -10,6 +10,17 @@ export type EventBody =
       readonly players: readonly PlayerSeat[];
     }
   | { readonly kind: 'life/changed'; readonly target: PlayerId; readonly delta: number }
+  /**
+   * Twenty-one from a single commander is lethal, so this is tracked per
+   * commander rather than as a total. `from` is the commander's owner: a stolen
+   * commander is still its owner's, and its damage still counts as theirs.
+   */
+  | {
+      readonly kind: 'commander/damaged';
+      readonly target: PlayerId;
+      readonly from: PlayerId;
+      readonly delta: number;
+    }
   | {
       readonly kind: 'counter/changed';
       readonly target: PlayerId;
