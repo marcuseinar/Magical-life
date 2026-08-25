@@ -165,9 +165,14 @@ floating over the same space kept apart by a margin.
 
 That margin was the whole problem. It was six pixels on Chromium and negative on
 WebKit, whose font metrics differ, and two attempts to widen it by measurement
-both failed there — WebKit cannot be installed in the development sandbox, so
-each fix was a guess checked only in CI. A row each makes overlap geometrically
-impossible in any engine, with nothing left to measure.
+both failed there. A row each makes overlap geometrically impossible in any
+engine, with nothing left to measure.
+
+Three CI cycles were spent on that because the sandbox was believed not to be
+able to run WebKit. It can: the browser downloads fine and only the system
+libraries are missing, which `npx playwright install-deps webkit` supplies. Run
+that before reasoning about engine-specific layout — a guess verified only in CI
+costs four minutes a try and is how the same test failed three times running.
 
 The row collapses when nothing is pending, so the resting layout is unchanged.
 
@@ -177,8 +182,42 @@ plate; a fixed-height row cannot. The selected chip is scrolled into view as the
 drag moves through the list, and an end-to-end test asserts the strip clears both
 the total and the plate at four and six players.
 
-Every seat appears, not only opponents, because a stolen commander still deals
-its owner's damage — including to its owner.
+Only opponents appear. The row briefly listed every seat, on the reasoning that a
+stolen commander still deals its owner's damage — and the table reported it as
+noise straight away. Your own chip is one more thing to aim past mid-gesture, for
+a case that needs somebody to have stolen your commander. The domain still
+records self-damage faithfully; the sheet is where you correct it.
+
+Each chip is the owner's mana pip rather than their seat number. Seat numbers
+were tried first, because mana colour already means something else in Magic — but
+the pip is standing in for a player portrait, which is what will identify a
+player here eventually, and the damage sheet already identifies people that way.
+A number would have to be unlearned twice.
+
+### Reaching the far end of the row
+
+One place along the row is a fixed 44 px of sideways travel — until the row is
+longer than the card, which is exactly when it matters. Six players needed 264 px
+of travel inside a 248 px card, so the last seats could not be reached by the
+gesture at all: the table found this as "I can't scroll to player 6".
+
+The step is now measured against the room the finger actually has, from the press
+point to the far edge of the card, capped at 44 px when there is room to spare.
+Sideways distance is unsigned, because a loss is usually pressed on the minus
+zone and dragged right, but a scrub down from the plus zone starts on the other
+side of the card and has to work too.
+
+There is deliberately no minimum step. A floor and a guarantee that every
+candidate is reachable are the same trade made twice — any floor above
+`room / gaps` puts the far end out of reach again, which is the bug. In practice
+it costs nothing: the room is never less than half a card, so six seats on a
+320 px screen still leave 14 px a step. `blameStepPx` is a pure function with a
+property test asserting that every candidate is reachable and none is skipped.
+
+The row is also pannable by hand (`touch-action: pan-x`) once it outruns the
+card. Rule 10 says nothing scrolls; this is the local opt-in that rule allows,
+and the row is the one element in the app whose length is set by the size of the
+table rather than the size of the screen.
 
 ### The flow that actually happens at a table
 

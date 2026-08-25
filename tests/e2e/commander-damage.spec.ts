@@ -100,17 +100,75 @@ for (const count of [4, 6]) {
   });
 }
 
-test('can blame the player themselves, for a commander that was stolen', async ({ page }) => {
+/* Reported from the table. Your own commander is not a thing that damages you
+   in any ordinary game, so the chip was pure noise in the row you have to aim
+   at mid-gesture. A stolen commander is corrected in the sheet instead. */
+test('leaves the player themselves out of the row', async ({ page }) => {
   await startGame(page, /commander/i, 4);
 
   await zone(page, 'Player 1', 'lose').click();
-  await page
-    .getByRole('group', { name: /whose commander dealt this to player 1/i })
-    .getByRole('button', { name: /^player 1's commander$/i })
-    .click();
+  const group = page.getByRole('group', { name: /whose commander dealt this to player 1/i });
 
-  await expect(page.getByLabel('Player 1: 39 life')).toBeVisible({ timeout: COMMITTED });
-  await expect(crown(page, 'Player 1')).toHaveText(/\b1\b/);
+  await expect(group.getByRole('button', { name: /^player 1's commander$/i })).toHaveCount(0);
+  // Nobody, plus the other three.
+  await expect(group.getByRole('button')).toHaveCount(4);
+});
+
+/* The bug the table hit: a fixed 44px step per candidate wanted more travel
+   than the card is wide once six people are playing, so the far end of the row
+   could not be reached by the gesture at all. */
+test('can reach the far end of the row by drag, at six players', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  // A near-row seat, so down the screen is down from that player's seat too.
+  const panel = page.locator('article[data-rotated="false"]').first();
+  const name = (await panel
+    .getByRole('button', { name: /lose one life/i })
+    .getAttribute('aria-label'))!.split(',')[0]!;
+
+  const box = (await panel.getByRole('button', { name: /lose one life/i }).boundingBox())!;
+  const card = (await panel.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 90, { steps: 8 });
+
+  // As far sideways as this card physically allows, and no further.
+  await page.mouse.move(card.x + card.width - 1, y + 90, { steps: 12 });
+
+  const group = page.getByRole('group', { name: new RegExp(`dealt this to ${name}`, 'i') });
+  const last = (await group.getByRole('button').all()).at(-1)!;
+  await expect(last).toHaveAttribute('aria-pressed', 'true');
+
+  await page.mouse.up();
+});
+
+/* Rule 10 says nothing scrolls; the row is the sanctioned local exception,
+   because its length is set by the size of the table rather than the screen. */
+test('the row can be panned by hand when it outruns the card', async ({ page }) => {
+  await startGame(page, /commander/i, 6);
+
+  const panel = page.locator('article[data-rotated="false"]').first();
+  await panel.getByRole('button', { name: /lose one life/i }).click();
+
+  const row = panel.locator('.blame__row');
+  await expect(row).toBeVisible();
+
+  const panned = await row.evaluate((element) => {
+    const style = getComputedStyle(element);
+    element.scrollLeft = 999;
+    return {
+      touchAction: style.touchAction,
+      overflows: element.scrollWidth > element.clientWidth,
+      moved: element.scrollLeft > 0
+    };
+  });
+
+  expect(panned.touchAction).toBe('pan-x');
+  // If it ever stops overflowing the panning is moot, but it must not be stuck.
+  if (panned.overflows) expect(panned.moved).toBe(true);
 });
 
 test('leaves life loss untagged when nobody is blamed', async ({ page }) => {

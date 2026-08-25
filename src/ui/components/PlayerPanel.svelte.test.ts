@@ -331,19 +331,18 @@ describe('player panel', () => {
       expect(onLifeChange).toHaveBeenCalledWith(-1, null);
     });
 
-    it('offers seats by number rather than by mana symbol', async () => {
+    it('identifies each commander by its owner\u2019s colour', async () => {
       mountCommander();
       await touch(decrease(), 'pointerDown');
       await touch(decrease(), 'pointerUp');
 
       const group = screen.getByRole('group', { name: /whose commander/i });
-      // Nobody, then seat 1 and seat 2 — mana colours mean something else in
-      // Magic, so they are the wrong signal for "which player".
-      expect(
-        within(group)
-          .getAllByRole('button')
-          .map((b) => b.textContent?.trim())
-      ).toEqual(['–', '1', '2']);
+      // The pip stands in for a portrait later, so the chip has to carry the
+      // player's identity rather than their position in the seating order.
+      const pip = within(group)
+        .getByRole('button', { name: /bj\u00f6rn's commander/i })
+        .querySelector('[data-colour]');
+      expect(pip).toHaveAttribute('data-colour', 'blue');
     });
 
     it('says out loud whose commander is currently blamed', async () => {
@@ -356,12 +355,20 @@ describe('player panel', () => {
       expect(screen.getByText("Björn's commander")).toBeInTheDocument();
     });
 
-    it('offers the player themselves, for a commander that was stolen', async () => {
+    /* Reported from the table: your own chip in the row is noise. You cannot be
+       dealt commander damage by your own commander in any ordinary game, and
+       the one case that allows it \u2014 somebody stealing it \u2014 is rare enough to
+       correct in the sheet afterwards rather than to carry in every gesture. */
+    it('leaves the player themselves out of the row', async () => {
       mountCommander();
       await touch(decrease(), 'pointerDown');
       await touch(decrease(), 'pointerUp');
 
-      expect(screen.getByRole('button', { name: /anna's commander/i })).toBeInTheDocument();
+      const group = screen.getByRole('group', { name: /whose commander/i });
+      expect(
+        within(group).queryByRole('button', { name: /anna's commander/i })
+      ).not.toBeInTheDocument();
+      expect(within(group).getAllByRole('button')).toHaveLength(2);
     });
 
     it('picks who dealt it from the same drag that sets how much', async () => {

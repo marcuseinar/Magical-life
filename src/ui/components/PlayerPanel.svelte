@@ -2,6 +2,7 @@
   import type { PlayerId } from '$domain/ids';
   import { highestCommanderDamage, lethalReasons, threatLevel } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
+  import { MAX_BLAME_STEP_PX, blameIndex, blameStepPx } from '$ui/interaction/blameStep';
   import { scrubPoints } from '$ui/interaction/pendingDelta';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
   import CounterTray from './CounterTray.svelte';
@@ -35,8 +36,8 @@
     celebrating?: boolean;
     /** A spin is running and the light is on somebody else. */
     dimmed?: boolean;
-    /** Every seat in the game, in order, this player included — a stolen
-     *  commander can hit its own owner. */
+    /** Every seat in the game, in order. The panel filters itself out of the
+     *  attribution row; the seating order is what gives each chip its colour. */
     seats?: readonly PlayerState[];
     tracksCommanderDamage?: boolean;
     onLifeChange: (delta: number, from: PlayerId | null) => void;
@@ -45,11 +46,14 @@
     onElimination: (eliminated: boolean) => void;
   } = $props();
 
+  /** Sized against the room the finger has, once the press point is known. */
+  let blameStep = $state(MAX_BLAME_STEP_PX);
+  let field = $state<HTMLElement | null>(null);
+
   /** Far enough to be a deliberate drag rather than the wobble of a tap. */
   const SCRUB_THRESHOLD_PX = 12;
 
   /** Sideways travel per step along the list of who dealt it. */
-  const BLAME_STEP_PX = 44;
   const REPEAT_DELAY_MS = 500;
   const REPEAT_MS = 250;
   const REPEAT_FAST_MS = 83;
@@ -72,15 +76,17 @@
 
   /**
    * Who could have dealt it: nobody in particular, then every seat in order.
-   * `null` first because most life loss is not commander damage, and every seat
-   * rather than only opponents because a stolen commander still deals its
-   * owner's damage — including to its owner.
+   * `null` first because most life loss is not commander damage, and opponents
+   * only: your own chip is one more thing to aim past mid-gesture, for a case
+   * that needs somebody to have stolen your commander. The domain still records
+   * self-damage; the sheet is where you correct it.
    */
-  const blame = $derived<readonly (PlayerId | null)[]>([null, ...seats.map((seat) => seat.id)]);
+  const blame = $derived<readonly (PlayerId | null)[]>([
+    null,
+    ...seats.filter((seat) => seat.id !== player.id).map((seat) => seat.id)
+  ]);
 
   const blamed = $derived(seats.find((seat) => seat.id === attributedTo) ?? null);
-
-  const seatNumber = (id: PlayerId) => seats.findIndex((seat) => seat.id === id) + 1;
 
   let blameRow = $state<HTMLElement | null>(null);
 
@@ -131,6 +137,14 @@
     controller.nudge(sign);
     origin = event.clientY;
     originX = event.clientX;
+
+    /* Whichever side of the press point has more room is the side the row will
+       run in, so the step is sized against that one. */
+    const card = field?.getBoundingClientRect();
+    const room = card
+      ? Math.max(event.clientX - card.left, card.right - event.clientX)
+      : MAX_BLAME_STEP_PX;
+    blameStep = blameStepPx(room, blame.length);
     scrubBase = controller.pending;
     scrubbing = false;
     startRepeating(sign);
@@ -148,9 +162,7 @@
      * back always undoes exactly.
      */
     if (askingWhoDealtIt) {
-      const sideways = (event.clientX - originX) * (rotated ? -1 : 1);
-      const step = Math.round(sideways / BLAME_STEP_PX);
-      attributedTo = blame[Math.min(blame.length - 1, Math.max(0, step))] ?? null;
+      attributedTo = blame[blameIndex(event.clientX - originX, blameStep, blame.length)] ?? null;
     }
 
     const travelled = (origin - event.clientY) * (rotated ? -1 : 1);
@@ -193,7 +205,7 @@
 >
   <Filigree />
 
-  <div class="field" data-attributing={askingWhoDealtIt}>
+  <div class="field" bind:this={field} data-attributing={askingWhoDealtIt}>
     <button
       class="zone zone--minus"
       aria-label="{player.name}, lose one life"
@@ -222,8 +234,8 @@
       <div class="top-stack">
         {#if askingWhoDealtIt}
           <!-- One gesture writes both numbers: drag down for how much, sideways
-               for whose commander. Tapping works too. Seat numbers rather than
-               mana symbols, which already mean something else in Magic. -->
+               for whose commander. Tapping works too. The pip is the player's
+               own colour, standing in for the portrait that will replace it. -->
           <div class="blame">
             <div
               bind:this={blameRow}
@@ -239,9 +251,14 @@
                   aria-label={candidate === null
                     ? 'Not commander damage'
                     : `${seats.find((s) => s.id === candidate)?.name}'s commander`}
+                  data-colour={seats.find((s) => s.id === candidate)?.colour}
                   onclick={() => (attributedTo = candidate)}
                 >
-                  {candidate === null ? '–' : seatNumber(candidate)}
+                  {#if candidate === null}
+                    <span class="blame__none" aria-hidden="true">–</span>
+                  {:else}
+                    <ManaPip colour={seats.find((s) => s.id === candidate)!.colour} size={26} />
+                  {/if}
                 </button>
               {/each}
             </div>
@@ -527,9 +544,12 @@
     overflow-x: auto;
     scrollbar-width: none;
 
-    /* The sideways drag on the panel is what moves the selection; the strip must
-       not eat that gesture by scrolling itself. */
-    touch-action: none;
+    /* Rule 10 says nothing scrolls; this is the local opt-in it allows. The row
+       is the one thing in the app whose length is set by the size of the table,
+       so at six players it outruns the card and has to be pannable by hand.
+       The life drag is unaffected: it starts on a zone underneath and takes
+       pointer capture, so it never reaches this element. */
+    touch-action: pan-x;
   }
 
   .blame__row::-webkit-scrollbar {
@@ -548,11 +568,10 @@
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
-    color: var(--text-primary);
+    color: var(--text-muted);
     font-family: var(--font-numeric);
     font-size: 1.05rem;
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
     line-height: 1;
     transition:
       background-color var(--duration-fast) var(--ease-out),
@@ -563,6 +582,11 @@
     border-color: var(--frame-rule-strong);
     background: var(--accent);
     color: var(--text-on-accent);
+  }
+
+  .blame__none {
+    /* "Not commander damage" has no colour to show, so it keeps the dash. */
+    font-size: 1.2rem;
   }
 
   .blame__caption {
