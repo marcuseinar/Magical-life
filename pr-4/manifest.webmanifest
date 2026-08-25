@@ -1,0 +1,12 @@
+{
+  "name": "Magical Life",
+  "short_name": "Magical Life",
+  "description": "A Magic: The Gathering life counter for the table.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07060a",
+  "theme_color": "#07060a",
+  "icons": [{ "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
