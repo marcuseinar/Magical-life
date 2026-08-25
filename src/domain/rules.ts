@@ -4,6 +4,10 @@ export const LETHAL_POISON = 10;
 /** Twenty-one combat damage from a single commander, tracked per commander. */
 export const LETHAL_COMMANDER_DAMAGE = 21;
 
+/** Long enough for a real name, short enough that a plate stays readable at six
+ *  players. Names are trimmed and clamped rather than rejected. */
+export const MAX_PLAYER_NAME = 16;
+
 export type FormatId = 'commander' | 'standard' | 'twoHeadedGiant' | 'brawl';
 
 export type ManaColour =

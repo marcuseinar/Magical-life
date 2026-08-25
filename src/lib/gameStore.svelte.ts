@@ -8,6 +8,7 @@ import { applyLifeDelta } from '$application/usecases/applyLifeDelta';
 import { changeCounter } from '$application/usecases/changeCounter';
 import { chooseFirstPlayer } from '$application/usecases/chooseFirstPlayer';
 import { rematch } from '$application/usecases/rematch';
+import { renamePlayer } from '$application/usecases/renamePlayer';
 import { setElimination } from '$application/usecases/setElimination';
 import { startGame } from '$application/usecases/startGame';
 import type { SeatRequest } from '$application/usecases/startGame';
@@ -86,6 +87,12 @@ export function createGameStore(
     async changeCounter(target: PlayerId, counter: CounterKind, delta: number) {
       await changeCounter({ session })(target, counter, delta);
       sync();
+    },
+
+    async rename(target: PlayerId, name: string) {
+      const result = await renamePlayer({ session })(target, name);
+      sync();
+      return result;
     },
 
     async setEliminated(target: PlayerId, eliminated: boolean) {

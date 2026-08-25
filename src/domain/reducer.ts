@@ -77,6 +77,9 @@ export function reduce(state: GameState | null, event: GameEvent): GameState | n
         ? { ...state, firstPlayer: event.target }
         : state;
 
+    case 'player/renamed':
+      return mapPlayer(state, event.target, (player) => ({ ...player, name: event.name }));
+
     case 'player/eliminated':
       return mapPlayer(state, event.target, (player) => ({ ...player, eliminated: true }));
 

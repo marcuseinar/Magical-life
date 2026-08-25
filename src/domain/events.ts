@@ -20,6 +20,7 @@ export type EventBody =
   /** Who takes the first turn. Chosen at random, but the *choice* is made
    *  outside the domain and arrives here as a decided fact. */
   | { readonly kind: 'turn/firstPlayer'; readonly target: PlayerId }
+  | { readonly kind: 'player/renamed'; readonly target: PlayerId; readonly name: string }
   | { readonly kind: 'player/eliminated'; readonly target: PlayerId }
   | { readonly kind: 'player/restored'; readonly target: PlayerId }
   | { readonly kind: 'event/retracted'; readonly retracts: EventId }

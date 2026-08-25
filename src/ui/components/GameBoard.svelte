@@ -10,6 +10,7 @@
     celebrating = null,
     onLifeChange,
     onOpenCounters,
+    onRename,
     onElimination
   }: {
     players: readonly PlayerState[];
@@ -20,6 +21,7 @@
     celebrating?: PlayerId | null;
     onLifeChange: (player: PlayerState, delta: number) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
+    onRename: (player: PlayerState, rotated: boolean) => void;
     onElimination: (player: PlayerState, eliminated: boolean) => void;
   } = $props();
 
@@ -53,6 +55,7 @@
         dimmed={spotlight !== null && index !== spotlight}
         onLifeChange={(delta) => onLifeChange(player, delta)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}
+        onRename={() => onRename(player, isRotated(index))}
         onElimination={(eliminated) => onElimination(player, eliminated)}
       />
     </div>
