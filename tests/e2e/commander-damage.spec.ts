@@ -345,6 +345,39 @@ test('blames nobody for a drag that never moves sideways', async ({ page }) => {
   await expect(crown(page, name)).not.toHaveText(/\d/);
 });
 
+/* Reported at the design level, not the table: a dead player's commander left
+   the game with them (rule 800.4a), so it cannot be the source of a *fresh*
+   point of damage. Offering one as a live option would be offering something
+   that cannot happen — correcting a total already on the books is a different
+   question, answered by the sheet, which deliberately still lists them. */
+test('drops an eliminated opponent from the row, once out', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+
+  // Twenty-one from Player 3 puts Player 2 at death's door, then "Out" makes
+  // it official — the app declares nobody dead on its own.
+  await crown(page, 'Player 2').click();
+  const sheet = page.getByRole('dialog', { name: /commander damage to player 2/i });
+  const fromThree = sheet.getByRole('button', {
+    name: /add one commander damage .* from player 3/i
+  });
+  for (let hit = 0; hit < 21; hit++) await fromThree.click();
+  await page.getByRole('button', { name: /close commander damage/i }).click();
+
+  const panel = page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Player 2' }) });
+  await panel.getByRole('button', { name: 'Out', exact: true }).click();
+
+  // Now Player 1 takes a loss and opens the row: Player 2 should not be in
+  // it, but Player 3 and Player 4, both still alive, should be.
+  await zone(page, 'Player 1', 'lose').click();
+  const group = page.getByRole('group', { name: /whose commander dealt this to player 1/i });
+
+  await expect(group.getByRole('button', { name: /player 2's commander/i })).toHaveCount(0);
+  await expect(group.getByRole('button', { name: /player 3's commander/i })).toBeVisible();
+  await expect(group.getByRole('button', { name: /player 4's commander/i })).toBeVisible();
+});
+
 test('leaves life loss untagged when nobody is blamed', async ({ page }) => {
   await startGame(page, /commander/i, 4);
 

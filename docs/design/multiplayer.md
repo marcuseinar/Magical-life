@@ -127,7 +127,7 @@ on either device reaches the other, in both directions, over an actual
 
 One non-obvious bug worth recording because it will recur in any future
 transport-facing code: a Svelte `$effect` only takes a reactive dependency on
-a value it actually *reads* during a given run. `connectTransport`'s catch-up
+a value it actually _reads_ during a given run. `connectTransport`'s catch-up
 effect used to check `transport.state` (a plain, non-reactive property)
 before reading `store.events`, so its very first run — before the connection
 was even up — returned early without ever reading `store.events`, and
@@ -262,6 +262,14 @@ stolen commander still deals its owner's damage — and the table reported it as
 noise straight away. Your own badge is one more thing to aim past mid-gesture,
 for a case that needs somebody to have stolen your commander. The domain still
 records self-damage faithfully; the sheet is where you correct it.
+
+Eliminated opponents are left out too. A dead player's commander left the game
+with them (rule 800.4a), so it cannot be the source of a _fresh_ point of
+damage — offering one as a live option would be offering something that
+cannot happen. That is a different question from correcting a total already
+on the books, which is what the damage sheet is for, and it deliberately does
+not filter by elimination: you may well need to add to a dead opponent's
+total after the fact.
 
 Each badge is the owner's mana pip rather than their seat number. Seat numbers
 were tried first, because mana colour already means something else in Magic — but
