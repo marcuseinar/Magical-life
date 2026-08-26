@@ -60,6 +60,15 @@ and naming players during setup rather than once the game has started.
 **Highest technical risk in the project.** Spike the handshake before committing
 to the milestone's shape.
 
+**Built, independently of the rest of this milestone**: the Cloudflare Worker
+and Durable Object for short-code signalling (`workers/signalling/`) —
+deployable and fully tested against the real Workers runtime on its own, with
+its own README covering deployment. Not yet wired to anything: no client in
+`src/` calls it yet, and the WebRTC transport adapter, the QR UI, and the join
+flow itself are all still unbuilt. This piece was pulled forward because it
+has no dependency on any of that — it is pure infrastructure that the rest of
+the milestone will call once it exists.
+
 ## M4 — Native shells
 
 - Capacitor wrapping the same static build
