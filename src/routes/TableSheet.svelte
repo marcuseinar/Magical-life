@@ -1,37 +1,69 @@
 <script lang="ts">
   import type { GameStore } from '$lib/gameStore.svelte';
-  import { inviteToTable } from '$lib/tableConnection.svelte';
-  import type { TableInvite } from '$lib/tableConnection.svelte';
+  import { inviteToTable, inviteToTableByCode } from '$lib/tableConnection.svelte';
+  import type { TableInvite, TableInviteByCode } from '$lib/tableConnection.svelte';
   import type { PlayerId } from '$domain/ids';
+  import { defaultSignalling } from '$lib/signalling';
+  import { resolve } from '$app/paths';
+  import QrCode from '$ui/components/QrCode.svelte';
 
   let { store, onclose }: { store: GameStore; onclose: () => void } = $props();
 
-  let active = $state<{ playerId: PlayerId; invite: TableInvite } | null>(null);
+  const signalling = defaultSignalling();
+
+  type Active =
+    | { readonly mode: 'code'; readonly playerId: PlayerId; readonly invite: TableInviteByCode }
+    | { readonly mode: 'manual'; readonly playerId: PlayerId; readonly invite: TableInvite };
+
+  let active = $state<Active | null>(null);
   let replyDraft = $state('');
   let replyError = $state(false);
   let copied = $state(false);
 
   function invite(playerId: PlayerId) {
-    active = { playerId, invite: inviteToTable(store, playerId) };
+    active = { mode: 'code', playerId, invite: inviteToTableByCode(store, playerId, signalling) };
     replyDraft = '';
     replyError = false;
+    copied = false;
   }
 
-  async function copyCode() {
-    const code = active?.invite.code;
-    if (code === null || code === undefined) return;
+  function useManualCode() {
+    if (active === null) return;
+    const { playerId } = active;
+    if (active.mode === 'code') active.invite.stop();
+    active = { mode: 'manual', playerId, invite: inviteToTable(store, playerId) };
+    replyDraft = '';
+    replyError = false;
+    copied = false;
+  }
+
+  // The worker being unreachable at all (offline, not deployed, blocked
+  // network) is not a state worth showing — it is the state the manual
+  // fallback exists for, so drop into it the moment it's clear the
+  // short-code path cannot work rather than making a player read an error.
+  $effect(() => {
+    if (active?.mode === 'code' && active.invite.error) useManualCode();
+  });
+
+  const joinLink = $derived(
+    active?.mode === 'code' && active.invite.code !== null
+      ? `${window.location.origin}${resolve('/join')}?code=${active.invite.code}`
+      : null
+  );
+
+  async function copyText(text: string) {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(text);
       copied = true;
     } catch {
-      // Clipboard access can be refused; the code is still selectable by hand
-      // in the field beneath the button, so there is nothing more to do here.
+      // Clipboard access can be refused; the text is still selectable by
+      // hand on screen, so there is nothing more to do here.
     }
   }
 
   async function submitReply(event: SubmitEvent) {
     event.preventDefault();
-    if (active === null) return;
+    if (active === null || active.mode !== 'manual') return;
     try {
       await active.invite.accept(replyDraft);
       replyError = false;
@@ -39,26 +71,28 @@
       replyError = true;
     }
   }
+
+  function close() {
+    if (active?.mode === 'code') active.invite.stop();
+    onclose();
+  }
 </script>
 
 <svelte:window
   onkeydown={(event) => {
-    if (event.key === 'Escape') onclose();
+    if (event.key === 'Escape') close();
   }}
 />
 
 <div class="scrim">
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="scrim__hit" onclick={onclose}></div>
+  <div class="scrim__hit" onclick={close}></div>
 
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="table-title">
     <h2 id="table-title" class="title">Connect a table</h2>
 
     {#if active === null}
-      <p class="body">
-        Give another player's seat to their own phone. This is a very early, no-frills version — no
-        QR code yet, just a code to send them.
-      </p>
+      <p class="body">Give another player's seat to their own phone.</p>
       <ul class="players">
         {#each store.state?.players ?? [] as player (player.id)}
           <li>
@@ -71,8 +105,46 @@
     {:else if active.invite.connected}
       <p class="body" role="status">Connected. Their phone now has this game too.</p>
       <div class="actions">
-        <button class="action action--go" type="button" onclick={onclose}>Done</button>
+        <button class="action action--go" type="button" onclick={close}>Done</button>
       </div>
+    {:else if active.mode === 'code'}
+      {#if active.invite.expired}
+        <p class="body" role="status">Nobody joined in time. That code has expired.</p>
+        <div class="actions">
+          <button class="action" type="button" onclick={close}>Cancel</button>
+          <button class="action action--go" type="button" onclick={() => invite(active!.playerId)}>
+            Try again
+          </button>
+        </div>
+      {:else if active.invite.code === null}
+        <p class="body" role="status">Preparing a code…</p>
+      {:else}
+        <p class="body">
+          Send this to whoever is joining, or let them scan it — either way, their phone connects on
+          its own once they do.
+        </p>
+
+        <p class="short-code">{active.invite.code}</p>
+
+        {#if joinLink !== null}
+          <div class="qr-row">
+            <QrCode value={joinLink} />
+          </div>
+          <div class="code-row">
+            <textarea class="code" readonly value={joinLink} rows="2"></textarea>
+            <button class="action" type="button" onclick={() => copyText(joinLink!)}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+          </div>
+        {/if}
+
+        <div class="actions">
+          <button class="action" type="button" onclick={close}>Cancel</button>
+        </div>
+        <button class="fallback" type="button" onclick={useManualCode}>
+          Trouble connecting? Use a code you paste instead.
+        </button>
+      {/if}
     {:else}
       <p class="body">
         Send this code to whoever is joining — a text message, read aloud, however is easiest.
@@ -83,7 +155,7 @@
       {:else}
         <div class="code-row">
           <textarea class="code" readonly value={active.invite.code} rows="3"></textarea>
-          <button class="action" type="button" onclick={copyCode}>
+          <button class="action" type="button" onclick={() => copyText(active!.invite.code!)}>
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
@@ -104,7 +176,7 @@
             </p>
           {/if}
           <div class="actions">
-            <button class="action" type="button" onclick={onclose}>Cancel</button>
+            <button class="action" type="button" onclick={close}>Cancel</button>
             <button class="action action--go" type="submit" disabled={replyDraft.trim() === ''}>
               Connect
             </button>
@@ -180,6 +252,27 @@
     text-align: left;
   }
 
+  .short-code {
+    margin: 0;
+    padding: var(--space-2);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    color: var(--text-gold);
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    letter-spacing: 0.3em;
+    text-align: center;
+  }
+
+  .qr-row {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: white;
+  }
+
   .code-row {
     display: grid;
     gap: var(--space-2);
@@ -232,6 +325,14 @@
     display: flex;
     gap: var(--space-2);
     justify-content: flex-end;
+  }
+
+  .fallback {
+    padding: var(--space-2) 0 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-align: center;
+    text-decoration: underline;
   }
 
   .action {

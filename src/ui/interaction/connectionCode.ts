@@ -6,14 +6,9 @@
  * is easy to add later without touching anything that calls this.
  */
 
-export type OfferPayload = {
-  readonly sdp: string;
-  readonly invitePlayerId: string;
-  /** Shown on the joiner's screen before they commit to anything — "Join as
-   *  Anna?" is what a person needs to see, not a raw id. */
-  readonly invitePlayerName: string;
-};
-export type AnswerPayload = { readonly sdp: string };
+import type { AnswerPayload, OfferPayload } from '$application/ports/signalling';
+
+export type { AnswerPayload, OfferPayload };
 
 export function encodeCode(payload: OfferPayload | AnswerPayload): string {
   return btoa(JSON.stringify(payload));

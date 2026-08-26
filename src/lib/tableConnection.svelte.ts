@@ -1,4 +1,5 @@
 import type { Transport } from '$application/ports/transport';
+import type { OfferPayload, Signalling } from '$application/ports/signalling';
 import type { PlayerId } from '$domain/ids';
 import { playerId } from '$domain/ids';
 import { answerConnection, offerConnection } from '$adapters/transport/webRtcTransport';
@@ -195,13 +196,191 @@ export function joinTable(offerCode: string): TableJoin {
 
 export type Invitation = { readonly playerId: PlayerId; readonly playerName: string };
 
+function toInvitation(offer: OfferPayload): Invitation {
+  return { playerId: playerId(offer.invitePlayerId), playerName: offer.invitePlayerName };
+}
+
 /** Reads an offer code enough to show "who is this for" before committing to
  *  answering it — a join screen's first honest response to a pasted code. */
 export function whoIsThisFor(offerCode: string): Invitation | null {
   const decoded = decodeCode(offerCode);
   if (!decoded.ok || !isOfferPayload(decoded.value)) return null;
+  return toInvitation(decoded.value);
+}
+
+/**
+ * The short-code path: a `Signalling` adapter carries the offer/answer
+ * exchange instead of a person copying a blob by hand. Everything past that
+ * exchange — the data channel, `connectTransport`, the joiner's own
+ * in-memory store — is identical to the manual-code path above, because the
+ * exchange is the only thing that differs between them.
+ */
+
+/** How often the host checks whether the joiner has answered yet. A person
+ *  is reading a code aloud or typing one in on the other end; there is no
+ *  reason to poll faster than that. */
+const ANSWER_POLL_MS = 1500;
+
+export type TableInviteByCode = {
+  /** The short code to send the other player, once the worker has issued
+   *  one. `null` until then. */
+  readonly code: string | null;
+  readonly connected: boolean;
+  /** `true` once the room the code pointed to is gone — expired, most
+   *  likely — with nobody having answered it. */
+  readonly expired: boolean;
+  /** Set if the worker could not be reached at all — offline, not deployed,
+   *  blocked network. Distinct from `expired`: this table was never
+   *  reachable, rather than reachable and then abandoned. A caller sees this
+   *  as the signal to fall back to `inviteToTable`'s manual code instead. */
+  readonly error: boolean;
+  /** Stops polling for an answer. Call it if the invite sheet closes before
+   *  the joiner has connected, so nothing keeps calling out after nobody is
+   *  watching for the reply. */
+  stop(): void;
+};
+
+/** The short-code twin of `inviteToTable`: same offer, same `Transport`,
+ *  same seat — the only difference is who carries the SDP. */
+export function inviteToTableByCode(
+  store: GameStore,
+  targetPlayerId: PlayerId,
+  signalling: Signalling
+): TableInviteByCode {
+  const offerer = offerConnection();
+  let code = $state<string | null>(null);
+  let connected = $state(false);
+  let expired = $state(false);
+  let error = $state(false);
+  let stopped = false;
+
+  const targetName =
+    store.state?.players.find((player) => player.id === targetPlayerId)?.name ?? 'a player';
+
+  async function pollForAnswer(roomCode: string) {
+    while (!stopped && !connected) {
+      await new Promise((resolve) => setTimeout(resolve, ANSWER_POLL_MS));
+      if (stopped || connected) return;
+      let result;
+      try {
+        result = await signalling.getAnswer(roomCode);
+      } catch {
+        error = true;
+        return;
+      }
+      if (!result.found) {
+        expired = true;
+        return;
+      }
+      if (result.answer !== null) {
+        await offerer.accept(result.answer.sdp);
+        return;
+      }
+    }
+  }
+
+  void offerer.offer.then(async (sdp) => {
+    let roomCode: string;
+    try {
+      ({ code: roomCode } = await signalling.createRoom({
+        sdp,
+        invitePlayerId: targetPlayerId,
+        invitePlayerName: targetName
+      }));
+    } catch {
+      error = true;
+      return;
+    }
+    if (stopped) return;
+    code = roomCode;
+    void pollForAnswer(roomCode);
+  });
+
+  offerer.transport.onStateChange((next) => {
+    connected = next === 'connected';
+  });
+
+  connectTransport(store, offerer.transport);
+
   return {
-    playerId: playerId(decoded.value.invitePlayerId),
-    playerName: decoded.value.invitePlayerName
+    get code() {
+      return code;
+    },
+    get connected() {
+      return connected;
+    },
+    get expired() {
+      return expired;
+    },
+    get error() {
+      return error;
+    },
+    stop() {
+      stopped = true;
+    }
   };
+}
+
+export type TableJoinByCode = {
+  readonly connected: boolean;
+  readonly store: GameStore | null;
+};
+
+/** The short-code twin of `joinTable`. Takes the offer already fetched by
+ *  `signalling.getOffer` — a join screen shows "join as Anna?" from that
+ *  same offer before ever calling this, the same shape as the manual-code
+ *  path's `whoIsThisFor` then `joinTable`. */
+export function joinTableByCode(
+  code: string,
+  offer: OfferPayload,
+  signalling: Signalling
+): TableJoinByCode {
+  const invitePlayerId = playerId(offer.invitePlayerId);
+  const answerer = answerConnection(offer.sdp);
+  let connected = $state(false);
+  let store = $state<GameStore | null>(null);
+
+  void answerer.answer.then((sdp) => {
+    void signalling.submitAnswer(code, { sdp });
+  });
+
+  void answerer.transport.then((transport) => {
+    // See joinTable's matching comment: deliberately in-memory, not the
+    // shared IndexedDB log solo play uses.
+    const newStore = createGameStore({ authorId: invitePlayerId, log: createMemoryEventLog() });
+    let seeded = false;
+
+    const stopSeeding = transport.onReceive((events) => {
+      if (seeded) return;
+      seeded = true;
+      stopSeeding();
+      void newStore.merge(events).then(() => {
+        connectTransport(newStore, transport);
+        store = newStore;
+        connected = true;
+      });
+    });
+  });
+
+  return {
+    get connected() {
+      return connected;
+    },
+    get store() {
+      return store;
+    }
+  };
+}
+
+/** A join screen's first honest response to a typed or scanned short code —
+ *  the code-path twin of `whoIsThisFor`. `null` covers both "no such code"
+ *  and "that room expired"; the port does not distinguish them and neither
+ *  does a joiner need it to. */
+export async function whoIsThisForCode(
+  code: string,
+  signalling: Signalling
+): Promise<{ invitation: Invitation; offer: OfferPayload } | null> {
+  const offer = await signalling.getOffer(code);
+  if (offer === null) return null;
+  return { invitation: toInvitation(offer), offer };
 }
