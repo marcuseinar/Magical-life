@@ -29,10 +29,24 @@ apps don't have. Use it:
 - Joiner scans it, produces an answer, and shows their own QR back.
 - Host scans that. Channel open.
 
-A complete offer SDP is around 1.5–4 kB. Trimmed (drop unused codecs — we carry
-a data channel only, not audio or video) and deflate-compressed, it lands near
-600–900 bytes, comfortably inside a QR code's binary capacity at error
-correction level L. Two scans per joining player.
+A data-channel-only offer, measured across three runs of
+`spikes/webrtc-handshake/`, lands at ~585 bytes raw and ~427 deflate-compressed
+— under the original 600–900 byte estimate, and comfortably inside a QR code's
+binary capacity at error correction level L. No codec trimming needed: creating
+a data channel with no media tracks never puts audio/video lines in the SDP to
+begin with. Two scans per joining player.
+
+**Gathering ICE candidates before showing the code needs a timeout, not an
+unqualified wait.** The spike found that when the STUN server never answers —
+a blocked network, not only the sandbox it was run in — `iceGatheringState`
+never reaches `complete` on its own, so a design that waits for it
+unconditionally hangs forever with nothing on screen and no error. The fix:
+gather for a bounded window (spiked at 1500 ms, unvalidated against a real
+network — the sandbox that number came from cannot produce a real STUN round
+trip to measure against) and proceed with whatever candidates exist. On a
+shared table WiFi — the common case this app is for — that is typically just
+the host candidates, gathered in well under 100 ms with no STUN round trip at
+all, which the spike confirmed still opens a channel on its own.
 
 Honest downsides: two scans is more friction than a code, and it scales
 awkwardly to a 4-player pod (the host scans three times). Mitigated by having

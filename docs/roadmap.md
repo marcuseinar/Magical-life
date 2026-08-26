@@ -60,6 +60,28 @@ and naming players during setup rather than once the game has started.
 **Highest technical risk in the project.** Spike the handshake before committing
 to the milestone's shape.
 
+**Spiked**, in `spikes/webrtc-handshake/` — throwaway, not built or tested the
+way `src/` is, run by hand rather than in CI. It found the handshake works and
+the QR-size estimate was pessimistic (~427 bytes compressed, not 600–900), and
+it found a real gap the design doc didn't have: non-trickle ICE gathering needs
+a timeout or it can hang forever on a network that blocks STUN, with nothing on
+screen and no error. `docs/design/multiplayer.md` now says so. Full writeup and
+the numbers are in the spike's own `README.md`.
+
+Two pieces of real, permanent groundwork turned out to already exist:
+`GameSession.merge()` — dedup, total ordering, and the lamport clock correctly
+advancing past events from other authors — is already built and tested
+(`src/application/gameSession.test.ts`), which is most of what ADR 0002 needs
+to hold up under a real remote peer. And `Transport`
+(`src/application/ports/transport.ts`) is now a real, committed port — pure
+type, no adapter behind it yet.
+
+Not started: the real `WebRtcTransport` adapter (the spike's `peer.mjs` is what
+it becomes, once it has tests — adapters needing real browser APIs are proven
+through e2e journeys in this codebase, same as `IndexedDbEventLog`, so that is
+what accepting this into `src/` looks like), the Cloudflare Worker and Durable
+Object for short-code signalling, the QR UI, and the join flow itself.
+
 ## M4 — Native shells
 
 - Capacitor wrapping the same static build

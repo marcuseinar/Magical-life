@@ -140,7 +140,10 @@ export default ts.config(
       'coverage/',
       'node_modules/',
       'test-results/',
-      'playwright-report/'
+      'playwright-report/',
+      // Explicitly outside every gate — see spikes/webrtc-handshake/README.md.
+      // A spike is throwaway by definition; it should not be able to fail CI.
+      'spikes/'
     ]
   }
 );
