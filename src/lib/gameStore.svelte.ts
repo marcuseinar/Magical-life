@@ -35,7 +35,19 @@ import type { GameState } from '$domain/state';
 export type GameStore = ReturnType<typeof createGameStore>;
 
 export function createGameStore(
-  overrides: { log?: EventLog; ids?: IdSource; rng?: Rng; session?: GameSession } = {}
+  overrides: {
+    log?: EventLog;
+    ids?: IdSource;
+    rng?: Rng;
+    session?: GameSession;
+    /** Which player this device authors events as. Solo and shared-device
+     *  table play use the one fixed id below — there is only one device, so
+     *  nothing is served by every game inventing its own. A joined table
+     *  gives each device the id of the seat it claimed instead, which is
+     *  what keeps two devices' events from colliding under ADR 0002's
+     *  ownership rule. */
+    authorId?: PlayerId;
+  } = {}
 ) {
   const log = overrides.log ?? (browser ? createIndexedDbEventLog() : createMemoryEventLog());
   const ids = overrides.ids ?? randomIdSource;
@@ -45,8 +57,7 @@ export function createGameStore(
     createGameSession({
       clock: systemClock,
       log,
-      // Solo play: this device is every player. A table gives each device its own id.
-      authorId: playerId('device')
+      authorId: overrides.authorId ?? playerId('device')
     });
 
   let state = $state<GameState | null>(null);
@@ -133,6 +144,15 @@ export function createGameStore(
 
     async abandon() {
       await session.reset();
+      sync();
+    },
+
+    /** Folds in events this device did not author itself — the other half of
+     *  a table connection, alongside `events` for reading what to send out.
+     *  Kept general rather than table-specific: merging is just merging,
+     *  whatever put the events on the wire. */
+    async merge(incoming: readonly GameEvent[]) {
+      await session.merge(incoming);
       sync();
     }
   };

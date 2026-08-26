@@ -7,8 +7,10 @@ import type { GameEvent } from '$domain/events';
  * server) is deliberately not part of this port: connecting is a whole
  * negotiation with its own state, this is what you have once it is open.
  */
+export type TransportState = 'connecting' | 'connected' | 'closed';
+
 export type Transport = {
-  readonly state: 'connecting' | 'connected' | 'closed';
+  readonly state: TransportState;
 
   /** Hand events to the peer. Ordering and delivery are the adapter's job;
    *  the log is idempotent under replay either way (`GameSession.merge`). */
@@ -17,6 +19,15 @@ export type Transport = {
   /** Called with whatever the peer has sent, as it arrives. Returns a
    *  function that stops listening. */
   onReceive(handler: (events: readonly GameEvent[]) => void): () => void;
+
+  /**
+   * Called whenever `state` changes. `state` itself is a plain property, not
+   * a framework-reactive one — this port has no opinion on what UI, if any,
+   * sits above it — so anything that needs to *react* to a connection
+   * opening or closing, rather than poll for it, needs this rather than the
+   * getter alone.
+   */
+  onStateChange(handler: (state: TransportState) => void): () => void;
 
   close(): void;
 };
