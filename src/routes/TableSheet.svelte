@@ -116,31 +116,36 @@
             Try again
           </button>
         </div>
-      {:else if active.invite.code === null}
-        <p class="body" role="status">Preparing a code…</p>
       {:else}
-        <p class="body">
-          Send this to whoever is joining, or let them scan it — either way, their phone connects on
-          its own once they do.
-        </p>
+        {#if active.invite.code === null}
+          <p class="body" role="status">Preparing a code…</p>
+        {:else}
+          <p class="body">
+            Send this to whoever is joining, or let them scan it — either way, their phone connects
+            on its own once they do.
+          </p>
 
-        <p class="short-code">{active.invite.code}</p>
+          <p class="short-code">{active.invite.code}</p>
 
-        {#if joinLink !== null}
-          <div class="qr-row">
-            <QrCode value={joinLink} />
-          </div>
-          <div class="code-row">
-            <textarea class="code" readonly value={joinLink} rows="2"></textarea>
-            <button class="action" type="button" onclick={() => copyText(joinLink!)}>
-              {copied ? 'Copied' : 'Copy link'}
-            </button>
-          </div>
+          {#if joinLink !== null}
+            <div class="qr-row">
+              <QrCode value={joinLink} />
+            </div>
+            <div class="code-row">
+              <textarea class="code" readonly value={joinLink} rows="2"></textarea>
+              <button class="action" type="button" onclick={() => copyText(joinLink!)}>
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+          {/if}
         {/if}
 
         <div class="actions">
           <button class="action" type="button" onclick={close}>Cancel</button>
         </div>
+        <!-- Reachable even while a code is still being prepared — a slow
+             worker is exactly one of the "troubles" this exists for, not
+             only an already-failed one. -->
         <button class="fallback" type="button" onclick={useManualCode}>
           Trouble connecting? Use a code you paste instead.
         </button>

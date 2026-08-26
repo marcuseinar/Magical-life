@@ -26,10 +26,24 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'], colorScheme: 'light', ...chromium } },
     ...webkit
   ],
-  webServer: {
-    command: 'npm run build && npm run preview -- --port 4173',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000
-  }
+  webServer: [
+    {
+      // VITE_SIGNALLING_URL must be set before `build`, not `preview`: Vite
+      // bakes import.meta.env.VITE_* values into the static bundle at build
+      // time. Every journey shares this one build; only table-connection
+      // specs that create a room actually touch the worker below.
+      command: 'npm run build && npm run preview -- --port 4173',
+      url: 'http://localhost:4173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: { VITE_SIGNALLING_URL: 'http://localhost:8787' }
+    },
+    {
+      command: 'npm run dev',
+      cwd: 'workers/signalling',
+      url: 'http://localhost:8787/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000
+    }
+  ]
 });

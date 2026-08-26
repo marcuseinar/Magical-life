@@ -11,6 +11,11 @@ function request(path: string, init: RequestInit = {}): Request {
 }
 
 describe('the signalling worker', () => {
+  it('answers /health for a deploy or local-dev check', async () => {
+    const res = await exports.default.fetch(request('/health'));
+    expect(res.status).toBe(200);
+  });
+
   it('creates a room and returns a four-character code', async () => {
     const res = await exports.default.fetch(
       request('/rooms', {

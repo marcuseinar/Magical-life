@@ -79,6 +79,8 @@ async function getAnswer(env: Env, code: string, headers: HeadersInit): Promise<
 }
 
 /**
+ * `GET  /health`             — for a deploy check or a local dev server to
+ *                              poll, not for a client to call
  * `POST /rooms`             — host offers a table, gets back a short code
  * `GET  /rooms/:code`       — joiner reads the offer for a code
  * `POST /rooms/:code/answer`— joiner posts their answer
@@ -94,6 +96,10 @@ export default {
 
     const url = new URL(request.url);
     const [root, code, sub, ...rest] = url.pathname.split('/').filter(Boolean);
+
+    if (root === 'health' && code === undefined && request.method === 'GET') {
+      return new Response('ok', { headers });
+    }
 
     try {
       if (root === 'rooms' && code === undefined && request.method === 'POST') {

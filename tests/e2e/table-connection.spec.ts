@@ -5,7 +5,9 @@ import { COMMITTED, startGame } from './support';
  * The real thing, not the spike: two independent browser contexts, standing
  * in for two separate phones, connect over an actual WebRTC channel using
  * only a pasted code — no QR, no server, exactly the mechanism the spike in
- * spikes/webrtc-handshake/ proved before any of this UI existed.
+ * spikes/webrtc-handshake/ proved before any of this UI existed. This is
+ * the manual fallback specifically; the short-code path built on top of it
+ * has its own journey in table-connection-by-code.spec.ts.
  */
 
 test('a joined table converges to the same game, in both directions', async ({ browser }) => {
@@ -18,12 +20,16 @@ test('a joined table converges to the same game, in both directions', async ({ b
 
   await host.getByRole('button', { name: 'Connect a table' }).click();
   await host.getByRole('button', { name: 'Invite Player 2' }).click();
+  // The short code is the default path now; this journey exercises its
+  // manual-paste fallback specifically.
+  await host.getByRole('button', { name: /paste instead/i }).click();
 
   const hostCode = host.locator('.sheet textarea.code[readonly]');
   await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });
   const offerCode = await hostCode.inputValue();
 
   await joiner.goto('/join');
+  await joiner.getByRole('button', { name: /paste instead/i }).click();
   await joiner.getByLabel('Their code').fill(offerCode);
   await joiner.getByRole('button', { name: 'Continue' }).click();
   await expect(joiner.getByText('Join as')).toContainText('Player 2');

@@ -80,6 +80,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Signalling worker's own dependencies (wrangler dev, for table-connection specs)
+        run: npm ci
+        working-directory: workers/signalling
       - name: Install browsers
         run: npx playwright install --with-deps chromium webkit
       - name: End-to-end, accessibility and the monkey walk
