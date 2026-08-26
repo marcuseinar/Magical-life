@@ -49,6 +49,27 @@ jobs:
       - name: Unit, property and component tests
         run: npm run test:coverage
 
+  signalling-worker:
+    name: Signalling worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/signalling
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/signalling/package-lock.json
+      - run: npm ci
+      - name: Types
+        run: npm run check
+      - name: Tests (real Workers runtime, incl. the Durable Object)
+        run: npm run test
+      - name: Deploy config is valid
+        run: npx wrangler deploy --dry-run
+
   e2e:
     name: User journeys
     runs-on: ubuntu-latest

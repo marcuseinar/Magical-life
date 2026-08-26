@@ -1,0 +1,15 @@
+{
+  "name": "magical-life-signalling",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-26",
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "SignallingRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SignallingRoom"] }],
+  "vars": {
+    // The static site's own origins. A GitHub Pages PR preview
+    // (pr-<number>/) shares the https://<owner>.github.io origin with
+    // production, so it does not need its own entry.
+    "ALLOWED_ORIGINS": "http://localhost:5173,https://marcuseinar.github.io"
+  }
+}

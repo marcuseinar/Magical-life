@@ -57,17 +57,28 @@ does QR, and joiners two and three are introduced over the existing mesh.
 
 ### 2. Short-code signalling — the default
 
-A Cloudflare Worker plus one Durable Object per table.
+A Cloudflare Worker plus one Durable Object per table. **Built**, in
+`workers/signalling/` — its own README covers deploying it. Not yet wired
+into the client; see that README's "Wiring it into the app".
 
-- Host gets a 4-character room code (`XKCD`). It is a room key, not a secret.
+- Host gets a 4-character room code (`XKCD`). It is a room key, not a secret
+  — codes exclude `0`/`O` and `1`/`I`/`L`, so it is also readable aloud
+  across a table.
 - Peers POST their offer/answer blobs to the Durable Object, which holds them
-  in memory and hands them to the other peer.
-- The Durable Object is destroyed after the last peer connects, or after 10
-  minutes of inactivity.
+  in storage and hands them to the other peer.
+- The room expires 10 minutes after creation, whether or not anyone joined.
 
-The server sees only opaque SDP blobs and never sees a single game event. Cost
-is a handful of requests per game — inside a free tier by orders of magnitude.
-Verify current Cloudflare free-tier limits before launch; they change.
+The server sees only opaque SDP blobs and the invited seat's id and name —
+never a game event. Cost is a handful of requests per game — inside a free
+tier by orders of magnitude. Verify current Cloudflare free-tier limits before
+launch; they change.
+
+The Durable Object's actual rule for what a "live" room is takes the current
+time as an argument rather than reading it itself
+(`workers/signalling/src/roomLogic.ts`) — the same purity discipline
+`src/domain/` uses in the main app, for the same reason: it made the whole
+offer/answer/expiry state machine unit-testable with `fast-check` and no
+Workers runtime at all, before ever touching real Durable Object storage.
 
 ### 3. Relay fallback — when the network is hostile
 

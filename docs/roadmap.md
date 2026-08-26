@@ -76,11 +76,20 @@ to hold up under a real remote peer. And `Transport`
 (`src/application/ports/transport.ts`) is now a real, committed port — pure
 type, no adapter behind it yet.
 
-Not started: the real `WebRtcTransport` adapter (the spike's `peer.mjs` is what
-it becomes, once it has tests — adapters needing real browser APIs are proven
-through e2e journeys in this codebase, same as `IndexedDbEventLog`, so that is
-what accepting this into `src/` looks like), the Cloudflare Worker and Durable
-Object for short-code signalling, the QR UI, and the join flow itself.
+**Built**: the real `WebRtcTransport` adapter, proven through e2e journeys the
+same way `IndexedDbEventLog` is; a manual-code join flow on top of it — paste
+an offer, paste a reply, no QR, no server — proven end to end with two
+independent browser contexts converging on the same game
+(`tests/e2e/table-connection.spec.ts`); the Cloudflare Worker and Durable
+Object for short-code signalling (`workers/signalling/`), independently
+deployable and tested against the real Workers runtime; and the client wiring
+that connects the two — a short code, a QR, and a shareable link as the
+default join path, falling back to the manual code without asking anyone to
+read an error if the worker can't be reached.
+
+Not started: the QR handshake path (encoding an offer straight into a QR code
+with no server involved, for when the network can't reach the worker), the
+relay fallback, and the connection-quality chip.
 
 ## M4 — Native shells
 
