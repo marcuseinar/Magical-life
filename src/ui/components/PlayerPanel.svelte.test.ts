@@ -283,14 +283,17 @@ describe('player panel', () => {
       colour: 'blue'
     });
 
-    const mountCommander = (over: Partial<PlayerState> = {}) => {
+    const mountCommander = (
+      over: Partial<PlayerState> = {},
+      seats: readonly PlayerState[] = [player(), bjorn()]
+    ) => {
       const onLifeChange = vi.fn();
       const onOpenCommander = vi.fn();
       render(PlayerPanel, {
         props: {
           player: player(over),
           tracksCommanderDamage: true,
-          seats: [player(), bjorn()],
+          seats,
           onLifeChange,
           onOpenCounters: vi.fn(),
           onOpenCommander,
@@ -371,6 +374,37 @@ describe('player panel', () => {
        dealt commander damage by your own commander in any ordinary game, and
        the one case that allows it \u2014 somebody stealing it \u2014 is rare enough to
        correct in the sheet afterwards rather than to carry in every gesture. */
+    /* A dead player's commander left the game with them (rule 800.4a) — it
+       cannot be the source of a fresh point of damage. Offering one as a live
+       option would be offering something that cannot happen. Correcting a
+       total already on the books is a different question, answered by
+       CommanderSheet, which deliberately does not filter by elimination. */
+    it('leaves eliminated opponents out of the row', async () => {
+      mountCommander({}, [player(), { ...bjorn(), eliminated: true }]);
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+
+      const group = screen.getByRole('group', { name: /whose commander/i });
+      expect(
+        within(group).queryByRole('button', { name: /björn's commander/i })
+      ).not.toBeInTheDocument();
+      // Only "not commander damage" remains.
+      expect(within(group).getAllByRole('button')).toHaveLength(1);
+    });
+
+    it('keeps a still-living opponent in the row alongside an eliminated one', async () => {
+      const cara: PlayerState = { ...player(), id: playerId('cara'), name: 'Cara', colour: 'red' };
+      mountCommander({}, [player(), { ...bjorn(), eliminated: true }, cara]);
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+
+      const group = screen.getByRole('group', { name: /whose commander/i });
+      expect(within(group).getByRole('button', { name: /cara's commander/i })).toBeInTheDocument();
+      expect(
+        within(group).queryByRole('button', { name: /björn's commander/i })
+      ).not.toBeInTheDocument();
+    });
+
     it('leaves the player themselves out of the row', async () => {
       mountCommander();
       await touch(decrease(), 'pointerDown');

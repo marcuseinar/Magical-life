@@ -84,15 +84,22 @@
   const commanderTaken = $derived(highestCommanderDamage(player));
 
   /**
-   * Who could have dealt it: nobody in particular, then every seat in order.
+   * Who could have dealt it: nobody in particular, then every living opponent.
    * `null` first because most life loss is not commander damage, and opponents
    * only: your own chip is one more thing to aim past mid-gesture, for a case
    * that needs somebody to have stolen your commander. The domain still records
    * self-damage; the sheet is where you correct it.
+   *
+   * Eliminated players are left out too. A dead player's commander left the
+   * game with them, so it cannot be the source of a *fresh* point of damage —
+   * offering one as a live option would be offering something that cannot
+   * happen. That is a different question from correcting a total already on
+   * the books, which is what CommanderSheet is for, and it deliberately does
+   * not filter by elimination.
    */
   const blame = $derived<readonly (PlayerId | null)[]>([
     null,
-    ...seats.filter((seat) => seat.id !== player.id).map((seat) => seat.id)
+    ...seats.filter((seat) => seat.id !== player.id && !seat.eliminated).map((seat) => seat.id)
   ]);
 
   const blamed = $derived(seats.find((seat) => seat.id === attributedTo) ?? null);

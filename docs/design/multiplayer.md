@@ -195,6 +195,14 @@ noise straight away. Your own badge is one more thing to aim past mid-gesture,
 for a case that needs somebody to have stolen your commander. The domain still
 records self-damage faithfully; the sheet is where you correct it.
 
+Eliminated opponents are left out too. A dead player's commander left the game
+with them (rule 800.4a), so it cannot be the source of a _fresh_ point of
+damage — offering one as a live option would be offering something that
+cannot happen. That is a different question from correcting a total already
+on the books, which is what the damage sheet is for, and it deliberately does
+not filter by elimination: you may well need to add to a dead opponent's
+total after the fact.
+
 Each badge is the owner's mana pip rather than their seat number. Seat numbers
 were tried first, because mana colour already means something else in Magic — but
 the pip is standing in for a player portrait, which is what will identify a
