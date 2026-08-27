@@ -113,9 +113,18 @@ describe('scrub sensitivity', () => {
     expect(scrubPoints(7)).toBe(0);
   });
 
-  it('accelerates with distance, so a forty-point swing is reachable', () => {
+  it('accelerates through the first two zones, so a moderate drag outpaces a small one', () => {
     expect(scrubPoints(160)).toBeGreaterThan(scrubPoints(80) * 2);
-    expect(scrubPoints(200)).toBeGreaterThanOrEqual(40);
+  });
+
+  it('flattens out for a long drag, rather than running away', () => {
+    // Reported from real use: 268px used to land on exactly 100 — a drag
+    // easily made by accident, on a phone or with a mouse both. A screen's
+    // whole height (~700px) must stay well short of that, and even a huge
+    // drag (1000px, longer than any phone is tall) must not blow past it.
+    expect(scrubPoints(268)).toBeLessThan(50);
+    expect(scrubPoints(700)).toBeLessThan(70);
+    expect(scrubPoints(1000)).toBeLessThan(100);
   });
 
   it('is symmetric, so dragging back always undoes the gesture exactly', () => {
