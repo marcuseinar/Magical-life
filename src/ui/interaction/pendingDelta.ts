@@ -61,11 +61,20 @@ export function stepDelta(state: DeltaState, input: DeltaInput): DeltaOutcome {
   }
 }
 
-/** How far the finger has to travel for one more point, by zone. */
+/**
+ * How far the finger has to travel for one more point, by zone.
+ *
+ * The last zone used to be 1.6 — reported from real use: that let a single
+ * 268px drag, easily made by accident on a phone or with a mouse, reach
+ * exactly 100. The far zone now widens instead of continuing to tighten, so
+ * a long drag keeps giving more the further it goes without being able to
+ * run away to three digits: even 1000px, longer than any phone is tall,
+ * stays under 100.
+ */
 const ZONES: readonly { readonly until: number; readonly pixelsPerPoint: number }[] = [
   { until: 60, pixelsPerPoint: 8 },
-  { until: 160, pixelsPerPoint: 4 },
-  { until: Infinity, pixelsPerPoint: 1.6 }
+  { until: 200, pixelsPerPoint: 5 },
+  { until: Infinity, pixelsPerPoint: 20 }
 ];
 
 /**
