@@ -3,8 +3,31 @@
   import '@fontsource/cinzel/latin-700.css';
   import '@fontsource/cinzel/latin-900.css';
   import '$ui/tokens/base.css';
+  import { createBrowserWakeLock } from '$adapters/platform/wakeLock';
 
   let { children } = $props();
+
+  /*
+   * A life counter that lets the screen lock mid-game is failing at its one
+   * job. The lock is released by the browser itself whenever the tab goes to
+   * the background — switching apps, the phone's own screen timeout firing
+   * first — so it has to be re-requested on every return to visibility, not
+   * just once at load.
+   */
+  $effect(() => {
+    const wakeLock = createBrowserWakeLock();
+    void wakeLock.request();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void wakeLock.request();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      void wakeLock.release();
+    };
+  });
 
   /*
    * Safari on iOS honours neither `user-scalable=no` nor `touch-action` for its
