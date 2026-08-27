@@ -29,10 +29,24 @@ apps don't have. Use it:
 - Joiner scans it, produces an answer, and shows their own QR back.
 - Host scans that. Channel open.
 
-A complete offer SDP is around 1.5–4 kB. Trimmed (drop unused codecs — we carry
-a data channel only, not audio or video) and deflate-compressed, it lands near
-600–900 bytes, comfortably inside a QR code's binary capacity at error
-correction level L. Two scans per joining player.
+A data-channel-only offer, measured across three runs of
+`spikes/webrtc-handshake/`, lands at ~585 bytes raw and ~427 deflate-compressed
+— under the original 600–900 byte estimate, and comfortably inside a QR code's
+binary capacity at error correction level L. No codec trimming needed: creating
+a data channel with no media tracks never puts audio/video lines in the SDP to
+begin with. Two scans per joining player.
+
+**Gathering ICE candidates before showing the code needs a timeout, not an
+unqualified wait.** The spike found that when the STUN server never answers —
+a blocked network, not only the sandbox it was run in — `iceGatheringState`
+never reaches `complete` on its own, so a design that waits for it
+unconditionally hangs forever with nothing on screen and no error. The fix:
+gather for a bounded window (spiked at 1500 ms, unvalidated against a real
+network — the sandbox that number came from cannot produce a real STUN round
+trip to measure against) and proceed with whatever candidates exist. On a
+shared table WiFi — the common case this app is for — that is typically just
+the host candidates, gathered in well under 100 ms with no STUN round trip at
+all, which the spike confirmed still opens a channel on its own.
 
 Honest downsides: two scans is more friction than a code, and it scales
 awkwardly to a 4-player pod (the host scans three times). Mitigated by having
@@ -80,6 +94,60 @@ preferred path is impossible.
 Because `Transport` is a port (see `docs/architecture.md`), this is one more
 adapter. The UI shows a small connection-quality chip — direct, relayed, or
 offline — and nothing else in the app changes.
+
+## What is actually built today: manual-code join
+
+The three paths above are the target shape. Before any of the QR or
+Cloudflare signalling layers, there is a fourth, deliberately smaller path
+already shipped: paste-a-code, with no server and no camera.
+
+- The host taps **Connect a table**, picks which seat is joining, and the
+  device runs `offerConnection()` (`src/adapters/transport/webRtcTransport.ts`)
+  — the same non-trickle-ICE offer/answer mechanism the spike proved, now a
+  typed `Transport` port adapter rather than spike code. The offer, plus the
+  target seat's id and name, is base64-encoded (`src/ui/interaction/connectionCode.ts`)
+  into one code meant to be copied and sent by hand — a text message, read
+  aloud, whatever is easiest.
+- The joiner opens `/join`, pastes it, and is shown which seat they are about
+  to become before committing to anything (`whoIsThisFor`). Accepting runs
+  `answerConnection`, encodes the answer the same way, and shows it as the
+  reply to send back.
+- The host pastes the reply and taps **Connect**. Once the data channel
+  opens, the host sends its entire event history as the joiner's first batch
+  — a joiner's "catch up" and an ordinary life change are the same mechanism,
+  in `connectTransport` (`src/lib/tableConnection.svelte.ts`): whatever this
+  device has that the peer does not yet have, goes out, forever, for as long
+  as the connection lasts.
+- The joiner's device runs its own local `GameStore`, seeded from that first
+  batch and merged with `GameSession.merge` (ADR 0002's ownership model,
+  already relied on to dedupe and total-order). Its `authorId` is the seat it
+  claimed, not the fixed `'device'` id solo and shared-device play use — that
+  is what keeps two devices' events from colliding.
+- The joiner's copy is deliberately **in memory only**
+  (`createMemoryEventLog`), not the shared `IndexedDbEventLog` the device's
+  own solo game uses — that log is one fixed database, and a joined table's
+  events landing in it would silently merge into whatever game was already
+  there. A reload loses a joined table today; rejoining supplies a fresh full
+  copy through the same mechanism as the first join. A per-table database is
+  the real fix, tracked for when reconnection matters, not before.
+
+Proven end to end in `tests/e2e/table-connection.spec.ts` with two real
+independent browser contexts standing in for two phones: a life change made
+on either device reaches the other, in both directions, over an actual
+`RTCDataChannel` — not a one-time snapshot.
+
+One non-obvious bug worth recording because it will recur in any future
+transport-facing code: a Svelte `$effect` only takes a reactive dependency on
+a value it actually _reads_ during a given run. `connectTransport`'s catch-up
+effect used to check `transport.state` (a plain, non-reactive property)
+before reading `store.events`, so its very first run — before the connection
+was even up — returned early without ever reading `store.events`, and
+therefore took no dependency on it. The initial sync still worked, because
+`onStateChange` calls the same function directly once the channel opens. But
+the effect itself never re-ran after that, so life changes made after the
+initial sync silently stopped propagating. The fix is to always read
+`store.events` first, before any early return, so the dependency is taken
+regardless of connection state at the time.
 
 ## Trust model
 
@@ -205,6 +273,14 @@ stolen commander still deals its owner's damage — and the table reported it as
 noise straight away. Your own badge is one more thing to aim past mid-gesture,
 for a case that needs somebody to have stolen your commander. The domain still
 records self-damage faithfully; the sheet is where you correct it.
+
+Eliminated opponents are left out too. A dead player's commander left the game
+with them (rule 800.4a), so it cannot be the source of a _fresh_ point of
+damage — offering one as a live option would be offering something that
+cannot happen. That is a different question from correcting a total already
+on the books, which is what the damage sheet is for, and it deliberately does
+not filter by elimination: you may well need to add to a dead opponent's
+total after the fact.
 
 Each badge is the owner's mana pip rather than their seat number. Seat numbers
 were tried first, because mana colour already means something else in Magic — but

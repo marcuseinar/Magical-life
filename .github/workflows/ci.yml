@@ -80,6 +80,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Signalling worker's own dependencies (wrangler dev, for table-connection specs)
+        run: npm ci
+        working-directory: workers/signalling
       - name: Install browsers
         run: npx playwright install --with-deps chromium webkit
       - name: End-to-end, accessibility and the monkey walk
@@ -139,6 +142,10 @@ jobs:
         run: npm run build
         env:
           BASE_PATH: ${{ steps.target.outputs.base }}
+          # The signalling worker's URL (workers/signalling/), set as a
+          # repository variable once it's deployed. Unset is fine — the
+          # short-code join path just falls back to a pasted code instead.
+          VITE_SIGNALLING_URL: ${{ vars.SIGNALLING_URL }}
 
       - name: Bundle budget
         run: node scripts/check-bundle-size.mjs

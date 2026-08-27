@@ -69,6 +69,15 @@ Same command: `npm run deploy`. If you change `wrangler.jsonc` (a new
 binding, a new var), run `npm run types` first so `tsc` sees the update
 before you commit.
 
+### Redeploying automatically instead
+
+`.github/workflows/deploy-signalling-worker.yml` redeploys on every push to
+`main` that touches this directory — set a `CLOUDFLARE_API_TOKEN` repository
+secret (Workers Edit scope) once, and merged changes here go live without
+anyone running `wrangler deploy` by hand again. Manual deploy above still
+works fine alongside it; the workflow is just the no-token-in-anyone's-hands
+version of the same command.
+
 ### Cost
 
 Durable Objects on the free plan include a real daily allowance of requests

@@ -1,0 +1,40 @@
+name: Deploy signalling worker
+
+# Deploys workers/signalling/ to Cloudflare whenever it changes on main —
+# i.e. once a PR touching it is merged, not on every push to a branch.
+# Needs a CLOUDFLARE_API_TOKEN repository secret (Workers Edit scope is
+# enough); without one this workflow fails loudly rather than silently
+# skipping, since a merged worker change that never deploys is a real bug.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/signalling/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-signalling-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/signalling
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/signalling/package-lock.json
+      - run: npm ci
+      - name: Deploy
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

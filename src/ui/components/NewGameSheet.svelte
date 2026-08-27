@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { FORMATS, FORMAT_ORDER, MANA_COLOURS } from '$domain/rules';
   import type { FormatId, ManaColour } from '$domain/rules';
   import ManaPip from './ManaPip.svelte';
@@ -67,6 +68,8 @@
   <button class="start" onclick={() => onstart(formatId, seats)}>
     Begin at {format.startingLife}
   </button>
+
+  <a class="join-link" href={resolve('/join')}>Join a table instead</a>
 </main>
 
 <style>
@@ -179,6 +182,16 @@
     gap: var(--space-2);
     justify-content: center;
     min-height: 26px;
+  }
+
+  .join-link {
+    justify-self: center;
+    padding: var(--space-1) var(--space-3);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .start {

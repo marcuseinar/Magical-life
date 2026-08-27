@@ -60,14 +60,36 @@ and naming players during setup rather than once the game has started.
 **Highest technical risk in the project.** Spike the handshake before committing
 to the milestone's shape.
 
-**Built, independently of the rest of this milestone**: the Cloudflare Worker
-and Durable Object for short-code signalling (`workers/signalling/`) —
-deployable and fully tested against the real Workers runtime on its own, with
-its own README covering deployment. Not yet wired to anything: no client in
-`src/` calls it yet, and the WebRTC transport adapter, the QR UI, and the join
-flow itself are all still unbuilt. This piece was pulled forward because it
-has no dependency on any of that — it is pure infrastructure that the rest of
-the milestone will call once it exists.
+**Spiked**, in `spikes/webrtc-handshake/` — throwaway, not built or tested the
+way `src/` is, run by hand rather than in CI. It found the handshake works and
+the QR-size estimate was pessimistic (~427 bytes compressed, not 600–900), and
+it found a real gap the design doc didn't have: non-trickle ICE gathering needs
+a timeout or it can hang forever on a network that blocks STUN, with nothing on
+screen and no error. `docs/design/multiplayer.md` now says so. Full writeup and
+the numbers are in the spike's own `README.md`.
+
+Two pieces of real, permanent groundwork turned out to already exist:
+`GameSession.merge()` — dedup, total ordering, and the lamport clock correctly
+advancing past events from other authors — is already built and tested
+(`src/application/gameSession.test.ts`), which is most of what ADR 0002 needs
+to hold up under a real remote peer. And `Transport`
+(`src/application/ports/transport.ts`) is now a real, committed port — pure
+type, no adapter behind it yet.
+
+**Built**: the real `WebRtcTransport` adapter, proven through e2e journeys the
+same way `IndexedDbEventLog` is; a manual-code join flow on top of it — paste
+an offer, paste a reply, no QR, no server — proven end to end with two
+independent browser contexts converging on the same game
+(`tests/e2e/table-connection.spec.ts`); the Cloudflare Worker and Durable
+Object for short-code signalling (`workers/signalling/`), independently
+deployable and tested against the real Workers runtime; and the client wiring
+that connects the two — a short code, a QR, and a shareable link as the
+default join path, falling back to the manual code without asking anyone to
+read an error if the worker can't be reached.
+
+Not started: the QR handshake path (encoding an offer straight into a QR code
+with no server involved, for when the network can't reach the worker), the
+relay fallback, and the connection-quality chip.
 
 ## M4 — Native shells
 
