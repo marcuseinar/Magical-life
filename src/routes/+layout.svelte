@@ -4,6 +4,7 @@
   import '@fontsource/cinzel/latin-900.css';
   import '$ui/tokens/base.css';
   import { createBrowserWakeLock } from '$adapters/platform/wakeLock';
+  import { createVideoKeepAwake } from '$adapters/platform/videoKeepAwake';
 
   let { children } = $props();
 
@@ -60,6 +61,31 @@
       document.removeEventListener('visibilitychange', onVisible);
       document.removeEventListener('pointerdown', onFirstInteraction);
       void wakeLock.release();
+    };
+  });
+
+  /*
+   * Belt-and-suspenders alongside the Wake Lock API above: iOS Safari has
+   * been seen resolving a wake lock request that does not actually stop the
+   * screen from sleeping (a known bug in standalone/home-screen mode fixed
+   * only in iOS 18.4), so success there is not proof the screen will stay
+   * lit. A muted, looping, otherwise-invisible video is a second, unrelated
+   * mechanism for the same effect that does not depend on that API working
+   * at all — restarted on the same visibilitychange signal in case the
+   * browser paused it while backgrounded.
+   */
+  $effect(() => {
+    const videoKeepAwake = createVideoKeepAwake();
+    videoKeepAwake.start();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') videoKeepAwake.start();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      videoKeepAwake.stop();
     };
   });
 

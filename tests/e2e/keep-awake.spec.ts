@@ -150,3 +150,73 @@ test('does nothing, without erroring, when the browser refuses or lacks the API'
 
   expect(errors).toEqual([]);
 });
+
+/*
+ * The Wake Lock API above can resolve successfully on iOS Safari without
+ * actually stopping the screen from sleeping — a documented bug in
+ * standalone/home-screen mode, not fixed until iOS 18.4. A muted, looping
+ * video is a second, independent mechanism for the same effect, so this runs
+ * against the real browser's canvas/video implementation rather than a mock:
+ * there is no substitute for proving actual frames are being decoded.
+ */
+
+test('keeps a hidden, muted video playing as a second, independent keep-awake mechanism', async ({
+  page
+}) => {
+  await startGame(page, /commander/i, 2);
+
+  const videoState = () =>
+    page.evaluate(() => {
+      const video = document.querySelector('video');
+      const track = (video?.srcObject as MediaStream | null)?.getVideoTracks()[0];
+      return video === null
+        ? null
+        : {
+            paused: video.paused,
+            muted: video.muted,
+            loop: video.loop,
+            trackState: track?.readyState
+          };
+    });
+
+  await expect.poll(videoState).toEqual({
+    paused: false,
+    muted: true,
+    loop: true,
+    trackState: 'live'
+  });
+
+  // Which signal actually moves for a live MediaStream source differs by
+  // engine — headless Chromium ticks readyState up to HAVE_ENOUGH_DATA but
+  // leaves currentTime frozen at 0, WebKit does the reverse — so either one
+  // advancing is proof the video is genuinely decoding frames over time,
+  // not just sitting in a `paused: false` state that never actually renders.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const video = document.querySelector('video')!;
+        return video.currentTime > 0 || video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+      })
+    )
+    .toBe(true);
+});
+
+test('the video fallback does nothing, without erroring, when captureStream is unsupported', async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', {
+      configurable: true,
+      value: undefined
+    });
+  });
+
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await startGame(page, /commander/i, 2);
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+
+  expect(await page.evaluate(() => document.querySelector('video'))).toBeNull();
+  expect(errors).toEqual([]);
+});
