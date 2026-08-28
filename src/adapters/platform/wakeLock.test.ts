@@ -23,7 +23,7 @@ describe('createBrowserWakeLock', () => {
     vi.stubGlobal('navigator', {});
     const wakeLock = createBrowserWakeLock();
 
-    await expect(wakeLock.request()).resolves.toBeUndefined();
+    await expect(wakeLock.request()).resolves.toBe(false);
     await expect(wakeLock.release()).resolves.toBeUndefined();
   });
 
@@ -33,7 +33,7 @@ describe('createBrowserWakeLock', () => {
     vi.stubGlobal('navigator', { wakeLock: { request } });
 
     const wakeLock = createBrowserWakeLock();
-    await wakeLock.request();
+    await expect(wakeLock.request()).resolves.toBe(true);
 
     expect(request).toHaveBeenCalledWith('screen');
     expect(sentinel.release).not.toHaveBeenCalled();
@@ -60,7 +60,7 @@ describe('createBrowserWakeLock', () => {
     vi.stubGlobal('navigator', { wakeLock: { request } });
 
     const wakeLock = createBrowserWakeLock();
-    await expect(wakeLock.request()).resolves.toBeUndefined();
+    await expect(wakeLock.request()).resolves.toBe(false);
   });
 
   it('releasing after a refused request is a no-op', async () => {
