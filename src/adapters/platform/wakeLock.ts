@@ -9,14 +9,30 @@ export type WakeLock = {
   release(): Promise<void>;
 };
 
-export function createBrowserWakeLock(): WakeLock {
+/**
+ * `onReleased` fires when the lock goes away for a reason other than our own
+ * `release()` call — the browser revoking it unprompted, which iOS Safari in
+ * particular is known to do without the tab ever going hidden. That is the
+ * one case `visibilitychange` cannot catch, so a caller wanting the lock
+ * held for as long as possible needs this to know when to ask again.
+ */
+export function createBrowserWakeLock(onReleased?: () => void): WakeLock {
   let sentinel: WakeLockSentinel | null = null;
 
   return {
     async request() {
       if (!('wakeLock' in navigator)) return;
       try {
-        sentinel = await navigator.wakeLock.request('screen');
+        const acquired = await navigator.wakeLock.request('screen');
+        sentinel = acquired;
+        acquired.addEventListener('release', () => {
+          // Our own release() below clears `sentinel` before calling the
+          // browser's release(), so by the time this fires for that case it
+          // no longer matches `acquired` — only an unprompted release does.
+          if (sentinel !== acquired) return;
+          sentinel = null;
+          onReleased?.();
+        });
       } catch {
         // Refused rather than unsupported — same outcome either way.
         sentinel = null;
