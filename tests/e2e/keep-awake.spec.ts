@@ -91,6 +91,45 @@ test('requests it again if the browser revokes it on its own, tab never hidden',
   await expect.poll(() => wakeLockCalls(page)).toEqual(['screen', 'screen']);
 });
 
+async function spyOnGestureGatedWakeLock(page: Page) {
+  await page.addInitScript(() => {
+    let hadGesture = false;
+    // Capture phase, so this always observes the tap before the app's own
+    // (bubble-phase) retry listener acts on the same event.
+    document.addEventListener('pointerdown', () => (hadGesture = true), { capture: true });
+
+    const calls: string[] = [];
+    (window as unknown as { __wakeLockCalls: string[] }).__wakeLockCalls = calls;
+
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: (type: string) => {
+          if (!hadGesture) return Promise.reject(new Error('NotAllowedError'));
+          calls.push(type);
+          return Promise.resolve({
+            released: false,
+            type,
+            release: () => Promise.resolve(),
+            addEventListener: () => {}
+          });
+        }
+      }
+    });
+  });
+}
+
+test('recovers on the first tap if the initial request needed a user gesture', async ({ page }) => {
+  await spyOnGestureGatedWakeLock(page);
+
+  // startGame itself performs the first tap (choosing a format), which is
+  // exactly what the recovery path is for — by the time it returns, the
+  // lock should be held even though the page-load attempt was refused.
+  await startGame(page, /commander/i, 2);
+
+  await expect.poll(() => wakeLockCalls(page)).toEqual(['screen']);
+});
+
 test('does nothing, without erroring, when the browser refuses or lacks the API', async ({
   page
 }) => {

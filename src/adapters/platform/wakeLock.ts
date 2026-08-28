@@ -5,7 +5,8 @@
  * locks as it would without this feature at all.
  */
 export type WakeLock = {
-  request(): Promise<void>;
+  /** Resolves to whether the lock was actually acquired. */
+  request(): Promise<boolean>;
   release(): Promise<void>;
 };
 
@@ -21,7 +22,7 @@ export function createBrowserWakeLock(onReleased?: () => void): WakeLock {
 
   return {
     async request() {
-      if (!('wakeLock' in navigator)) return;
+      if (!('wakeLock' in navigator)) return false;
       try {
         const acquired = await navigator.wakeLock.request('screen');
         sentinel = acquired;
@@ -33,9 +34,11 @@ export function createBrowserWakeLock(onReleased?: () => void): WakeLock {
           sentinel = null;
           onReleased?.();
         });
+        return true;
       } catch {
         // Refused rather than unsupported — same outcome either way.
         sentinel = null;
+        return false;
       }
     },
     async release() {
