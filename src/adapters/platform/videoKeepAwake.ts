@@ -10,19 +10,43 @@
  * and does not depend on the Wake Lock API working at all.
  */
 export type VideoKeepAwake = {
-  start(): void;
+  /** Resolves to whether the video is actually playing. */
+  start(): Promise<boolean>;
   stop(): void;
 };
+
+/**
+ * WebKit has been seen leaving the promise from `HTMLVideoElement.play()`
+ * pending forever for a MediaStream-sourced video — even once `paused` has
+ * already flipped to false and playback is genuinely under way. Waiting on
+ * that promise alone would report "pending" forever on exactly the device
+ * this mechanism targets, so it races a short, bounded check of `paused`
+ * alongside it as a fallback signal the hang doesn't affect.
+ */
+async function attemptPlay(element: HTMLVideoElement): Promise<boolean> {
+  let played: boolean | undefined;
+  const settled = element
+    .play()
+    .then(() => {
+      played = true;
+    })
+    .catch(() => {
+      played = false;
+    });
+
+  await Promise.race([settled, new Promise((resolve) => setTimeout(resolve, 300))]);
+
+  return played ?? !element.paused;
+}
 
 export function createVideoKeepAwake(): VideoKeepAwake {
   let video: HTMLVideoElement | null = null;
 
   return {
-    start() {
+    async start() {
       try {
         if (video) {
-          if (video.paused) void video.play().catch(() => {});
-          return;
+          return video.paused ? await attemptPlay(video) : true;
         }
 
         const canvas = document.createElement('canvas');
@@ -43,10 +67,12 @@ export function createVideoKeepAwake(): VideoKeepAwake {
         element.style.pointerEvents = 'none';
         element.srcObject = stream;
         document.body.appendChild(element);
-        void element.play().catch(() => {});
         video = element;
+
+        return await attemptPlay(element);
       } catch {
         video = null;
+        return false;
       }
     },
     stop() {

@@ -52,11 +52,25 @@ const fireWakeLockRelease = (page: Page) =>
     (window as unknown as { __fireWakeLockRelease: () => void }).__fireWakeLockRelease()
   );
 
+/*
+ * Both mechanisms below can report success back to this app's own code while
+ * the screen still sleeps on a real device — that gap is exactly what sent
+ * this suite chasing three separate Wake Lock fixes and a whole second
+ * mechanism, only to have a real iPhone still lock. The status text next to
+ * the version number is the one place that gap can be closed: it shows,
+ * on the device itself, what the browser actually told the page — no remote
+ * debugger required. `.version` rather than a role query because the element
+ * is deliberately `aria-hidden` — decorative diagnostic text, not meant to
+ * reach the accessibility tree at all.
+ */
+const statusText = (page: Page) => page.locator('.version').innerText();
+
 test('requests a screen wake lock on load', async ({ page }) => {
   await spyOnWakeLock(page);
   await startGame(page, /commander/i, 2);
 
   await expect.poll(() => wakeLockCalls(page)).toEqual(['screen']);
+  await expect.poll(() => statusText(page)).toContain('wl:granted');
 });
 
 test('requests it again on returning from the background', async ({ page }) => {
@@ -149,6 +163,7 @@ test('does nothing, without erroring, when the browser refuses or lacks the API'
   await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
 
   expect(errors).toEqual([]);
+  await expect.poll(() => statusText(page)).toContain('wl:denied');
 });
 
 /*
@@ -199,6 +214,8 @@ test('keeps a hidden, muted video playing as a second, independent keep-awake me
       })
     )
     .toBe(true);
+
+  await expect.poll(() => statusText(page)).toContain('vid:playing');
 });
 
 test('the video fallback does nothing, without erroring, when captureStream is unsupported', async ({
@@ -219,4 +236,5 @@ test('the video fallback does nothing, without erroring, when captureStream is u
 
   expect(await page.evaluate(() => document.querySelector('video'))).toBeNull();
   expect(errors).toEqual([]);
+  await expect.poll(() => statusText(page)).toContain('vid:blocked');
 });
