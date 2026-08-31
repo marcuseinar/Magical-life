@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { COMMIT_WINDOW_MS, scrubPoints, stepDelta } from './pendingDelta';
+import {
+  COMMIT_WINDOW_MS,
+  CONTINUE_WINDOW_MS,
+  PIXELS_PER_POINT,
+  scrubPoints,
+  stepDelta
+} from './pendingDelta';
 import type { DeltaState } from './pendingDelta';
 
 const at = (now: number) => now;
@@ -81,16 +87,69 @@ describe('pending delta', () => {
     expect(out.state).toBeNull();
   });
 
-  it('commits a deliberate gesture immediately on release', () => {
+  /*
+   * Releasing a scrub does not commit it. A second drag started straight
+   * after the first is one correction in two movements far more often than it
+   * is two separate decisions — committing on release turned that into two
+   * log entries and two undos. The value instead stays live for a short
+   * window, so the next drag continues it, and commits on its own if none
+   * comes.
+   */
+  it('keeps a released scrub live rather than committing it', () => {
     const pending = stepDelta(idle, { kind: 'scrub', to: -12, now: at(0) });
-    const out = stepDelta(pending.state, { kind: 'commit', now: at(10) });
+    const out = stepDelta(pending.state, { kind: 'release', now: at(10) });
+
+    expect(out.commit).toBeNull();
+    expect(out.state?.value).toBe(-12);
+  });
+
+  it('gives a released scrub the shorter continuation window, not the full one', () => {
+    const pending = stepDelta(idle, { kind: 'scrub', to: -12, now: at(0) });
+    const out = stepDelta(pending.state, { kind: 'release', now: at(10) });
+
+    expect(out.state?.deadline).toBe(10 + CONTINUE_WINDOW_MS);
+  });
+
+  it('commits a released scrub once the continuation window runs out', () => {
+    const pending = stepDelta(idle, { kind: 'scrub', to: -12, now: at(0) });
+    const released = stepDelta(pending.state, { kind: 'release', now: at(10) });
+    const out = stepDelta(released.state, { kind: 'tick', now: at(10 + CONTINUE_WINDOW_MS) });
 
     expect(out.commit).toBe(-12);
     expect(out.state).toBeNull();
   });
 
-  it('committing nothing emits nothing', () => {
-    expect(stepDelta(idle, { kind: 'commit', now: at(0) })).toEqual({ state: null, commit: null });
+  it('lets a second scrub inside the window continue the first', () => {
+    const first = stepDelta(idle, { kind: 'scrub', to: -12, now: at(0) });
+    const released = stepDelta(first.state, { kind: 'release', now: at(10) });
+    // The panel resumes from whatever is still pending, so the second drag
+    // arrives as an absolute value built on the first.
+    const second = stepDelta(released.state, {
+      kind: 'scrub',
+      to: released.state!.value - 5,
+      now: at(400)
+    });
+
+    expect(second.commit).toBeNull();
+    expect(second.state?.value).toBe(-17);
+    // Back on the full window: the gesture is live again, not winding down.
+    expect(second.state?.deadline).toBe(400 + COMMIT_WINDOW_MS);
+  });
+
+  it('flushes on demand, whatever is left of the window', () => {
+    const pending = stepDelta(idle, { kind: 'nudge', by: -7, now: at(0) });
+    const out = stepDelta(pending.state, { kind: 'flush' });
+
+    expect(out.commit).toBe(-7);
+    expect(out.state).toBeNull();
+  });
+
+  it('flushing nothing emits nothing, so flushing twice is harmless', () => {
+    expect(stepDelta(idle, { kind: 'flush' })).toEqual({ state: null, commit: null });
+  });
+
+  it('releasing nothing emits nothing', () => {
+    expect(stepDelta(idle, { kind: 'release', now: at(0) })).toEqual({ state: null, commit: null });
   });
 
   it('mixes tap and drag input in one pending value', () => {
@@ -102,29 +161,37 @@ describe('pending delta', () => {
   });
 });
 
+/*
+ * One rate, everywhere. The zoned curve this replaces meant the same finger
+ * movement was worth different amounts depending on where in the gesture it
+ * happened, which is impossible to aim with: the same movement had to be
+ * worth the same thing wherever in the drag it fell.
+ */
 describe('scrub sensitivity', () => {
-  it('is one point per eight pixels close to the press point', () => {
-    expect(scrubPoints(8)).toBe(1);
-    expect(scrubPoints(32)).toBe(4);
+  it('is one point per twelve pixels', () => {
+    expect(scrubPoints(PIXELS_PER_POINT)).toBe(1);
+    expect(scrubPoints(PIXELS_PER_POINT * 4)).toBe(4);
+    expect(scrubPoints(PIXELS_PER_POINT * 25)).toBe(25);
   });
 
   it('is zero for a movement too small to mean anything', () => {
     expect(scrubPoints(0)).toBe(0);
-    expect(scrubPoints(7)).toBe(0);
+    expect(scrubPoints(PIXELS_PER_POINT - 1)).toBe(0);
   });
 
-  it('accelerates through the first two zones, so a moderate drag outpaces a small one', () => {
-    expect(scrubPoints(160)).toBeGreaterThan(scrubPoints(80) * 2);
+  it('does not accelerate: the second half of a drag is worth what the first was', () => {
+    // Whole multiples of the step, so the flooring of a part-point does not
+    // stand in for the acceleration this is actually checking for.
+    expect(scrubPoints(240)).toBe(scrubPoints(120) * 2);
+    expect(scrubPoints(960)).toBe(scrubPoints(480) * 2);
   });
 
-  it('flattens out for a long drag, rather than running away', () => {
-    // Reported from real use: 268px used to land on exactly 100 — a drag
-    // easily made by accident, on a phone or with a mouse both. A screen's
-    // whole height (~700px) must stay well short of that, and even a huge
-    // drag (1000px, longer than any phone is tall) must not blow past it.
-    expect(scrubPoints(268)).toBeLessThan(50);
-    expect(scrubPoints(700)).toBeLessThan(70);
-    expect(scrubPoints(1000)).toBeLessThan(100);
+  it('stays proportional over a long drag, so no distance runs away', () => {
+    // Reported from real use, under the old curve: 268px landed on exactly
+    // 100 — a drag easily made by accident. A flat rate cannot spike like
+    // that; it only ever gives distance ÷ 12.
+    expect(scrubPoints(268)).toBe(22);
+    expect(scrubPoints(1000)).toBe(83);
   });
 
   it('is symmetric, so dragging back always undoes the gesture exactly', () => {

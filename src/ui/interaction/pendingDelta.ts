@@ -9,12 +9,25 @@
  * Pure and synchronous: `now` is passed in and timers live in the component.
  */
 
-/** How long a pending change waits before it becomes an event. */
-export const COMMIT_WINDOW_MS = 4000;
+/** How long a pending change stays on screen, and waits, before it becomes an event. */
+export const COMMIT_WINDOW_MS = 3000;
+
+/**
+ * How long a *released* scrub stays live before committing.
+ *
+ * Short, because the finger has already said it is done — but not zero. Two
+ * drags in quick succession are one correction made in two movements far
+ * more often than they are two separate decisions, and committing the
+ * instant a drag ended made that into two log entries needing two undos.
+ * Anything inside this window joins the gesture already in progress.
+ */
+export const CONTINUE_WINDOW_MS = 800;
 
 export type DeltaState = {
   readonly value: number;
   readonly deadline: number;
+  /** Which window this deadline came from, so the drain ring is drawn to scale. */
+  readonly window: number;
 } | null;
 
 export type DeltaInput =
@@ -22,8 +35,15 @@ export type DeltaInput =
   | { readonly kind: 'nudge'; readonly by: number; readonly now: number }
   /** A drag: set the pending value outright, because the finger is the value. */
   | { readonly kind: 'scrub'; readonly to: number; readonly now: number }
-  /** Deliberate release, or an explicit "apply". */
-  | { readonly kind: 'commit'; readonly now: number }
+  /** The finger lifting off a drag. Does not commit — see CONTINUE_WINDOW_MS. */
+  | { readonly kind: 'release'; readonly now: number }
+  /**
+   * Commit right now, whatever the window says. For the moments when the
+   * screen is about to disagree with the log: the tab going away, an undo, a
+   * rematch. The total already counts a pending change, so anything that
+   * reads or resets the committed history has to see it too.
+   */
+  | { readonly kind: 'flush' }
   /** Tapping the badge, or dragging out of bounds. */
   | { readonly kind: 'cancel' }
   /** The clock, asking whether the window has run out. */
@@ -37,9 +57,9 @@ export type DeltaOutcome = {
 
 const nothing: DeltaOutcome = { state: null, commit: null };
 
-const pending = (value: number, now: number): DeltaOutcome =>
+const pending = (value: number, now: number, window = COMMIT_WINDOW_MS): DeltaOutcome =>
   // A pending value of zero is not pending at all — it is idle.
-  value === 0 ? nothing : { state: { value, deadline: now + COMMIT_WINDOW_MS }, commit: null };
+  value === 0 ? nothing : { state: { value, deadline: now + window, window }, commit: null };
 
 export function stepDelta(state: DeltaState, input: DeltaInput): DeltaOutcome {
   switch (input.kind) {
@@ -49,7 +69,13 @@ export function stepDelta(state: DeltaState, input: DeltaInput): DeltaOutcome {
     case 'scrub':
       return pending(input.to, input.now);
 
-    case 'commit':
+    case 'release':
+      // Deliberately not a commit. The value stays live on the short window,
+      // so a drag begun straight after continues this one; the tick below
+      // commits it if nothing does.
+      return state === null ? nothing : pending(state.value, input.now, CONTINUE_WINDOW_MS);
+
+    case 'flush':
       return state === null ? nothing : { state: null, commit: state.value };
 
     case 'cancel':
@@ -62,20 +88,20 @@ export function stepDelta(state: DeltaState, input: DeltaInput): DeltaOutcome {
 }
 
 /**
- * How far the finger has to travel for one more point, by zone.
+ * How far the finger travels for one point — the same everywhere in the
+ * gesture.
  *
- * The last zone used to be 1.6 — reported from real use: that let a single
- * 268px drag, easily made by accident on a phone or with a mouse, reach
- * exactly 100. The far zone now widens instead of continuing to tighten, so
- * a long drag keeps giving more the further it goes without being able to
- * run away to three digits: even 1000px, longer than any phone is tall,
- * stays under 100.
+ * This used to be a zoned curve that tightened as the drag went on, which
+ * made the same movement worth different amounts depending on when in the
+ * gesture it happened: impossible to aim. Flat also means a runaway is not
+ * possible: it can only ever give distance ÷ 12.
+ *
+ * Twelve rather than eight, from trying it in the hand — eight was still
+ * quick enough that a small movement overshot. Twelve is also exactly the
+ * travel that turns a press into a scrub (`SCRUB_THRESHOLD_PX`), so the
+ * gesture is worth its first point at the same moment it becomes a drag.
  */
-const ZONES: readonly { readonly until: number; readonly pixelsPerPoint: number }[] = [
-  { until: 60, pixelsPerPoint: 8 },
-  { until: 200, pixelsPerPoint: 5 },
-  { until: Infinity, pixelsPerPoint: 20 }
-];
+export const PIXELS_PER_POINT = 12;
 
 /**
  * Scrub distance to points.
@@ -86,16 +112,5 @@ const ZONES: readonly { readonly until: number; readonly pixelsPerPoint: number 
  * feels broken in the hand however good it looks in a demo.
  */
 export function scrubPoints(pixels: number): number {
-  const distance = Math.abs(pixels);
-
-  let points = 0;
-  let covered = 0;
-  for (const zone of ZONES) {
-    const inZone = Math.min(distance, zone.until) - covered;
-    if (inZone <= 0) break;
-    points += inZone / zone.pixelsPerPoint;
-    covered += inZone;
-  }
-
-  return Math.sign(pixels) * Math.floor(points);
+  return Math.sign(pixels) * Math.floor(Math.abs(pixels) / PIXELS_PER_POINT);
 }

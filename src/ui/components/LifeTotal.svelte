@@ -4,16 +4,34 @@
   let {
     life,
     threat = 'safe',
-    label
-  }: { life: number; threat?: ThreatLevel; label: string } = $props();
+    label,
+    interim = false
+  }: {
+    life: number;
+    threat?: ThreatLevel;
+    label: string;
+    /** The total includes a change still being made, so it is about to move again. */
+    interim?: boolean;
+  } = $props();
 </script>
 
 <!--
-  The committed total. `role="status"` is an implicit polite live region, so a
-  screen reader hears the settled result rather than every value of a scrub —
-  and unlike a bare paragraph it is allowed to carry an accessible name.
+  The running total, including whatever is pending: a life counter that shows
+  yesterday's number until a timer expires is lying to the table.
+
+  `role="status"` is an implicit polite live region, and unlike a bare
+  paragraph it is allowed to carry an accessible name. While a change is
+  still being made, `aria-live="off"` silences it — otherwise a screen reader
+  would read out every value a scrub passes through on the way. Announcing
+  resumes for the settled result, which is the one worth hearing.
 -->
-<p class="total" data-threat={threat} role="status" aria-label="{label}: {life} life">
+<p
+  class="total"
+  data-threat={threat}
+  role="status"
+  aria-live={interim ? 'off' : 'polite'}
+  aria-label="{label}: {life} life"
+>
   <span aria-hidden="true">{life}</span>
 </p>
 

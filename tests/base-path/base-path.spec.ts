@@ -16,7 +16,14 @@ test('plays a full game when served from a subdirectory', async ({ page }) => {
 
   await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
   await page.getByRole('button', { name: 'Player 3, lose one life' }).click();
-  await expect(page.getByLabel('Player 3: 39 life')).toBeVisible({ timeout: 6000 });
+  await expect(page.getByLabel('Player 3: 39 life')).toBeVisible();
+
+  // The total counts the change at once, but the reload is reading the log,
+  // so wait for it to get there: the badge exists only while something is
+  // still pending.
+  await expect(page.getByRole('button', { name: /cancel pending change/i })).toHaveCount(0, {
+    timeout: 6000
+  });
 
   await page.reload();
   await expect(page.getByLabel('Player 3: 39 life')).toBeVisible();

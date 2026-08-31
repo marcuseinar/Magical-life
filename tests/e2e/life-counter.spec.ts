@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { COMMITTED, expectLife, readLife, scrub, startGame, zone } from './support';
+import { COMMITTED, expectLife, readLife, scrub, settled, startGame, zone } from './support';
 
 test('opens straight into a game with no login and no waiting', async ({ page }) => {
   await page.goto('/');
@@ -39,9 +39,10 @@ test('takes a big swing from a drag rather than twenty taps', async ({ page }) =
   // Player 2 has the near panel, so screen-down is down for them too.
   await scrub(page, 'Player 2', -150);
 
-  // A deliberate gesture commits on release, without waiting out the window.
-  await expectLife(page, 'Player 2').toBeLessThan(20);
-  await expectLife(page, 'Player 2').toBeGreaterThan(-20);
+  // Exactly, not approximately: the rate is flat, so 150px is 12 points and
+  // nothing about where in the drag they were changes that. The press that
+  // began the gesture is the thirteenth.
+  await expectLife(page, 'Player 2').toBe(27);
 });
 
 test('reads the drag from the seat, not the screen, for the far panel', async ({ page }) => {
@@ -70,7 +71,13 @@ test('loses nothing when the app is reloaded mid-game', async ({ page }) => {
   await startGame(page, /commander/i, 4);
 
   await zone(page, 'Player 3', 'lose').click();
-  await expect(page.getByLabel('Player 3: 39 life')).toBeVisible({ timeout: COMMITTED });
+  // On the total at once — but the reload is testing the log, so it has to
+  // wait for the change to actually get there. A pending change does not
+  // survive a reload: the write is asynchronous and the page is gone before
+  // it lands, which is why the app also flushes when the tab is merely
+  // hidden, the case that really happens on a phone.
+  await expect(page.getByLabel('Player 3: 39 life')).toBeVisible();
+  await settled(page);
 
   await page.reload();
 

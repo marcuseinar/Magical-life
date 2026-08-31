@@ -4,6 +4,7 @@
   import type { PlayerState } from '$domain/state';
   import { NO_SLOT, blameSlot } from '$ui/interaction/blameSlot';
   import { scrubPoints } from '$ui/interaction/pendingDelta';
+  import { registerPendingFlush } from '$ui/interaction/pendingFlush';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
   import CounterTray from './CounterTray.svelte';
   import DeltaBadge from './DeltaBadge.svelte';
@@ -117,8 +118,18 @@
   let scrubBase = 0;
   let repeat: ReturnType<typeof setTimeout> | undefined;
 
-  const threat = $derived(threatLevel(player));
-  const reasons = $derived(lethalReasons(player));
+  /*
+   * The total on the card counts the pending change straight away, rather
+   * than sitting on the old number until the commit window runs out. The
+   * delta badge says what is still being decided; the total says where it
+   * lands. Waiting made the app look like it had missed the tap.
+   *
+   * Everything read off the total goes through the same projection, or the
+   * card would show a lethal number in a safe colour for three seconds.
+   */
+  const projected = $derived<PlayerState>({ ...player, life: player.life + controller.pending });
+  const threat = $derived(threatLevel(projected));
+  const reasons = $derived(lethalReasons(projected));
 
   const stopRepeating = () => {
     clearTimeout(repeat);
@@ -196,6 +207,11 @@
     // `detail === 0` means the click came from a key, not a pointer we already handled.
     if (event.detail === 0) controller.nudge(sign);
   }
+
+  // Anything about to read or reset the committed history — undo, rematch,
+  // the tab going away — forces this panel's pending change into the log
+  // first, because the total on screen has already counted it.
+  $effect(() => registerPendingFlush(controller.flush));
 
   $effect(() => () => {
     stopRepeating();
@@ -314,7 +330,12 @@
         {/if}
       </div>
       <div class="readout">
-        <LifeTotal life={player.life} {threat} label={player.name} />
+        <LifeTotal
+          life={projected.life}
+          {threat}
+          label={player.name}
+          interim={controller.pending !== 0}
+        />
       </div>
     </div>
   </div>

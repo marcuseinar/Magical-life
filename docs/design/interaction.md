@@ -28,8 +28,14 @@ This matters for three reasons:
 - The log stays readable: "Anna −7" not seven separate "−1" entries.
 
 `Accumulating` is UI state and is never written to the event log. Only the
-commit produces a `life/changed` event. Batching window: **4 s** default,
-configurable 2–10 s, with a per-user setting.
+commit produces a `life/changed` event. Batching window: **3 s** default,
+configurable 2–10 s, with a per-user setting. A released drag runs on a
+shorter **0.8 s** window instead — see "Release" below.
+
+The total on the card counts the accumulating value straight away rather than
+waiting for the commit. What is still being decided is the _log entry_, not
+the number at the table: a counter that shows the old total for three seconds
+reads as one that missed the tap.
 
 ## Style 1 — tap zones
 
@@ -65,9 +71,12 @@ Three candidates were considered.
 2. **Drag up to gain, down to lose.** Past 12 px of vertical travel the press
    becomes a scrub: the delta badge follows your thumb from wherever the tap
    left it.
-3. **Release to commit** — immediately, not after the 4 s window. A deliberate
-   gesture deserves an immediate result. The badge stays visible for the
-   normal window purely so you can still tap it to cancel.
+3. **Release** starts a short **0.8 s** window rather than committing outright.
+   A drag begun inside it continues the one before rather than starting a
+   fresh change — a swing bigger than the screen has to be made in two pulls,
+   and those two pulls are one correction, not two. Nothing else arriving, it
+   commits on its own when the window runs out: far quicker than the 3 s taps
+   get, because the finger has already said it is done.
 4. **Cancel** by dragging back through zero, or by tapping the badge.
 
 Engagement is by **movement, not by a hold timer**. An earlier draft used a
@@ -79,19 +88,44 @@ already accumulated rather than discarding it.
 
 ### Scrub sensitivity
 
-A flat pixels-per-point ratio fails at both ends: 1 point of precision needs a
-fine ratio, and a 40-point Commander swing needs a coarse one. So the ratio is
-distance-dependent, not velocity-dependent:
+**One point per 12 px, everywhere in the gesture.**
 
-| Distance from press origin | Points per 8 px |
-| -------------------------- | --------------- |
-| 0–60 px                    | 1               |
-| 60–160 px                  | 2               |
-| 160 px+                    | 5               |
+This replaced a zoned curve that tightened as the drag went on (1 point per
+8 px near the press, then 2, then 5). The theory was that precision and a
+40-point Commander swing want different ratios. In the hand it failed twice
+over: the same movement was worth different amounts depending on when in the
+gesture it happened, so it could not be aimed — and the far zone made a
+268 px drag, easy to make by accident, land on exactly 100.
+
+A flat rate can only ever give distance ÷ 12, so nothing can run away. The
+long swings the curve existed for are served by the continuation window
+above instead: pull, lift, pull again, and it is still one change. 12 rather
+than the 8 it was first tried at, which still overshot on a small movement;
+it is also exactly the travel that turns a press into a scrub, so the gesture
+earns its first point at the moment it becomes a drag.
 
 Distance-based rather than velocity-based because it is **reversible**: dragging
 back to the same pixel always gives the same number. Velocity-scaled scrubbing
 famously cannot be undone by reversing the gesture, and that feels broken.
+
+### Drawing the rate — tried and dropped
+
+Two attempts to show what a movement is worth were built and taken out again,
+recorded so a third does not start from scratch.
+
+A **still ruler** — a line per point, anchored to the press. It can only be
+read by watching your own thumb travel across it, which is the one place you
+are not looking during a life change.
+
+A **rolling drum** — the same lines moving one step per point, for motion
+caught in the corner of the eye. Truer to the gesture, but still noise on a
+card whose whole job is one large number, and the total already moves the
+instant you touch it. That is the feedback; a second, quieter animation
+saying the same thing only competes with it.
+
+If this is revisited, the thing that was actually missing is a sense of
+**rate**, not of change — and the delta badge, which already exists and is
+already where the eye goes, is the more promising place to put it.
 
 A haptic tick fires on each unit change up to 5 units, then on each multiple of
 5 — otherwise a 40-point swing buzzes like a phone call.
@@ -268,8 +302,10 @@ Not an afterthought, because it is also what makes UI testing possible.
   and Testing Library both query by role, so an inaccessible app is also an
   untestable one.
 - The tap zones are `<button>`s with `aria-label="Anna, decrease life"`.
-- The total is an `aria-live="polite"` region announcing the committed result,
-  not every intermediate scrub value.
+- The total is an `aria-live="polite"` region. It shows the accumulating value
+  as it changes, but announces only the settled result: while a change is
+  still being made it drops to `aria-live="off"`, so a scrub is not read out
+  value by value on the way past.
 - Full keyboard path: arrows to change, tab between players, Enter to commit,
   Escape to cancel — which doubles as the fastest possible E2E test harness.
 - `prefers-reduced-motion` removes the badge animation and the pulse; the

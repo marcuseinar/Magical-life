@@ -6,6 +6,7 @@
   import type { GameStore } from '$lib/gameStore.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
   import { createSpinController } from '$ui/interaction/spinController.svelte';
+  import { flushPending } from '$ui/interaction/pendingFlush';
   import CommanderSheet from '$ui/components/CommanderSheet.svelte';
   import CounterSheet from '$ui/components/CounterSheet.svelte';
   import RenameSheet from '$ui/components/RenameSheet.svelte';
@@ -34,6 +35,27 @@
 
   $effect(() => {
     void store.hydrate();
+  });
+
+  /*
+   * A change counting down on a panel is on screen but not yet in the log, so
+   * a reload — or switching apps and never coming back — would lose it. Both
+   * events, because neither fires reliably alone on a phone: iOS often ends a
+   * page at `pagehide` without `visibilitychange`, and a tab switch is the
+   * reverse. Flushing twice is a no-op, so the overlap costs nothing.
+   */
+  $effect(() => {
+    const flush = () => flushPending();
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHidden);
+
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
   });
 
   /* A sheet holds a snapshot, so it has to follow the live player. */
@@ -82,6 +104,9 @@
     spin.stop();
     clearTimeout(blinkTimer);
     celebrating = null;
+    // Both of these throw the current game away, so a change still counting
+    // down on a panel has to land in its history first or it never happened.
+    flushPending();
     if (action === 'rematch') await store.rematch();
     if (action === 'new-game') await store.abandon();
   }
@@ -112,7 +137,15 @@
     />
 
     <nav class="toolbar" aria-label="Game">
-      <button class="tool" onclick={() => store.undo()}>Undo</button>
+      <!-- Flush first: the panels' totals already count what is pending, so
+           undoing past it would step back through a change still on screen. -->
+      <button
+        class="tool"
+        onclick={() => {
+          flushPending();
+          void store.undo();
+        }}>Undo</button
+      >
       <!-- Short visible label so four actions fit one row on a phone; the
            accessible name spells it out and contains the visible text. -->
       <button class="tool" onclick={roll} disabled={rolling} aria-label="Choose who goes first"
