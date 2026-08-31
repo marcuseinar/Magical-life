@@ -27,8 +27,17 @@
 
   /*
    * A life counter that lets the screen lock mid-game is failing at its one
-   * job. Three separate reasons the initial request can need retrying, all
-   * needing the same response — ask again:
+   * job. This used to also request on load, with no gesture behind it, and
+   * fall back to a gesture-gated retry only once that failed — but a real
+   * iPhone kept reporting `wl:denied` even after the retry fired. Pegasus
+   * (github.com/dannyrhubarb/pegasus), whose web build genuinely does not
+   * lock the screen during hands-off replay playback on the same phone,
+   * never makes that first request until a real tap has happened — every
+   * call in its `syncWakeLock()` is downstream of a menu click. Matching
+   * that exactly: no request before the first tap, at all.
+   *
+   * After that first grant, two reasons still need a retry, both without
+   * needing another tap:
    *
    * 1. The browser releases it whenever the tab goes to the background —
    *    switching apps, the phone's own screen timeout firing first — caught
@@ -38,13 +47,6 @@
    *    sleeping again a few minutes in. `visibilitychange` cannot see that;
    *    only the sentinel's own `release` event can, which is what
    *    `onReleased` below is wired to.
-   * 3. The very first request, at page load, has no user gesture behind it.
-   *    WebKit documents "the document is not active" as one reason a
-   *    request can be refused, and does not commit to what that covers —
-   *    so if that first attempt is refused, the next tap anywhere retries
-   *    it once, on the chance it needed a gesture and silently lost. Only
-   *    armed on that failure — arming it unconditionally would fire a
-   *    second, redundant request on the first tap of ordinary setup.
    */
   $effect(() => {
     let wakeLock: ReturnType<typeof createBrowserWakeLock>;
@@ -55,24 +57,23 @@
       });
     wakeLock = createBrowserWakeLock(() => void requestWakeLock());
 
-    let disposed = false;
-    const onFirstInteraction = () => void requestWakeLock();
-
-    void requestWakeLock().then((acquired) => {
-      if (!disposed && !acquired) {
-        document.addEventListener('pointerdown', onFirstInteraction, { once: true });
-      }
-    });
+    let hasGesture = false;
+    const onTap = () => {
+      hasGesture = true;
+      void requestWakeLock().then((acquired) => {
+        if (acquired) document.removeEventListener('pointerdown', onTap);
+      });
+    };
+    document.addEventListener('pointerdown', onTap);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void requestWakeLock();
+      if (hasGesture && document.visibilityState === 'visible') void requestWakeLock();
     };
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
-      disposed = true;
+      document.removeEventListener('pointerdown', onTap);
       document.removeEventListener('visibilitychange', onVisible);
-      document.removeEventListener('pointerdown', onFirstInteraction);
       void wakeLock.release();
     };
   });
