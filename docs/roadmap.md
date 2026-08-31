@@ -9,7 +9,7 @@ The whole product for most users. If this is not excellent, nothing later matter
 
 - Solo device, 1–6 players, rotating panel layouts
 - Tap zones (style 1) and drag-scrub (style 2), sharing the pending-delta machine
-- Formats: Standard 20, Commander 40, Two-Headed Giant 30, custom
+- Formats: Standard 20, Commander 40, Multiplayer 30, custom
 - Poison and the counter tray; monarch/initiative flags
 - Undo via retraction; rematch (same players and format, fresh totals)
 - Random first player, revealed by a spotlight travelling round the table —

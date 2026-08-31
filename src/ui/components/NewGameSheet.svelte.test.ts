@@ -65,7 +65,7 @@ describe('new game sheet', () => {
 
   it('never offers more seats than the format allows', async () => {
     mount();
-    await fireEvent.click(screen.getByRole('button', { name: /two-headed giant/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /multiplayer/i }));
     expect(screen.queryByRole('button', { name: '5' })).not.toBeInTheDocument();
   });
 });
