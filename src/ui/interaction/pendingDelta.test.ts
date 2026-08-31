@@ -164,12 +164,12 @@ describe('pending delta', () => {
 /*
  * One rate, everywhere. The zoned curve this replaces meant the same finger
  * movement was worth different amounts depending on where in the gesture it
- * happened, which is impossible to aim with and impossible to draw: the
- * panel now rules the scrub with a line every point, and evenly spaced lines
- * are only honest if every point really is the same distance.
+ * happened, which is impossible to aim with — and impossible to show, since
+ * the panel now rolls a drum one step per point, and even steps are only
+ * honest if every point really is the same distance.
  */
 describe('scrub sensitivity', () => {
-  it('is one point per eight pixels', () => {
+  it('is one point per twelve pixels', () => {
     expect(scrubPoints(PIXELS_PER_POINT)).toBe(1);
     expect(scrubPoints(PIXELS_PER_POINT * 4)).toBe(4);
     expect(scrubPoints(PIXELS_PER_POINT * 25)).toBe(25);
@@ -183,16 +183,16 @@ describe('scrub sensitivity', () => {
   it('does not accelerate: the second half of a drag is worth what the first was', () => {
     // Whole multiples of the step, so the flooring of a part-point does not
     // stand in for the acceleration this is actually checking for.
-    expect(scrubPoints(160)).toBe(scrubPoints(80) * 2);
-    expect(scrubPoints(640)).toBe(scrubPoints(320) * 2);
+    expect(scrubPoints(240)).toBe(scrubPoints(120) * 2);
+    expect(scrubPoints(960)).toBe(scrubPoints(480) * 2);
   });
 
   it('stays proportional over a long drag, so no distance runs away', () => {
     // Reported from real use, under the old curve: 268px landed on exactly
     // 100 — a drag easily made by accident. A flat rate cannot spike like
-    // that; it only ever gives distance ÷ 8.
-    expect(scrubPoints(268)).toBe(33);
-    expect(scrubPoints(1000)).toBe(125);
+    // that; it only ever gives distance ÷ 12.
+    expect(scrubPoints(268)).toBe(22);
+    expect(scrubPoints(1000)).toBe(83);
   });
 
   it('is symmetric, so dragging back always undoes the gesture exactly', () => {

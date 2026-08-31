@@ -88,7 +88,7 @@ already accumulated rather than discarding it.
 
 ### Scrub sensitivity
 
-**One point per 8 px, everywhere in the gesture.**
+**One point per 12 px, everywhere in the gesture.**
 
 This replaced a zoned curve that tightened as the drag went on (1 point per
 8 px near the press, then 2, then 5). The theory was that precision and a
@@ -97,20 +97,36 @@ over: the same movement was worth different amounts depending on when in the
 gesture it happened, so it could not be aimed — and the far zone made a
 268 px drag, easy to make by accident, land on exactly 100.
 
-A flat rate can only ever give distance ÷ 8, so nothing can run away. The
+A flat rate can only ever give distance ÷ 12, so nothing can run away. The
 long swings the curve existed for are served by the continuation window
-above instead: pull, lift, pull again, and it is still one change.
-
-It is also what makes the gesture **legible**. While a drag is live the panel
-draws a ruler — one line per point, every fifth heavier, anchored to the press
-point — so what a movement is worth is something you can see rather than
-something you have to learn. Evenly spaced lines are only honest if every
-point really is the same distance, which is the other reason the zones had to
-go.
+above instead: pull, lift, pull again, and it is still one change. 12 rather
+than the 8 it was first tried at, which still overshot on a small movement;
+it is also exactly the travel that turns a press into a scrub, so the gesture
+earns its first point at the moment it becomes a drag.
 
 Distance-based rather than velocity-based because it is **reversible**: dragging
 back to the same pixel always gives the same number. Velocity-scaled scrubbing
 famously cannot be undone by reversing the gesture, and that feels broken.
+
+### The drum
+
+While a drag is live the panel rolls a drum behind the total: faint lines
+moving one step per point, every fifth heavier. The point is **motion** —
+something changing in the corner of your eye while you look at the number,
+the way a wheel turns under a thumb.
+
+A still ruler was tried first and removed. Lines that only sit there can be
+read solely by watching your own thumb travel across them, which is the one
+place you are not looking during a life change.
+
+It rolls by points, not by pixels: one line passing is exactly one point, so
+the motion counts rather than merely smearing in the right direction. Even
+steps are only honest with a flat rate, which is the other reason the zones
+had to go. Drawn as a `transform` on a single element rather than an animated
+`background-position` — it is the one thing moving every frame of a drag, and
+a transform is composited instead of repainting the card. Under
+`prefers-reduced-motion` it still steps with the drag, but snaps between
+points instead of rolling.
 
 A haptic tick fires on each unit change up to 5 units, then on each multiple of
 5 — otherwise a 40-point swing buzzes like a phone call.

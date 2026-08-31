@@ -118,9 +118,13 @@
   let scrubBase = 0;
   let repeat: ReturnType<typeof setTimeout> | undefined;
 
-  /** Where the press landed inside the field, so the ruler's lines line up with it. */
-  let field = $state<HTMLElement | null>(null);
-  let scrubOrigin = $state(0);
+  /**
+   * Points won or lost by the drag in progress, on its own — not counting
+   * whatever the taps before it left behind. The ruler rolls by exactly this,
+   * so one line passing is one point, and it starts from rest on every press
+   * rather than from wherever the last gesture ended.
+   */
+  let rolled = $state(0);
 
   /*
    * The total on the card counts the pending change straight away, rather
@@ -158,7 +162,7 @@
     controller.nudge(sign);
     origin = event.clientY;
     originX = event.clientX;
-    scrubOrigin = event.clientY - (field?.getBoundingClientRect().top ?? 0);
+    rolled = 0;
 
     scrubBase = controller.pending;
     scrubbing = false;
@@ -198,7 +202,8 @@
       scrubbing = true;
       stopRepeating();
     }
-    controller.scrub(scrubBase + scrubPoints(travelled));
+    rolled = scrubPoints(travelled);
+    controller.scrub(scrubBase + rolled);
   }
 
   function lift() {
@@ -236,20 +241,23 @@
 >
   <Filigree />
 
-  <div bind:this={field} class="field" data-attributing={askingWhoDealtIt}>
+  <div class="field" data-attributing={askingWhoDealtIt}>
     <!--
-      The ruler. One line per point, every line the same distance apart
-      because the scrub rate is flat — so what a movement is worth is
-      something you can see rather than something you have to learn. Anchored
-      to where the press landed, so the lines mark the actual boundaries this
-      gesture will cross, and every fifth is drawn stronger to count against.
-      Only while dragging: on a tap it would be a flash of noise.
+      The drum. Lines that roll under the finger, one step per point, so the
+      card is visibly turning while the number changes — motion you catch
+      from the corner of your eye without looking away from the total. A
+      still ruler could only be read by watching your own thumb.
+
+      It rolls by the points the drag has made, not by the pixels it has
+      travelled, so a line passing is exactly one point rather than a smear
+      that happens to be going the right way. Only while dragging: on a tap
+      it would be a flash of noise.
     -->
     {#if scrubbing}
       <div
-        class="ruler"
+        class="drum"
         aria-hidden="true"
-        style="--step: {PIXELS_PER_POINT}px; --origin: {scrubOrigin}px"
+        style="--step: {PIXELS_PER_POINT}px; --roll: {-rolled * PIXELS_PER_POINT}px"
       ></div>
     {/if}
 
@@ -528,14 +536,16 @@
     min-height: 0;
   }
 
-  .ruler {
+  .drum {
     position: absolute;
-    inset: 0;
+
+    /* Taller than the card on both sides, so it can roll a long way without
+       ever dragging an edge into view. */
+    inset: -100% 0;
     z-index: 1;
 
-    /* Two rulers in one: a line every point, and a heavier line every fifth
-       so a long drag can be counted in fives rather than squinted at. Both
-       are offset to the press point, so the lines are where the steps are. */
+    /* Two drums in one: a line every point, and a heavier line every fifth,
+       so a long roll can be counted in fives rather than squinted at. */
     background-image:
       repeating-linear-gradient(
         to bottom,
@@ -547,7 +557,13 @@
         var(--frame-highlight) 0 1px,
         transparent 1px var(--step)
       );
-    background-position: 0 var(--origin);
+
+    /* Transform, not background-position: this is the one thing on screen
+       moving every frame of a drag, and a transform is composited rather
+       than repainting the whole card. The transition is what turns a jump
+       per point into a roll. */
+    transform: translateY(var(--roll));
+    transition: transform var(--duration-fast) var(--ease-out);
 
     /* Never in the way of the gesture drawing it. */
     pointer-events: none;
@@ -920,6 +936,12 @@
     .blame,
     .first {
       animation: none;
+    }
+
+    /* The drum still steps with the drag — it is feedback, not decoration —
+       but it snaps between points rather than rolling between them. */
+    .drum {
+      transition: none;
     }
 
     .readout {

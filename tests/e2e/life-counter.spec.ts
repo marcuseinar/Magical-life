@@ -39,10 +39,10 @@ test('takes a big swing from a drag rather than twenty taps', async ({ page }) =
   // Player 2 has the near panel, so screen-down is down for them too.
   await scrub(page, 'Player 2', -150);
 
-  // Exactly, not approximately: the rate is flat, so 150px is 18 points and
+  // Exactly, not approximately: the rate is flat, so 150px is 12 points and
   // nothing about where in the drag they were changes that. The press that
-  // began the gesture is the nineteenth.
-  await expectLife(page, 'Player 2').toBe(21);
+  // began the gesture is the thirteenth.
+  await expectLife(page, 'Player 2').toBe(27);
 });
 
 test('reads the drag from the seat, not the screen, for the far panel', async ({ page }) => {

@@ -93,13 +93,15 @@ export function stepDelta(state: DeltaState, input: DeltaInput): DeltaOutcome {
  *
  * This used to be a zoned curve that tightened as the drag went on, which
  * made the same movement worth different amounts depending on when in the
- * gesture it happened: impossible to aim, and impossible to draw honestly.
- * The panel now rules the scrub with a line per point, and evenly spaced
- * lines are only true if every point is the same distance away from the
- * last. Also the reason a runaway is no longer possible — a flat rate can
- * only ever give distance ÷ 8.
+ * gesture it happened: impossible to aim. Flat also means a runaway is not
+ * possible: it can only ever give distance ÷ 12.
+ *
+ * Twelve rather than eight, from trying it in the hand — eight was still
+ * quick enough that a small movement overshot. Twelve is also exactly the
+ * travel that turns a press into a scrub (`SCRUB_THRESHOLD_PX`), so the
+ * gesture is worth its first point at the same moment it becomes a drag.
  */
-export const PIXELS_PER_POINT = 8;
+export const PIXELS_PER_POINT = 12;
 
 /**
  * Scrub distance to points.

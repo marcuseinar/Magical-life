@@ -151,9 +151,9 @@ describe('player panel', () => {
 
     await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
     expect(onLifeChange).toHaveBeenCalledTimes(1);
-    // 160px upward at a flat eight pixels a point is +20, less the −1 from
+    // 160px upward at a flat twelve pixels a point is +13, less the −1 from
     // pressing the minus zone to start with.
-    expect(onLifeChange.mock.calls[0]![0]).toBe(19);
+    expect(onLifeChange.mock.calls[0]![0]).toBe(12);
   });
 
   /*
@@ -167,7 +167,7 @@ describe('player panel', () => {
     const zone = decrease();
 
     await touch(zone, 'pointerDown', 300);
-    await touch(zone, 'pointerMove', 220); // 80px up: +10, less the −1 to start
+    await touch(zone, 'pointerMove', 220); // 80px up: +6, less the −1 to start
     await touch(zone, 'pointerUp', 220);
 
     await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS - 200);
@@ -177,9 +177,9 @@ describe('player panel', () => {
     await touch(zone, 'pointerUp', 220);
     await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
-    // One entry, both pulls in it: 9 from the first, 9 more from the second.
+    // One entry, both pulls in it: 5 from the first, 5 more from the second.
     expect(onLifeChange).toHaveBeenCalledTimes(1);
-    expect(onLifeChange).toHaveBeenCalledWith(18, null);
+    expect(onLifeChange).toHaveBeenCalledWith(10, null);
   });
 
   it('starts a fresh change when the next drag comes after the window', async () => {
@@ -198,8 +198,8 @@ describe('player panel', () => {
     await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
     expect(onLifeChange).toHaveBeenCalledTimes(2);
-    expect(onLifeChange).toHaveBeenNthCalledWith(1, 9, null);
-    expect(onLifeChange).toHaveBeenNthCalledWith(2, 9, null);
+    expect(onLifeChange).toHaveBeenNthCalledWith(1, 5, null);
+    expect(onLifeChange).toHaveBeenNthCalledWith(2, 5, null);
   });
 
   /* A counter that shows the old number until a timer runs out looks like it
@@ -258,7 +258,9 @@ describe('player panel', () => {
     await touch(zone, 'pointerUp', 140);
     await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
-    expect(onLifeChange.mock.calls[0]![0]).toBeLessThan(-20);
+    // The same 160px that gained 12 on a near panel loses 14 here: −13 for
+    // the drag, and the press landed on their minus zone too.
+    expect(onLifeChange.mock.calls[0]![0]).toBe(-14);
   });
 
   it('asks for the counter sheet rather than opening one inside the card', async () => {
