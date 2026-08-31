@@ -164,9 +164,8 @@ describe('pending delta', () => {
 /*
  * One rate, everywhere. The zoned curve this replaces meant the same finger
  * movement was worth different amounts depending on where in the gesture it
- * happened, which is impossible to aim with — and impossible to show, since
- * the panel now rolls a drum one step per point, and even steps are only
- * honest if every point really is the same distance.
+ * happened, which is impossible to aim with: the same movement had to be
+ * worth the same thing wherever in the drag it fell.
  */
 describe('scrub sensitivity', () => {
   it('is one point per twelve pixels', () => {

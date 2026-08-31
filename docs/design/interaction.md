@@ -108,25 +108,24 @@ Distance-based rather than velocity-based because it is **reversible**: dragging
 back to the same pixel always gives the same number. Velocity-scaled scrubbing
 famously cannot be undone by reversing the gesture, and that feels broken.
 
-### The drum
+### Drawing the rate — tried and dropped
 
-While a drag is live the panel rolls a drum behind the total: faint lines
-moving one step per point, every fifth heavier. The point is **motion** —
-something changing in the corner of your eye while you look at the number,
-the way a wheel turns under a thumb.
+Two attempts to show what a movement is worth were built and taken out again,
+recorded so a third does not start from scratch.
 
-A still ruler was tried first and removed. Lines that only sit there can be
-read solely by watching your own thumb travel across them, which is the one
-place you are not looking during a life change.
+A **still ruler** — a line per point, anchored to the press. It can only be
+read by watching your own thumb travel across it, which is the one place you
+are not looking during a life change.
 
-It rolls by points, not by pixels: one line passing is exactly one point, so
-the motion counts rather than merely smearing in the right direction. Even
-steps are only honest with a flat rate, which is the other reason the zones
-had to go. Drawn as a `transform` on a single element rather than an animated
-`background-position` — it is the one thing moving every frame of a drag, and
-a transform is composited instead of repainting the card. Under
-`prefers-reduced-motion` it still steps with the drag, but snaps between
-points instead of rolling.
+A **rolling drum** — the same lines moving one step per point, for motion
+caught in the corner of the eye. Truer to the gesture, but still noise on a
+card whose whole job is one large number, and the total already moves the
+instant you touch it. That is the feedback; a second, quieter animation
+saying the same thing only competes with it.
+
+If this is revisited, the thing that was actually missing is a sense of
+**rate**, not of change — and the delta badge, which already exists and is
+already where the eye goes, is the more promising place to put it.
 
 A haptic tick fires on each unit change up to 5 units, then on each multiple of
 5 — otherwise a 40-point swing buzzes like a phone call.
