@@ -12,6 +12,8 @@ export type DeltaController = {
   nudge(by: number): void;
   scrub(to: number): void;
   release(): void;
+  /** Commit now rather than waiting out the window. See `pendingFlush`. */
+  flush(): void;
   cancel(): void;
   destroy(): void;
 };
@@ -59,6 +61,7 @@ export function createDeltaController(commit: (delta: number) => void): DeltaCon
     nudge: (by) => apply({ kind: 'nudge', by, now: Date.now() }),
     scrub: (to) => apply({ kind: 'scrub', to, now: Date.now() }),
     release: () => apply({ kind: 'release', now: Date.now() }),
+    flush: () => apply({ kind: 'flush' }),
     cancel: () => apply({ kind: 'cancel' }),
     destroy: stop
   };

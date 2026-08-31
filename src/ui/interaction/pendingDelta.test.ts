@@ -136,6 +136,18 @@ describe('pending delta', () => {
     expect(second.state?.deadline).toBe(400 + COMMIT_WINDOW_MS);
   });
 
+  it('flushes on demand, whatever is left of the window', () => {
+    const pending = stepDelta(idle, { kind: 'nudge', by: -7, now: at(0) });
+    const out = stepDelta(pending.state, { kind: 'flush' });
+
+    expect(out.commit).toBe(-7);
+    expect(out.state).toBeNull();
+  });
+
+  it('flushing nothing emits nothing, so flushing twice is harmless', () => {
+    expect(stepDelta(idle, { kind: 'flush' })).toEqual({ state: null, commit: null });
+  });
+
   it('releasing nothing emits nothing', () => {
     expect(stepDelta(idle, { kind: 'release', now: at(0) })).toEqual({ state: null, commit: null });
   });

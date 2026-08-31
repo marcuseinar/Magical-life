@@ -4,6 +4,7 @@
   import type { PlayerState } from '$domain/state';
   import { NO_SLOT, blameSlot } from '$ui/interaction/blameSlot';
   import { PIXELS_PER_POINT, scrubPoints } from '$ui/interaction/pendingDelta';
+  import { registerPendingFlush } from '$ui/interaction/pendingFlush';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
   import CounterTray from './CounterTray.svelte';
   import DeltaBadge from './DeltaBadge.svelte';
@@ -211,6 +212,11 @@
     // `detail === 0` means the click came from a key, not a pointer we already handled.
     if (event.detail === 0) controller.nudge(sign);
   }
+
+  // Anything about to read or reset the committed history — undo, rematch,
+  // the tab going away — forces this panel's pending change into the log
+  // first, because the total on screen has already counted it.
+  $effect(() => registerPendingFlush(controller.flush));
 
   $effect(() => () => {
     stopRepeating();

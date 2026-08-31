@@ -37,6 +37,13 @@ export type DeltaInput =
   | { readonly kind: 'scrub'; readonly to: number; readonly now: number }
   /** The finger lifting off a drag. Does not commit — see CONTINUE_WINDOW_MS. */
   | { readonly kind: 'release'; readonly now: number }
+  /**
+   * Commit right now, whatever the window says. For the moments when the
+   * screen is about to disagree with the log: the tab going away, an undo, a
+   * rematch. The total already counts a pending change, so anything that
+   * reads or resets the committed history has to see it too.
+   */
+  | { readonly kind: 'flush' }
   /** Tapping the badge, or dragging out of bounds. */
   | { readonly kind: 'cancel' }
   /** The clock, asking whether the window has run out. */
@@ -67,6 +74,9 @@ export function stepDelta(state: DeltaState, input: DeltaInput): DeltaOutcome {
       // so a drag begun straight after continues this one; the tick below
       // commits it if nothing does.
       return state === null ? nothing : pending(state.value, input.now, CONTINUE_WINDOW_MS);
+
+    case 'flush':
+      return state === null ? nothing : { state: null, commit: state.value };
 
     case 'cancel':
       return nothing;

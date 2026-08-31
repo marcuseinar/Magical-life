@@ -2,7 +2,18 @@ import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 /** The commit window plus a margin, so a pending change has certainly landed. */
-export const COMMITTED = 4600;
+export const COMMITTED = 3600;
+
+/**
+ * A pending change is on the total the moment it is made, but reaches the
+ * event log only when its window runs out. Anything testing the log — a
+ * reload, an undo, the history — has to wait for that, and the badge going
+ * away is the signal: it exists only while something is still pending.
+ */
+export const settled = (page: Page) =>
+  expect(page.getByRole('button', { name: /cancel pending change/i })).toHaveCount(0, {
+    timeout: COMMITTED
+  });
 
 export async function startGame(page: Page, format: RegExp, players: number) {
   await page.goto('/');
