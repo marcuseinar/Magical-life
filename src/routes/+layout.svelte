@@ -17,6 +17,14 @@
     7
   );
 
+  // Both keep-awake mechanisms below can report success on a device where the
+  // screen still sleeps — that gap can only be closed by seeing, on the
+  // actual device, whether the browser genuinely granted them. Shown next to
+  // the version for the same reason: a glance, not a guess, without needing
+  // a remote debugger.
+  let wakeLockStatus = $state<'pending' | 'granted' | 'denied'>('pending');
+  let videoStatus = $state<'pending' | 'playing' | 'blocked'>('pending');
+
   /*
    * A life counter that lets the screen lock mid-game is failing at its one
    * job. Three separate reasons the initial request can need retrying, all
@@ -40,19 +48,24 @@
    */
   $effect(() => {
     let wakeLock: ReturnType<typeof createBrowserWakeLock>;
-    wakeLock = createBrowserWakeLock(() => void wakeLock.request());
+    const requestWakeLock = () =>
+      wakeLock.request().then((acquired) => {
+        wakeLockStatus = acquired ? 'granted' : 'denied';
+        return acquired;
+      });
+    wakeLock = createBrowserWakeLock(() => void requestWakeLock());
 
     let disposed = false;
-    const onFirstInteraction = () => void wakeLock.request();
+    const onFirstInteraction = () => void requestWakeLock();
 
-    void wakeLock.request().then((acquired) => {
+    void requestWakeLock().then((acquired) => {
       if (!disposed && !acquired) {
         document.addEventListener('pointerdown', onFirstInteraction, { once: true });
       }
     });
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void wakeLock.request();
+      if (document.visibilityState === 'visible') void requestWakeLock();
     };
     document.addEventListener('visibilitychange', onVisible);
 
@@ -76,10 +89,14 @@
    */
   $effect(() => {
     const videoKeepAwake = createVideoKeepAwake();
-    videoKeepAwake.start();
+    const startVideo = () =>
+      void videoKeepAwake.start().then((playing) => {
+        videoStatus = playing ? 'playing' : 'blocked';
+      });
+    startVideo();
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') videoKeepAwake.start();
+      if (document.visibilityState === 'visible') startVideo();
     };
     document.addEventListener('visibilitychange', onVisible);
 
@@ -117,7 +134,9 @@
 
 <!-- Never intercepts a tap: this is the one thing on screen allowed to sit
      over gameplay, so it must never be able to steal a gesture from it. -->
-<span class="version" aria-hidden="true">{appVersion}</span>
+<span class="version" aria-hidden="true"
+  >{appVersion} · wl:{wakeLockStatus} · vid:{videoStatus}</span
+>
 
 <style>
   .app {
