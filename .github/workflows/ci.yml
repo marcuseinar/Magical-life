@@ -146,10 +146,6 @@ jobs:
           # repository variable once it's deployed. Unset is fine — the
           # short-code join path just falls back to a pasted code instead.
           VITE_SIGNALLING_URL: ${{ vars.SIGNALLING_URL }}
-          # A small, non-interactive version tag in the corner of the app —
-          # the fast way to confirm a device is actually on the build you
-          # think it is, rather than a cached or stale one.
-          VITE_APP_VERSION: ${{ github.sha }}
 
       - name: Bundle budget
         run: node scripts/check-bundle-size.mjs
