@@ -6,11 +6,11 @@ import { startGame } from './support';
  * A life counter that lets the screen lock mid-game is failing at its one
  * job. Spies on navigator.wakeLock.request rather than the real thing —
  * there is no way to observe from outside the page whether a phone's screen
- * actually stayed lit, so this proves the app asks correctly: on load,
- * again on returning from the background, and again if the browser revokes
- * the lock on its own without the tab ever going hidden — the failure mode
- * reported from a real iPhone, which only the sentinel's own `release`
- * event can catch.
+ * actually stayed lit, so this proves the app asks correctly: not before the
+ * first tap, on the first tap, again on returning from the background, and
+ * again if the browser revokes the lock on its own without the tab ever
+ * going hidden — the failure mode reported from a real iPhone, which only
+ * the sentinel's own `release` event can catch.
  */
 
 async function spyOnWakeLock(page: Page) {
@@ -65,9 +65,19 @@ const fireWakeLockRelease = (page: Page) =>
  */
 const statusText = (page: Page) => page.locator('.version').innerText();
 
-test('requests a screen wake lock on load', async ({ page }) => {
+test('requests nothing until the first tap, then a screen wake lock on it', async ({ page }) => {
   await spyOnWakeLock(page);
-  await startGame(page, /commander/i, 2);
+  await page.goto('/');
+
+  // Pegasus's web build (github.com/dannyrhubarb/pegasus) genuinely does not
+  // lock a real iPhone's screen during hands-off replay playback, and it
+  // never requests the lock without a tap behind it — every call is
+  // downstream of a menu click. This app's own load-time, gesture-less
+  // request kept coming back denied on the same phone; matching Pegasus
+  // exactly, there should be no request at all before the first tap.
+  expect(await wakeLockCalls(page)).toEqual([]);
+
+  await page.getByRole('button', { name: /commander/i }).click();
 
   await expect.poll(() => wakeLockCalls(page)).toEqual(['screen']);
   await expect.poll(() => statusText(page)).toContain('wl:granted');
@@ -105,13 +115,9 @@ test('requests it again if the browser revokes it on its own, tab never hidden',
   await expect.poll(() => wakeLockCalls(page)).toEqual(['screen', 'screen']);
 });
 
-async function spyOnGestureGatedWakeLock(page: Page) {
+async function spyOnWakeLockDeniedOnFirstAttempt(page: Page) {
   await page.addInitScript(() => {
-    let hadGesture = false;
-    // Capture phase, so this always observes the tap before the app's own
-    // (bubble-phase) retry listener acts on the same event.
-    document.addEventListener('pointerdown', () => (hadGesture = true), { capture: true });
-
+    let attempts = 0;
     const calls: string[] = [];
     (window as unknown as { __wakeLockCalls: string[] }).__wakeLockCalls = calls;
 
@@ -119,7 +125,8 @@ async function spyOnGestureGatedWakeLock(page: Page) {
       configurable: true,
       value: {
         request: (type: string) => {
-          if (!hadGesture) return Promise.reject(new Error('NotAllowedError'));
+          attempts++;
+          if (attempts === 1) return Promise.reject(new Error('NotAllowedError'));
           calls.push(type);
           return Promise.resolve({
             released: false,
@@ -133,15 +140,17 @@ async function spyOnGestureGatedWakeLock(page: Page) {
   });
 }
 
-test('recovers on the first tap if the initial request needed a user gesture', async ({ page }) => {
-  await spyOnGestureGatedWakeLock(page);
+test('retries on a later tap if an earlier one was denied', async ({ page }) => {
+  await spyOnWakeLockDeniedOnFirstAttempt(page);
 
-  // startGame itself performs the first tap (choosing a format), which is
-  // exactly what the recovery path is for — by the time it returns, the
-  // lock should be held even though the page-load attempt was refused.
+  // startGame's three taps (format, players, begin) give this multiple
+  // chances — the first is denied, so the tap listener has to stay armed
+  // rather than giving up after one failed attempt, for a later tap to
+  // succeed.
   await startGame(page, /commander/i, 2);
 
   await expect.poll(() => wakeLockCalls(page)).toEqual(['screen']);
+  await expect.poll(() => statusText(page)).toContain('wl:granted');
 });
 
 test('does nothing, without erroring, when the browser refuses or lacks the API', async ({
