@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import PlayerPanel from './PlayerPanel.svelte';
-import { COMMIT_WINDOW_MS } from '$ui/interaction/pendingDelta';
+import { COMMIT_WINDOW_MS, CONTINUE_WINDOW_MS } from '$ui/interaction/pendingDelta';
 import { playerId } from '$domain/ids';
 import type { PlayerState } from '$domain/state';
 
@@ -137,7 +137,7 @@ describe('player panel', () => {
     expect(onLifeChange.mock.calls[0]![0]).toBeLessThan(-2);
   });
 
-  it('scrubs a large change from a vertical drag and commits it on release', async () => {
+  it('scrubs a large change from a vertical drag, and commits it once the finger stays off', async () => {
     const { onLifeChange } = mount();
     const zone = decrease();
 
@@ -145,9 +145,87 @@ describe('player panel', () => {
     await touch(zone, 'pointerMove', 140); // 160px upward
     await touch(zone, 'pointerUp', 140);
 
+    // Lifting off does not commit: a second drag started straight after is
+    // meant to continue this one, so it waits out the short window first.
+    expect(onLifeChange).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
     expect(onLifeChange).toHaveBeenCalledTimes(1);
-    // Released deliberately, so it commits at once rather than waiting out the window.
-    expect(onLifeChange.mock.calls[0]![0]).toBeGreaterThan(20);
+    // 160px upward at a flat eight pixels a point is +20, less the −1 from
+    // pressing the minus zone to start with.
+    expect(onLifeChange.mock.calls[0]![0]).toBe(19);
+  });
+
+  /*
+   * Two drags in quick succession are one correction made in two movements
+   * far more often than they are two separate decisions — a long change runs
+   * out of screen and has to be finished with a second pull. Committing the
+   * instant the finger lifted made that two log entries needing two undos.
+   */
+  it('continues the previous drag when another starts inside the window', async () => {
+    const { onLifeChange } = mount();
+    const zone = decrease();
+
+    await touch(zone, 'pointerDown', 300);
+    await touch(zone, 'pointerMove', 220); // 80px up: +10, less the −1 to start
+    await touch(zone, 'pointerUp', 220);
+
+    await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS - 200);
+
+    await touch(zone, 'pointerDown', 300);
+    await touch(zone, 'pointerMove', 220);
+    await touch(zone, 'pointerUp', 220);
+    await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
+
+    // One entry, both pulls in it: 9 from the first, 9 more from the second.
+    expect(onLifeChange).toHaveBeenCalledTimes(1);
+    expect(onLifeChange).toHaveBeenCalledWith(18, null);
+  });
+
+  it('starts a fresh change when the next drag comes after the window', async () => {
+    const { onLifeChange } = mount();
+    const zone = decrease();
+
+    await touch(zone, 'pointerDown', 300);
+    await touch(zone, 'pointerMove', 220);
+    await touch(zone, 'pointerUp', 220);
+
+    await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
+
+    await touch(zone, 'pointerDown', 300);
+    await touch(zone, 'pointerMove', 220);
+    await touch(zone, 'pointerUp', 220);
+    await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
+
+    expect(onLifeChange).toHaveBeenCalledTimes(2);
+    expect(onLifeChange).toHaveBeenNthCalledWith(1, 9, null);
+    expect(onLifeChange).toHaveBeenNthCalledWith(2, 9, null);
+  });
+
+  /* A counter that shows the old number until a timer runs out looks like it
+     missed the tap — and at a table, the number is the whole product. */
+  it('counts a pending change into the total straight away', async () => {
+    mount({ life: 40 });
+
+    await touch(decrease(), 'pointerDown');
+    expect(screen.getByLabelText('Anna: 39 life')).toBeInTheDocument();
+
+    await touch(decrease(), 'pointerUp');
+    await touch(decrease(), 'pointerDown');
+    expect(screen.getByLabelText('Anna: 38 life')).toBeInTheDocument();
+  });
+
+  it('does not double-count once the pending change is committed', async () => {
+    mount({ life: 40 });
+
+    await touch(decrease(), 'pointerDown');
+    await touch(decrease(), 'pointerUp');
+    await vi.advanceTimersByTimeAsync(COMMIT_WINDOW_MS + 100);
+
+    // The parent owns the real total and this mount never updates it, so the
+    // projection dropping back to the committed 40 is what proves the pending
+    // value stopped being counted rather than being added twice.
+    expect(screen.getByLabelText('Anna: 40 life')).toBeInTheDocument();
   });
 
   it('ignores a wobble too small to be a drag', async () => {
@@ -178,6 +256,7 @@ describe('player panel', () => {
     await touch(zone, 'pointerDown', 300);
     await touch(zone, 'pointerMove', 140); // up the screen, down for them
     await touch(zone, 'pointerUp', 140);
+    await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
     expect(onLifeChange.mock.calls[0]![0]).toBeLessThan(-20);
   });
@@ -436,6 +515,7 @@ describe('player panel', () => {
       layOutRow();
       await touch(zone, 'pointerMove', 400, 150);
       await touch(zone, 'pointerUp', 400, 150);
+      await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
       const [delta, from] = onLifeChange.mock.calls[0]!;
       expect(delta).toBeLessThan(-5);
@@ -452,6 +532,7 @@ describe('player panel', () => {
       await touch(zone, 'pointerMove', 400, 150);
       await touch(zone, 'pointerMove', 400, 20);
       await touch(zone, 'pointerUp', 400, 20);
+      await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
       expect(onLifeChange.mock.calls[0]![1]).toBeNull();
     });
@@ -471,6 +552,7 @@ describe('player panel', () => {
         layOutRow();
         await touch(zone, 'pointerMove', 400, 150);
         await touch(zone, 'pointerUp', 400, 150);
+        await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
         results.push(onLifeChange.mock.calls[0]![1]);
         cleanup();
@@ -490,6 +572,7 @@ describe('player panel', () => {
       layOutRow();
       await touch(zone, 'pointerMove', 460, 150);
       await touch(zone, 'pointerUp', 460, 150);
+      await vi.advanceTimersByTimeAsync(CONTINUE_WINDOW_MS + 100);
 
       expect(onLifeChange.mock.calls[0]![1]).toBeNull();
     });

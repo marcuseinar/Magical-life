@@ -1,7 +1,7 @@
-import { COMMIT_WINDOW_MS, stepDelta } from './pendingDelta';
+import { stepDelta } from './pendingDelta';
 import type { DeltaInput, DeltaState } from './pendingDelta';
 
-/** How often the drain ring is repainted. Fine for a four-second sweep, cheap enough to ignore. */
+/** How often the drain ring is repainted. Fine for a three-second sweep, cheap enough to ignore. */
 const TICK_MS = 80;
 
 export type DeltaController = {
@@ -52,11 +52,13 @@ export function createDeltaController(commit: (delta: number) => void): DeltaCon
       return state?.value ?? 0;
     },
     get progress() {
-      return remaining / COMMIT_WINDOW_MS;
+      // Against the window actually running, not always the long one: a
+      // released scrub drains the short one, and its ring still starts full.
+      return state === null ? 0 : remaining / state.window;
     },
     nudge: (by) => apply({ kind: 'nudge', by, now: Date.now() }),
     scrub: (to) => apply({ kind: 'scrub', to, now: Date.now() }),
-    release: () => apply({ kind: 'commit', now: Date.now() }),
+    release: () => apply({ kind: 'release', now: Date.now() }),
     cancel: () => apply({ kind: 'cancel' }),
     destroy: stop
   };

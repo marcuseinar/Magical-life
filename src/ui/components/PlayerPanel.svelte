@@ -3,7 +3,7 @@
   import { highestCommanderDamage, lethalReasons, threatLevel } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import { NO_SLOT, blameSlot } from '$ui/interaction/blameSlot';
-  import { scrubPoints } from '$ui/interaction/pendingDelta';
+  import { PIXELS_PER_POINT, scrubPoints } from '$ui/interaction/pendingDelta';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
   import CounterTray from './CounterTray.svelte';
   import DeltaBadge from './DeltaBadge.svelte';
@@ -117,8 +117,22 @@
   let scrubBase = 0;
   let repeat: ReturnType<typeof setTimeout> | undefined;
 
-  const threat = $derived(threatLevel(player));
-  const reasons = $derived(lethalReasons(player));
+  /** Where the press landed inside the field, so the ruler's lines line up with it. */
+  let field = $state<HTMLElement | null>(null);
+  let scrubOrigin = $state(0);
+
+  /*
+   * The total on the card counts the pending change straight away, rather
+   * than sitting on the old number until the commit window runs out. The
+   * delta badge says what is still being decided; the total says where it
+   * lands. Waiting made the app look like it had missed the tap.
+   *
+   * Everything read off the total goes through the same projection, or the
+   * card would show a lethal number in a safe colour for three seconds.
+   */
+  const projected = $derived<PlayerState>({ ...player, life: player.life + controller.pending });
+  const threat = $derived(threatLevel(projected));
+  const reasons = $derived(lethalReasons(projected));
 
   const stopRepeating = () => {
     clearTimeout(repeat);
@@ -143,6 +157,7 @@
     controller.nudge(sign);
     origin = event.clientY;
     originX = event.clientX;
+    scrubOrigin = event.clientY - (field?.getBoundingClientRect().top ?? 0);
 
     scrubBase = controller.pending;
     scrubbing = false;
@@ -215,7 +230,23 @@
 >
   <Filigree />
 
-  <div class="field" data-attributing={askingWhoDealtIt}>
+  <div bind:this={field} class="field" data-attributing={askingWhoDealtIt}>
+    <!--
+      The ruler. One line per point, every line the same distance apart
+      because the scrub rate is flat — so what a movement is worth is
+      something you can see rather than something you have to learn. Anchored
+      to where the press landed, so the lines mark the actual boundaries this
+      gesture will cross, and every fifth is drawn stronger to count against.
+      Only while dragging: on a tap it would be a flash of noise.
+    -->
+    {#if scrubbing}
+      <div
+        class="ruler"
+        aria-hidden="true"
+        style="--step: {PIXELS_PER_POINT}px; --origin: {scrubOrigin}px"
+      ></div>
+    {/if}
+
     <button
       class="zone zone--minus"
       aria-label="{player.name}, lose one life"
@@ -314,7 +345,12 @@
         {/if}
       </div>
       <div class="readout">
-        <LifeTotal life={player.life} {threat} label={player.name} />
+        <LifeTotal
+          life={projected.life}
+          {threat}
+          label={player.name}
+          interim={controller.pending !== 0}
+        />
       </div>
     </div>
   </div>
@@ -484,6 +520,31 @@
        are holding in the dark. */
     grid-template-columns: 1fr 1fr;
     min-height: 0;
+  }
+
+  .ruler {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+
+    /* Two rulers in one: a line every point, and a heavier line every fifth
+       so a long drag can be counted in fives rather than squinted at. Both
+       are offset to the press point, so the lines are where the steps are. */
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        var(--text-faint) 0 1px,
+        transparent 1px calc(var(--step) * 5)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        var(--frame-highlight) 0 1px,
+        transparent 1px var(--step)
+      );
+    background-position: 0 var(--origin);
+
+    /* Never in the way of the gesture drawing it. */
+    pointer-events: none;
   }
 
   .zone {
