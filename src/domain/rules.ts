@@ -43,13 +43,21 @@ export const FORMATS: Readonly<Record<FormatId, Format>> = {
     maxPlayers: 6,
     tracksCommanderDamage: false
   },
+  // The `id` stays `twoHeadedGiant` for storage stability (it's a value in
+  // already-saved games' state), even though the name no longer claims the
+  // format: sanctioned Two-Headed Giant's defining rule is that each team of
+  // two shares one life total, which this app has no mechanism for — every
+  // player still gets their own panel. Calling it that promised a mechanic
+  // that isn't here, and commander damage doubly so: vanilla 2HG has no
+  // commanders at all, so tracking it (as this used to) invited attributing
+  // damage to a source that format doesn't have.
   twoHeadedGiant: {
     id: 'twoHeadedGiant',
-    name: 'Two-Headed Giant',
+    name: 'Multiplayer',
     startingLife: 30,
     defaultPlayers: 2,
     maxPlayers: 4,
-    tracksCommanderDamage: true
+    tracksCommanderDamage: false
   },
   brawl: {
     id: 'brawl',
