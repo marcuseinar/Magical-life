@@ -50,13 +50,13 @@ test('a joined table converges to the same game, in both directions', async ({ b
   await expect(joiner.getByLabel('Player 2: 40 life')).toBeVisible();
 
   /*
-   * Joining claims the seat. In a two-player game that leaves each device
-   * playing exactly one seat, so the grid collapses to that one panel and
-   * the opponent bar takes the other — proven here once, since claiming
-   * happens in `tableConnection.svelte.ts`, shared by every join path
-   * including the short-code one in table-connection-by-code.spec.ts. The
-   * disabled-panel-in-the-grid case is for a local pod with a remote seat
-   * mixed in, a different table shape than this test sets up.
+   * Joining claims the seat, and a claimed seat leaves the grid for the
+   * opponent bar instead — proven here once, since claiming happens in
+   * `tableConnection.svelte.ts`, shared by every join path including the
+   * short-code one in table-connection-by-code.spec.ts. This is a
+   * two-player game, so each device is also down to exactly one seat of
+   * its own; the case where several local seats remain is its own test
+   * below, since a two-player game cannot exercise it.
    */
   const hostOpponents = host.getByRole('group', { name: /opponents/i });
   // The claim itself has to cross the wire before the host's board reflects
@@ -83,6 +83,56 @@ test('a joined table converges to the same game, in both directions', async ({ b
   await expect(hostOpponents.getByLabel('Player 2: 41 life')).toBeVisible({
     timeout: COMMITTED + 5000
   });
+
+  await hostContext.close();
+  await joinContext.close();
+});
+
+test('a claimed seat leaves the grid even while several local seats remain', async ({
+  browser
+}) => {
+  const hostContext = await browser.newContext();
+  const joinContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const joiner = await joinContext.newPage();
+
+  await startGame(host, /commander/i, 3);
+
+  await host.getByRole('button', { name: 'Connect a table' }).click();
+  await host.getByRole('button', { name: 'Invite Player 2' }).click();
+  await host.getByRole('button', { name: /paste instead/i }).click();
+
+  const hostCode = host.locator('.sheet textarea.code[readonly]');
+  await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });
+  const offerCode = await hostCode.inputValue();
+
+  await joiner.goto('/join');
+  await joiner.getByRole('button', { name: /paste instead/i }).click();
+  await joiner.getByLabel('Their code').fill(offerCode);
+  await joiner.getByRole('button', { name: 'Continue' }).click();
+  await joiner.getByRole('button', { name: 'Join' }).click();
+
+  const replyCode = joiner.locator('textarea.code[readonly]');
+  await expect(replyCode).not.toHaveValue('', { timeout: 10_000 });
+  const answerCode = await replyCode.inputValue();
+
+  await host.getByLabel('Paste their reply').fill(answerCode);
+  await host.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(host.getByText('Connected.')).toBeVisible({ timeout: 10_000 });
+  await host.getByRole('button', { name: 'Done' }).click();
+
+  /*
+   * Three seats, one claimed: the host still plays two of its own, and
+   * both stay full panels. It is claiming a seat that moves it to the bar,
+   * never a headcount of how many are left — a host down to two local
+   * seats is not the single-seat shape the test above exercises.
+   */
+  await expect(
+    host.getByRole('group', { name: /opponents/i }).getByLabel('Player 2: 40 life')
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(host.getByRole('button', { name: 'Player 1, lose one life' })).toBeEnabled();
+  await expect(host.getByRole('button', { name: 'Player 3, lose one life' })).toBeEnabled();
+  await expect(host.getByRole('button', { name: 'Player 2, lose one life' })).toHaveCount(0);
 
   await hostContext.close();
   await joinContext.close();

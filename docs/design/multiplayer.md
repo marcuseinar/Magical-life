@@ -159,44 +159,62 @@ is a no-op rather than an error if the seat is somehow already claimed, which
 covers a rejoin without needing to special-case it.
 
 From there, `localSeats`/`remoteSeats` (`src/domain/selectors.ts`) answer
-"which seats can this device actually play", and the UI locks every panel
-that answers no: the tap zones, rename, elimination, the commander sheet, and
-the counter tray all disable, and the card shows a **Locked** badge. This is
-ADR 0002's ownership rule — "a device may only author events about its own
-player" — made visible instead of merely assumed, so a host cannot even
-attempt to change a life total that is not theirs to change once somebody
-else has joined that seat.
+"which seats can this device actually play". `PlayerPanel`'s `readOnly` prop
+is what enforces it when a remote seat does end up rendered with a panel:
+the tap zones, rename, elimination, the commander sheet, and the counter
+tray all disable, and the card shows a **Locked** badge. This is ADR 0002's
+ownership rule — "a device may only author events about its own player" —
+made visible instead of merely assumed, so a host could never attempt to
+change a life total that is not theirs to change.
+
+In practice today a remote seat never reaches the grid in the first place —
+see "The opponent bar" below, which removes it instead of locking it in
+place. The lock is still real and still the backstop `localSeatIds`
+provides to `GameBoard`; it is just not the thing on screen for the common
+path any more.
 
 Deliberately **not locked before a join**: a host with four unclaimed seats
 and one device is playing all four, which is what `localSeats` already
 returns for an author matching no seat. The lock only appears once a second
 device is actually in the game — the case the confusion was ever about.
 
-## The opponent bar, once you are down to one seat of your own
+## The opponent bar
 
-Once this device plays exactly one seat and somebody else has actually
-joined the rest — `localSeats(state, authorId).length === 1 &&
-remoteSeats(...).length > 0` — the full grid gives way to that one panel,
-full size, plus a compact bar above it (`OpponentBar.svelte`) showing every
-other seat's name and life total. Every panel in the bar is a plain reading,
-not a control: there is nothing to lock there, because there was never
-anything to tap.
+The moment anyone has actually joined a seat, that seat leaves the grid —
+`remoteSeats(state, authorId).length > 0` is the whole condition — and shows
+instead in a compact bar above the board (`OpponentBar.svelte`) with every
+claimed seat's name and life total. This holds regardless of how many local
+seats remain: a host running a four-player pod who has invited one opponent
+sees three panels in the grid, not four with one locked. Every entry in the
+bar is a plain reading, not a control: there is nothing to lock there,
+because there was never anything to tap.
+
+"Only once they've joined" still holds exactly as before — a host with four
+unclaimed seats plays and sees all four, same as solo play always has. It is
+claiming a seat that moves it out of the grid, never headcount.
 
 Two things this is deliberately not:
 
-- **Not the local-multiplayer shape.** A host with three unclaimed seats
-  still plays all three, and the grid shows all three, exactly as before —
-  `localSeats` for an author matching no player already returns every
-  unclaimed seat, so the bar only appears once local really does mean one.
-  A local pod with a remote seat mixed in (some seats local, one seat
-  remote) keeps the full grid with that one seat locked, per the seat-lock
-  work — its own bar, one shown _between_ the local panels, is a later PR.
+- **Not the between-panels placement.** The bar sits at the top of the
+  screen regardless of how many local panels remain below it. An earlier
+  design call asked for opponents shown _between_ the local panels in a
+  multi-seat local pod specifically; the bar today is one shape for every
+  local seat count, and a different placement for the local-pod case is
+  still open.
 - **Not commander-damage-aware yet.** The bar shows life only. Attribution
-  itself still works from the panel that remains on the board — `GameBoard`
-  takes `seats` (every seat, for "who dealt it") separately from `players`
-  (who gets a panel), so an opponent who moved to the bar can still be
-  blamed for damage taken. Showing commander damage _in_ the bar is tracked
-  for its own PR.
+  itself still works from whichever local panel remains — `GameBoard` takes
+  `seats` (every seat, for "who dealt it") separately from `players` (who
+  gets a panel), so an opponent who moved to the bar can still be blamed for
+  damage taken. Showing commander damage _in_ the bar is tracked for its own
+  PR.
+
+The seat-lock work (`readOnly` on `PlayerPanel`, `localSeatIds` on
+`GameBoard`) is not dead code even though the grid, wired this way, never
+actually hands `GameBoard` a mix of local and remote seats any more —
+`boardPlayers` is either the full unclaimed table or exactly `localList`.
+It stays as the correctness backstop for any future screen that does show
+mixed seats deliberately (a spectator or judge view, mentioned as a later
+milestone), and its own tests still exercise it directly.
 
 The "First" toolbar action is hidden while the bar is showing: it drives a
 spotlight that is an index into the board's own seat list, and once that

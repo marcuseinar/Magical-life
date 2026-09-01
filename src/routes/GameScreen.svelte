@@ -83,14 +83,13 @@
   );
 
   /**
-   * Once this device plays exactly one seat and somebody else has actually
-   * joined the rest, the full grid gives way to that one panel plus a
-   * compact bar for everyone else — "only once they've joined", never
-   * merely because a seat is still unclaimed. A host with three unclaimed
-   * seats plays all three, so `localList` stays at three and the grid
-   * shows all of them, same as it always has.
+   * The moment anyone has actually joined a seat, the grid stops showing
+   * it — the bar does, instead — no matter how many local seats remain.
+   * "Only once they've joined" still holds: a host with four unclaimed
+   * seats plays and sees all four, exactly as before. It is claiming, not
+   * headcount, that moves a seat out of the grid.
    */
-  const showOpponentBar = $derived(localList.length === 1 && remoteList.length > 0);
+  const showOpponentBar = $derived(remoteList.length > 0);
   const boardPlayers = $derived(showOpponentBar ? localList : (store.state?.players ?? []));
 
   async function roll() {
