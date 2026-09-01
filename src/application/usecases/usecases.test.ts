@@ -16,7 +16,8 @@ import { MAX_PLAYER_NAME } from '$domain/rules';
 import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
 import { recordCommanderDamage } from './recordCommanderDamage';
-import { commanderDamageFrom } from '$domain/selectors';
+import { claimSeat } from './claimSeat';
+import { commanderDamageFrom, localSeats } from '$domain/selectors';
 import type { Rng } from '../ports/rng';
 
 /** A dealt sequence of "random" numbers, so a roll is a fact and not a coin toss. */
@@ -515,6 +516,32 @@ describe('use cases', () => {
       await undoLast({ session })();
       expect(session.events.length).toBe(before + 1);
       expect(session.events.at(-1)?.kind).toBe('event/retracted');
+    });
+  });
+
+  describe('claimSeat', () => {
+    it('marks the seat claimed', async () => {
+      const result = await claimSeat({ session })(seats[0]!);
+      expect(result.ok).toBe(true);
+      expect(session.state?.players[0]?.claimed).toBe(true);
+    });
+
+    it('drops the seat out of the host device that used to play it', async () => {
+      await claimSeat({ session })(seats[0]!);
+      expect(localSeats(session.state!, HOST).map((p) => p.id)).toEqual([seats[1]]);
+    });
+
+    it('is a no-op rather than an error when the seat is already claimed', async () => {
+      await claimSeat({ session })(seats[0]!);
+      const before = session.events.length;
+      const result = await claimSeat({ session })(seats[0]!);
+      expect(result.ok).toBe(true);
+      expect(session.events.length).toBe(before);
+    });
+
+    it('rejects an unknown player', async () => {
+      const result = await claimSeat({ session })(playerId('nobody'));
+      expect(result).toEqual({ ok: false, error: 'unknown-player' });
     });
   });
 });

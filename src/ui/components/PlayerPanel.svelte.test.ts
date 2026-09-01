@@ -625,4 +625,67 @@ describe('player panel', () => {
 
     expect(onLifeChange).toHaveBeenCalledWith(-1, null);
   });
+
+  /*
+   * A claimed seat is somebody else's device to play once they have joined —
+   * ADR 0002's ownership rule made visible. Every control that would mutate
+   * this player's own state is disabled, not hidden: a greyed-out card still
+   * shows the life total, it just cannot be the hand that changes it.
+   */
+  describe('a seat somebody else is playing', () => {
+    const mountReadOnly = (over: Partial<PlayerState> = {}) => {
+      const onLifeChange = vi.fn();
+      const onOpenCommander = vi.fn();
+      render(PlayerPanel, {
+        props: {
+          player: player(over),
+          readOnly: true,
+          tracksCommanderDamage: true,
+          onLifeChange,
+          onOpenCounters: vi.fn(),
+          onOpenCommander,
+          onRename: vi.fn(),
+          onElimination: vi.fn()
+        }
+      });
+      return { onLifeChange, onOpenCommander };
+    };
+
+    it('disables both tap zones', () => {
+      mountReadOnly();
+      expect(decrease()).toBeDisabled();
+      expect(increase()).toBeDisabled();
+    });
+
+    it('disables renaming', () => {
+      mountReadOnly();
+      expect(screen.getByRole('button', { name: 'Rename Anna' })).toBeDisabled();
+    });
+
+    it('disables declaring the player out, even though they qualify', () => {
+      mountReadOnly({ life: 0 });
+      expect(screen.getByRole('button', { name: 'Out' })).toBeDisabled();
+    });
+
+    it('disables opening the commander damage sheet', () => {
+      mountReadOnly();
+      expect(screen.getByRole('button', { name: /commander damage to anna/i })).toBeDisabled();
+    });
+
+    it('disables opening the counter sheet', () => {
+      mountReadOnly();
+      expect(screen.getByRole('button', { name: /counters for anna/i })).toBeDisabled();
+    });
+
+    it('says so visibly, not just to a screen reader', () => {
+      mountReadOnly();
+      expect(screen.getByText(/locked/i)).toBeInTheDocument();
+    });
+
+    it('is interactive again once nothing says otherwise', () => {
+      mount();
+      expect(decrease()).not.toBeDisabled();
+      expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
+    });
+  });
 });

@@ -2,6 +2,7 @@
   import { FORMATS } from '$domain/rules';
   import type { CounterKind } from '$domain/rules';
   import type { PlayerId } from '$domain/ids';
+  import { localSeats } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import type { GameStore } from '$lib/gameStore.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
@@ -71,6 +72,14 @@
       : (store.state?.players.find((player) => player.id === renaming?.player.id) ?? null)
   );
 
+  /** `null` until a table is actually connected: nothing is locked in solo
+   *  or shared-device play, which never claims a seat at all. */
+  const localSeatIds = $derived(
+    store.state === null
+      ? null
+      : new Set(localSeats(store.state, store.authorId).map((player) => player.id))
+  );
+
   async function roll() {
     if (rolling) return;
 
@@ -128,6 +137,7 @@
       firstPlayer={rolling ? null : store.state.firstPlayer}
       spotlight={spin.spotlight}
       {celebrating}
+      {localSeatIds}
       onLifeChange={(player, delta, from) => store.changeLife(player.id, delta, from)}
       tracksCommanderDamage={store.state.config.tracksCommanderDamage}
       onOpenCounters={(player, rotated) => (counters = { player, rotated })}

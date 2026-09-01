@@ -49,6 +49,17 @@ test('a joined table converges to the same game, in both directions', async ({ b
   await expect(joiner.getByLabel('Player 1: 40 life')).toBeVisible({ timeout: 10_000 });
   await expect(joiner.getByLabel('Player 2: 40 life')).toBeVisible();
 
+  /*
+   * Joining claims the seat, and a claimed seat is read-only everywhere but
+   * the device that claimed it — proven here once, since claiming happens in
+   * `tableConnection.svelte.ts`, shared by every join path including the
+   * short-code one in table-connection-by-code.spec.ts.
+   */
+  await expect(host.getByRole('button', { name: 'Player 2, lose one life' })).toBeDisabled();
+  await expect(joiner.getByRole('button', { name: 'Player 1, lose one life' })).toBeDisabled();
+  await expect(host.getByRole('button', { name: 'Player 1, lose one life' })).toBeEnabled();
+  await expect(joiner.getByRole('button', { name: 'Player 2, lose one life' })).toBeEnabled();
+
   // A change on the host reaches the joiner.
   await host.getByRole('button', { name: 'Player 1, lose one life' }).click();
   await expect(joiner.getByLabel('Player 1: 39 life')).toBeVisible({ timeout: COMMITTED + 5000 });

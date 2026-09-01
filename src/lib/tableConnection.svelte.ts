@@ -173,7 +173,11 @@ export function joinTable(offerCode: string): TableJoin {
       if (seeded) return;
       seeded = true;
       stopSeeding();
-      void newStore.merge(events).then(() => {
+      void newStore.merge(events).then(async () => {
+        // Claimed before the store is exposed, so nothing ever sees this
+        // seat as unclaimed on the joiner's own screen — and the claim event
+        // itself goes out over `connectTransport` like any other.
+        await newStore.claimSeat(invitePlayerId);
         connectTransport(newStore, transport);
         store = newStore;
         connected = true;
@@ -354,7 +358,11 @@ export function joinTableByCode(
       if (seeded) return;
       seeded = true;
       stopSeeding();
-      void newStore.merge(events).then(() => {
+      void newStore.merge(events).then(async () => {
+        // Claimed before the store is exposed, so nothing ever sees this
+        // seat as unclaimed on the joiner's own screen — and the claim event
+        // itself goes out over `connectTransport` like any other.
+        await newStore.claimSeat(invitePlayerId);
         connectTransport(newStore, transport);
         store = newStore;
         connected = true;

@@ -72,4 +72,25 @@ describe('game board', () => {
     const colours = panels(container).map((p) => p.dataset.colour);
     expect(new Set(colours).size).toBe(4);
   });
+
+  it('locks nobody while no table is connected', () => {
+    const container = mount(2);
+    expect(panels(container).map((p) => p.dataset.locked)).toEqual(['false', 'false']);
+  });
+
+  it('locks every seat this device is not in localSeatIds for', () => {
+    const players = Array.from({ length: 3 }, (_, index) => seat(index));
+    const { container } = render(GameBoard, {
+      props: {
+        players,
+        localSeatIds: new Set([players[1]!.id]),
+        onLifeChange: vi.fn(),
+        onOpenCounters: vi.fn(),
+        onOpenCommander: vi.fn(),
+        onRename: vi.fn(),
+        onElimination: vi.fn()
+      }
+    });
+    expect(panels(container).map((p) => p.dataset.locked)).toEqual(['true', 'false', 'true']);
+  });
 });

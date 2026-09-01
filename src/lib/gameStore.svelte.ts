@@ -7,6 +7,7 @@ import type { Rng } from '$application/ports/rng';
 import { applyLifeDelta } from '$application/usecases/applyLifeDelta';
 import { changeCounter } from '$application/usecases/changeCounter';
 import { chooseFirstPlayer } from '$application/usecases/chooseFirstPlayer';
+import { claimSeat } from '$application/usecases/claimSeat';
 import { recordCommanderDamage } from '$application/usecases/recordCommanderDamage';
 import { rematch } from '$application/usecases/rematch';
 import { renamePlayer } from '$application/usecases/renamePlayer';
@@ -79,6 +80,11 @@ export function createGameStore(
     get ready() {
       return ready;
     },
+    /** Which player this device authors events as — see `localSeats`, which
+     *  is what turns this into "which seats can I actually play". */
+    get authorId() {
+      return session.authorId;
+    },
 
     async hydrate() {
       await session.hydrate();
@@ -123,6 +129,13 @@ export function createGameStore(
     async setEliminated(target: PlayerId, eliminated: boolean) {
       await setElimination({ session })(target, eliminated);
       sync();
+    },
+
+    /** Records that this device is now playing `target`'s seat. */
+    async claimSeat(target: PlayerId) {
+      const result = await claimSeat({ session })(target);
+      sync();
+      return result;
     },
 
     async chooseFirstPlayer() {

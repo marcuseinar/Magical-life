@@ -5,10 +5,12 @@
   let {
     playerName,
     counters,
+    disabled = false,
     onopen
   }: {
     playerName: string;
     counters: Readonly<Record<CounterKind, number>>;
+    disabled?: boolean;
     onopen: () => void;
   } = $props();
 
@@ -33,7 +35,9 @@
     </span>
   {/each}
 
-  <button class="toggle" aria-label="Counters for {playerName}" onclick={onopen}>+</button>
+  <button class="toggle" aria-label="Counters for {playerName}" {disabled} onclick={onopen}
+    >+</button
+  >
 </div>
 
 <style>
@@ -92,5 +96,9 @@
     color: var(--text-muted);
     font-size: var(--size-chip);
     line-height: 1;
+  }
+
+  .toggle:disabled {
+    opacity: 0.45;
   }
 </style>
