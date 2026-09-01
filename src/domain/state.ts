@@ -20,6 +20,9 @@ export type PlayerState = PlayerSeat & {
   /** Damage taken, keyed by the commander's owner. Absent means none. */
   readonly commanderDamage: Readonly<Record<string, number>>;
   readonly eliminated: boolean;
+  /** Somebody is playing this seat on their own device. Says nothing about
+   *  *which* device — see `localSeats`, which needs to know who is asking. */
+  readonly claimed: boolean;
 };
 
 export type GameState = {

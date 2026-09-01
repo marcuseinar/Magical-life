@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { isLethal, lethalReasons, livingPlayers, threatLevel } from './selectors';
+import {
+  isLethal,
+  lethalReasons,
+  livingPlayers,
+  localSeats,
+  remoteSeats,
+  threatLevel
+} from './selectors';
 import { LETHAL_POISON } from './rules';
 import { fold } from './reducer';
+import { playerId } from './ids';
 import { ANNA, BJORN, commanderConfig, makeLog, seat, started } from '../../tests/support/events';
-import type { PlayerState } from './state';
+import type { GameState, PlayerState } from './state';
 
 const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   id: ANNA,
@@ -13,6 +21,7 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
   commanderDamage: {},
   eliminated: false,
+  claimed: false,
   ...over
 });
 
@@ -103,5 +112,60 @@ describe('livingPlayers', () => {
     ]);
     const state = fold(events)!;
     expect(livingPlayers(state).map((p) => p.id)).toEqual([BJORN]);
+  });
+});
+
+/*
+ * Which seats this device plays. Both ends fold the same log, so the answer
+ * has to come from who is asking as well as from the log: the host is not a
+ * seat and plays everything nobody has taken, while a joiner is a seat and
+ * plays exactly that one. Everything else, for either of them, is somebody
+ * else's — and `remoteSeats` is the rest, so the two always partition the
+ * table with nobody counted twice or dropped.
+ */
+describe('whose seat is whose', () => {
+  const anna = player({ id: ANNA, name: 'Anna' });
+  const bjorn = player({ id: BJORN, name: 'Björn' });
+  const table = [anna, bjorn];
+  const DEVICE = playerId('device');
+
+  const state = (players: PlayerState[]): GameState => ({
+    config: commanderConfig,
+    players,
+    flags: { monarch: null, initiative: null, citysBlessing: null },
+    firstPlayer: null,
+    ended: false,
+    winner: null
+  });
+
+  it('gives an offline device every seat, because nobody else has one', () => {
+    expect(localSeats(state(table), DEVICE)).toEqual(table);
+    expect(remoteSeats(state(table), DEVICE)).toEqual([]);
+  });
+
+  it('takes a claimed seat away from the device that is not playing it', () => {
+    const claimed = [anna, { ...bjorn, claimed: true }];
+
+    expect(localSeats(state(claimed), DEVICE)).toEqual([anna]);
+    expect(remoteSeats(state(claimed), DEVICE)).toEqual([{ ...bjorn, claimed: true }]);
+  });
+
+  it('gives a joiner their own seat and nothing else', () => {
+    const claimed = [anna, { ...bjorn, claimed: true }];
+
+    expect(localSeats(state(claimed), BJORN)).toEqual([{ ...bjorn, claimed: true }]);
+    // Anna is unclaimed, but she is still not this device's to play.
+    expect(remoteSeats(state(claimed), BJORN)).toEqual([anna]);
+  });
+
+  it('keeps the table whole: every seat is local or remote, never both', () => {
+    for (const author of [DEVICE, ANNA, BJORN]) {
+      const claimed = [anna, { ...bjorn, claimed: true }];
+      const local = localSeats(state(claimed), author);
+      const remote = remoteSeats(state(claimed), author);
+
+      expect([...local, ...remote]).toHaveLength(claimed.length);
+      expect(local.filter((seat) => remote.includes(seat))).toEqual([]);
+    }
   });
 });

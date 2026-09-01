@@ -45,3 +45,24 @@ export function threatLevel(player: PlayerState): ThreatLevel {
 
 export const livingPlayers = (state: GameState): readonly PlayerState[] =>
   state.players.filter((player) => !player.eliminated);
+
+/**
+ * The seats this device is playing.
+ *
+ * Both ends fold the same log, so the log alone cannot answer this — it also
+ * takes knowing who is asking. A joiner's author id *is* a seat, and that one
+ * seat is all they play. A host's is not a seat at all, so it plays
+ * everything nobody has claimed. One rule covers both, and covers a host who
+ * has invited nobody: every seat is theirs, because none is claimed.
+ */
+export const localSeats = (state: GameState, authorId: PlayerId): readonly PlayerState[] =>
+  state.players.some((player) => player.id === authorId)
+    ? state.players.filter((player) => player.id === authorId)
+    : state.players.filter((player) => !player.claimed);
+
+/** Everyone else at the table — the exact complement of `localSeats`, so the
+ *  two partition the game with nobody counted twice or dropped. */
+export const remoteSeats = (state: GameState, authorId: PlayerId): readonly PlayerState[] => {
+  const mine = localSeats(state, authorId);
+  return state.players.filter((player) => !mine.includes(player));
+};

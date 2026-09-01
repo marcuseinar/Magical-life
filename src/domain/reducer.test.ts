@@ -165,6 +165,50 @@ describe('elimination', () => {
   });
 });
 
+/*
+ * A seat is claimed when somebody takes it over on their own device. It is a
+ * recorded fact rather than per-device connection state, so both ends fold
+ * the same log to the same answer about who is playing where — and a device
+ * that reconnects, or joins late, learns it from the history like everything
+ * else.
+ */
+describe('claiming a seat', () => {
+  it('starts unclaimed: an offline game belongs entirely to this device', () => {
+    const events = newGame([]);
+    expect(fold(events)?.players.every((p) => !p.claimed)).toBe(true);
+  });
+
+  it('is recorded when a device takes a seat over', () => {
+    const events = newGame([{ kind: 'seat/claimed', target: BJORN }]);
+    const state = fold(events);
+
+    expect(state?.players.find((p) => p.id === BJORN)?.claimed).toBe(true);
+    // And nobody else moves.
+    expect(state?.players.find((p) => p.id === ANNA)?.claimed).toBe(false);
+  });
+
+  it('is idempotent, because a reconnect replays the same claim', () => {
+    const events = newGame([
+      { kind: 'seat/claimed', target: BJORN },
+      { kind: 'seat/claimed', target: BJORN }
+    ]);
+    expect(fold(events)?.players.find((p) => p.id === BJORN)?.claimed).toBe(true);
+  });
+
+  it('can be released, so a seat handed back is playable on this device again', () => {
+    const events = newGame([
+      { kind: 'seat/claimed', target: BJORN },
+      { kind: 'seat/released', target: BJORN }
+    ]);
+    expect(fold(events)?.players.find((p) => p.id === BJORN)?.claimed).toBe(false);
+  });
+
+  it('ignores a claim on a player who is not in the game', () => {
+    const events = newGame([{ kind: 'seat/claimed', target: CARA }]);
+    expect(fold(events)?.players.every((p) => !p.claimed)).toBe(true);
+  });
+});
+
 describe('who goes first', () => {
   it('is nobody until it is decided', () => {
     expect(fold(newGame())?.firstPlayer).toBeNull();

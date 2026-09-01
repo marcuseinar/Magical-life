@@ -19,6 +19,8 @@ type Action =
   | { t: 'flag'; f: FlagKind; p: number | null }
   | { t: 'eliminate'; p: number }
   | { t: 'restore'; p: number }
+  | { t: 'claim'; p: number }
+  | { t: 'release'; p: number }
   | { t: 'end'; p: number | null };
 
 const arbAction: fc.Arbitrary<Action> = fc.oneof(
@@ -40,6 +42,8 @@ const arbAction: fc.Arbitrary<Action> = fc.oneof(
   }),
   fc.record({ t: fc.constant('eliminate' as const), p: fc.nat(5) }),
   fc.record({ t: fc.constant('restore' as const), p: fc.nat(5) }),
+  fc.record({ t: fc.constant('claim' as const), p: fc.nat(5) }),
+  fc.record({ t: fc.constant('release' as const), p: fc.nat(5) }),
   fc.record({ t: fc.constant('end' as const), p: fc.option(fc.nat(5), { nil: null }) })
 );
 
@@ -102,6 +106,10 @@ const arbScenario = fc
           return { ...envelope, kind: 'player/eliminated', target: seatOf(action.p) };
         case 'restore':
           return { ...envelope, kind: 'player/restored', target: seatOf(action.p) };
+        case 'claim':
+          return { ...envelope, kind: 'seat/claimed', target: seatOf(action.p) };
+        case 'release':
+          return { ...envelope, kind: 'seat/released', target: seatOf(action.p) };
         case 'end':
           return {
             ...envelope,
