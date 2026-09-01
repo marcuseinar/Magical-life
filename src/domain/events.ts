@@ -32,6 +32,14 @@ export type EventBody =
    *  outside the domain and arrives here as a decided fact. */
   | { readonly kind: 'turn/firstPlayer'; readonly target: PlayerId }
   | { readonly kind: 'player/renamed'; readonly target: PlayerId; readonly name: string }
+  /**
+   * A device has taken this seat over, or handed it back. Recorded rather
+   * than kept as connection state on whoever noticed: both ends fold the
+   * same log, so this is what makes them agree about who is playing where —
+   * including a device that joins late and learns it from the history.
+   */
+  | { readonly kind: 'seat/claimed'; readonly target: PlayerId }
+  | { readonly kind: 'seat/released'; readonly target: PlayerId }
   | { readonly kind: 'player/eliminated'; readonly target: PlayerId }
   | { readonly kind: 'player/restored'; readonly target: PlayerId }
   | { readonly kind: 'event/retracted'; readonly retracts: EventId }

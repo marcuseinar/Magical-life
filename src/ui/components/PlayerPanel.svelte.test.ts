@@ -13,6 +13,7 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
   commanderDamage: {},
   eliminated: false,
+  claimed: false,
   ...over
 });
 

@@ -12,7 +12,8 @@ const seat = (index: number): PlayerState => ({
   life: 40,
   counters: { poison: 0, energy: 0, experience: 0, rad: 0, ticket: 0 },
   commanderDamage: {},
-  eliminated: false
+  eliminated: false,
+  claimed: false
 });
 
 const mount = (count: number) => {

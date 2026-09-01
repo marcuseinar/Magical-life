@@ -15,7 +15,8 @@ const seatPlayer = (seat: PlayerSeat, life: number): PlayerState => ({
   life,
   counters: zeroCounters(),
   commanderDamage: {},
-  eliminated: false
+  eliminated: false,
+  claimed: false
 });
 
 /** Apply `change` to the named player and leave everyone else exactly as they were. */
@@ -94,6 +95,12 @@ export function reduce(state: GameState | null, event: GameEvent): GameState | n
 
     case 'player/renamed':
       return mapPlayer(state, event.target, (player) => ({ ...player, name: event.name }));
+
+    case 'seat/claimed':
+      return mapPlayer(state, event.target, (player) => ({ ...player, claimed: true }));
+
+    case 'seat/released':
+      return mapPlayer(state, event.target, (player) => ({ ...player, claimed: false }));
 
     case 'player/eliminated':
       return mapPlayer(state, event.target, (player) => ({ ...player, eliminated: true }));
