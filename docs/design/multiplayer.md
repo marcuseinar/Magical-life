@@ -149,6 +149,29 @@ initial sync silently stopped propagating. The fix is to always read
 `store.events` first, before any early return, so the dependency is taken
 regardless of connection state at the time.
 
+## Seat ownership once a table is joined
+
+Joining claims the seat. The moment a joiner's device has folded the host's
+history, it records `seat/claimed` for the seat it just became — an ordinary
+event, sent over the connection like any other, so the host learns it the
+same way it learns a life change. `claimSeat` (`src/application/usecases/claimSeat.ts`)
+is a no-op rather than an error if the seat is somehow already claimed, which
+covers a rejoin without needing to special-case it.
+
+From there, `localSeats`/`remoteSeats` (`src/domain/selectors.ts`) answer
+"which seats can this device actually play", and the UI locks every panel
+that answers no: the tap zones, rename, elimination, the commander sheet, and
+the counter tray all disable, and the card shows a **Locked** badge. This is
+ADR 0002's ownership rule — "a device may only author events about its own
+player" — made visible instead of merely assumed, so a host cannot even
+attempt to change a life total that is not theirs to change once somebody
+else has joined that seat.
+
+Deliberately **not locked before a join**: a host with four unclaimed seats
+and one device is playing all four, which is what `localSeats` already
+returns for an author matching no seat. The lock only appears once a second
+device is actually in the game — the case the confusion was ever about.
+
 ## Trust model
 
 Be explicit, because P2P invites wishful thinking.

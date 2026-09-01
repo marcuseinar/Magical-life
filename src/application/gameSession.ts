@@ -17,6 +17,7 @@ export type GameSessionDeps = {
 export type GameSession = {
   readonly state: GameState | null;
   readonly events: readonly GameEvent[];
+  readonly authorId: PlayerId;
   hydrate(): Promise<void>;
   record(body: EventBody): Promise<GameEvent>;
   merge(incoming: readonly GameEvent[]): Promise<void>;
@@ -51,6 +52,9 @@ export function createGameSession({ clock, log, authorId }: GameSessionDeps): Ga
     },
     get events() {
       return events;
+    },
+    get authorId() {
+      return authorId;
     },
 
     async hydrate() {

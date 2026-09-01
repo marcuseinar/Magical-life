@@ -8,6 +8,7 @@
     firstPlayer = null,
     spotlight = null,
     celebrating = null,
+    localSeatIds = null,
     tracksCommanderDamage = false,
     onLifeChange,
     onOpenCounters,
@@ -21,6 +22,10 @@
     spotlight?: number | null;
     /** Player who has just won the roll, blinking to announce it. */
     celebrating?: PlayerId | null;
+    /** Which seats this device may play, from `localSeats`. `null` means no
+     *  table is connected yet, so nothing is locked — the common case, and
+     *  the only one solo and shared-device play ever see. */
+    localSeatIds?: ReadonlySet<PlayerId> | null;
     tracksCommanderDamage?: boolean;
     onLifeChange: (player: PlayerState, delta: number, from: PlayerId | null) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
@@ -61,6 +66,7 @@
         spotlit={index === spotlight}
         celebrating={player.id === celebrating}
         dimmed={spotlight !== null && index !== spotlight}
+        readOnly={localSeatIds !== null && !localSeatIds.has(player.id)}
         {tracksCommanderDamage}
         {seats}
         onLifeChange={(delta, from) => onLifeChange(player, delta, from)}

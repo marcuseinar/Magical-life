@@ -21,6 +21,7 @@
     spotlit = false,
     dimmed = false,
     celebrating = false,
+    readOnly = false,
     seats = [],
     tracksCommanderDamage = false,
     onLifeChange,
@@ -38,6 +39,10 @@
     celebrating?: boolean;
     /** A spin is running and the light is on somebody else. */
     dimmed?: boolean;
+    /** Somebody else's device is playing this seat. Every control that would
+     *  mutate this player's state is disabled — ADR 0002's ownership rule,
+     *  made visible rather than merely assumed. */
+    readOnly?: boolean;
     /** Every seat in the game, in order. The panel filters itself out of the
      *  attribution row; the seating order is what gives each chip its colour. */
     seats?: readonly PlayerState[];
@@ -228,6 +233,7 @@
   data-spotlit={spotlit}
   data-celebrating={celebrating}
   data-dimmed={dimmed}
+  data-locked={readOnly}
 >
   <Filigree />
 
@@ -235,6 +241,7 @@
     <button
       class="zone zone--minus"
       aria-label="{player.name}, lose one life"
+      disabled={readOnly}
       onpointerdown={(event) => press(event, -1)}
       onpointermove={drag}
       onpointerup={lift}
@@ -247,6 +254,7 @@
     <button
       class="zone zone--plus"
       aria-label="{player.name}, gain one life"
+      disabled={readOnly}
       onpointerdown={(event) => press(event, 1)}
       onpointermove={drag}
       onpointerup={lift}
@@ -345,7 +353,12 @@
     <!-- Still a heading, so the panel keeps its place in the document outline;
          the button inside is what makes the name editable. -->
     <h2 class="name">
-      <button class="name__edit" aria-label="Rename {player.name}" onclick={() => onRename?.()}>
+      <button
+        class="name__edit"
+        aria-label="Rename {player.name}"
+        disabled={readOnly}
+        onclick={() => onRename?.()}
+      >
         {player.name}
       </button>
     </h2>
@@ -356,12 +369,17 @@
       <span class="first" aria-hidden="true">1st</span>
     {/if}
 
+    {#if readOnly}
+      <span class="locked">Locked</span>
+    {/if}
+
     <div class="plate__end">
       {#if tracksCommanderDamage}
         <button
           class="crown"
           data-lethal={commanderTaken >= 21}
           aria-label="Commander damage to {player.name}"
+          disabled={readOnly}
           onclick={() => onOpenCommander?.()}
         >
           <span aria-hidden="true">♛</span>
@@ -372,12 +390,18 @@
         <button
           class="out"
           aria-pressed={player.eliminated}
+          disabled={readOnly}
           onclick={() => onElimination(!player.eliminated)}
         >
           {player.eliminated ? 'Back in' : 'Out'}
         </button>
       {/if}
-      <CounterTray playerName={player.name} counters={player.counters} onopen={onOpenCounters} />
+      <CounterTray
+        playerName={player.name}
+        counters={player.counters}
+        disabled={readOnly}
+        onopen={onOpenCounters}
+      />
     </div>
   </footer>
 </article>
@@ -519,6 +543,10 @@
 
   .zone:active {
     background-color: var(--surface-pressed);
+  }
+
+  .zone:disabled {
+    opacity: 0.35;
   }
 
   .zone__glyph {
@@ -833,6 +861,24 @@
   .out[aria-pressed='true'] {
     border-color: var(--frame-rule);
     color: var(--text-muted);
+  }
+
+  .name__edit:disabled,
+  .crown:disabled,
+  .out:disabled {
+    opacity: 0.45;
+  }
+
+  .locked {
+    flex: none;
+    padding: 2px var(--space-2);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-pill);
+    color: var(--text-muted);
+    font-size: var(--size-chip);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
   @keyframes strike {
