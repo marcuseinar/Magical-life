@@ -157,6 +157,29 @@ The architectural boundary is enforced mechanically, not by review:
 `eslint-plugin-boundaries` fails the build if `domain/` imports anything, or if
 `ui/` imports an adapter directly. Layering that depends on discipline decays.
 
+### These gates are CI's job, not a pre-push ritual
+
+Gates 3 through 8 run on every push and block the merge. Running them locally
+first proves nothing CI is not about to prove, on a machine that is already
+paid for and already parallel. So don't: before a push, run the type check,
+the lint, and the test files you actually touched — see "Where verification
+runs" in `CLAUDE.md`.
+
+Two exceptions, both about CI being unable to answer rather than about
+thoroughness:
+
+- **Reproducing a failure CI has reported.** Fix nothing you have not first
+  seen fail; then show the same check passing.
+- **Behaviour no suite covers yet.** Some things are only answerable by
+  driving a real browser — whether an element actually renders where it
+  should, whether a transform really animates. Probe the specific thing;
+  do not run the suite to find out.
+
+One trap worth naming, because CI caught it and a local run did not:
+`test:e2e:base-path` has **its own Playwright config** and is not part of
+`npm run test:e2e`. A "full local run" was never actually full. Another
+reason to let the machine whose job it is do the checking.
+
 ## Deployment
 
 Default branch → GitHub Actions → GitHub Pages, on green only. Every pull
