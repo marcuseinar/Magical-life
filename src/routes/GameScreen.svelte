@@ -2,7 +2,7 @@
   import { FORMATS } from '$domain/rules';
   import type { CounterKind } from '$domain/rules';
   import type { PlayerId } from '$domain/ids';
-  import { localSeats } from '$domain/selectors';
+  import { localSeats, remoteSeats } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import type { GameStore } from '$lib/gameStore.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
@@ -13,6 +13,7 @@
   import RenameSheet from '$ui/components/RenameSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
   import NewGameSheet from '$ui/components/NewGameSheet.svelte';
+  import OpponentBar from '$ui/components/OpponentBar.svelte';
   import TableSheet from './TableSheet.svelte';
 
   let { store }: { store: GameStore } = $props();
@@ -72,13 +73,25 @@
       : (store.state?.players.find((player) => player.id === renaming?.player.id) ?? null)
   );
 
+  const localList = $derived(store.state === null ? [] : localSeats(store.state, store.authorId));
+  const remoteList = $derived(store.state === null ? [] : remoteSeats(store.state, store.authorId));
+
   /** `null` until a table is actually connected: nothing is locked in solo
    *  or shared-device play, which never claims a seat at all. */
   const localSeatIds = $derived(
-    store.state === null
-      ? null
-      : new Set(localSeats(store.state, store.authorId).map((player) => player.id))
+    store.state === null ? null : new Set(localList.map((player) => player.id))
   );
+
+  /**
+   * Once this device plays exactly one seat and somebody else has actually
+   * joined the rest, the full grid gives way to that one panel plus a
+   * compact bar for everyone else — "only once they've joined", never
+   * merely because a seat is still unclaimed. A host with three unclaimed
+   * seats plays all three, so `localList` stays at three and the grid
+   * shows all of them, same as it always has.
+   */
+  const showOpponentBar = $derived(localList.length === 1 && remoteList.length > 0);
+  const boardPlayers = $derived(showOpponentBar ? localList : (store.state?.players ?? []));
 
   async function roll() {
     if (rolling) return;
@@ -132,19 +145,27 @@
       {store.state.players.length === 1 ? 'player' : 'players'}
     </h1>
 
-    <GameBoard
-      players={store.state.players}
-      firstPlayer={rolling ? null : store.state.firstPlayer}
-      spotlight={spin.spotlight}
-      {celebrating}
-      {localSeatIds}
-      onLifeChange={(player, delta, from) => store.changeLife(player.id, delta, from)}
-      tracksCommanderDamage={store.state.config.tracksCommanderDamage}
-      onOpenCounters={(player, rotated) => (counters = { player, rotated })}
-      onOpenCommander={(player, rotated) => (commander = { player, rotated })}
-      onRename={(player, rotated) => (renaming = { player, rotated })}
-      onElimination={(player, eliminated) => store.setEliminated(player.id, eliminated)}
-    />
+    <div class="playfield">
+      {#if showOpponentBar}
+        <OpponentBar players={remoteList} />
+      {/if}
+      <div class="board-slot">
+        <GameBoard
+          players={boardPlayers}
+          seats={store.state.players}
+          firstPlayer={rolling ? null : store.state.firstPlayer}
+          spotlight={spin.spotlight}
+          {celebrating}
+          {localSeatIds}
+          onLifeChange={(player, delta, from) => store.changeLife(player.id, delta, from)}
+          tracksCommanderDamage={store.state.config.tracksCommanderDamage}
+          onOpenCounters={(player, rotated) => (counters = { player, rotated })}
+          onOpenCommander={(player, rotated) => (commander = { player, rotated })}
+          onRename={(player, rotated) => (renaming = { player, rotated })}
+          onElimination={(player, eliminated) => store.setEliminated(player.id, eliminated)}
+        />
+      </div>
+    </div>
 
     <nav class="toolbar" aria-label="Game">
       <!-- Flush first: the panels' totals already count what is pending, so
@@ -156,11 +177,16 @@
           void store.undo();
         }}>Undo</button
       >
-      <!-- Short visible label so four actions fit one row on a phone; the
-           accessible name spells it out and contains the visible text. -->
-      <button class="tool" onclick={roll} disabled={rolling} aria-label="Choose who goes first"
-        >First</button
-      >
+      {#if !showOpponentBar}
+        <!-- Short visible label so four actions fit one row on a phone; the
+             accessible name spells it out and contains the visible text.
+             Hidden once the bar is showing: the spotlight it drives is an
+             index into the board's own seats, which are no longer every
+             seat at the table once some of them have moved to the bar. -->
+        <button class="tool" onclick={roll} disabled={rolling} aria-label="Choose who goes first"
+          >First</button
+        >
+      {/if}
       <button class="tool" onclick={() => (confirming = 'rematch')}>Rematch</button>
       <button class="tool" onclick={() => (confirming = 'new-game')}>New game</button>
     </nav>
@@ -239,6 +265,21 @@
   .game {
     display: grid;
     grid-template-rows: 1fr auto auto;
+    min-height: 0;
+  }
+
+  /* Holds the board and, once it exists, the opponent bar above it — a flex
+     column rather than a fixed grid row count, so the layout does not care
+     whether the bar is there. */
+  .playfield {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .board-slot {
+    display: grid;
+    flex: 1;
     min-height: 0;
   }
 

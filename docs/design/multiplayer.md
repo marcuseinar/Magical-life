@@ -172,6 +172,38 @@ and one device is playing all four, which is what `localSeats` already
 returns for an author matching no seat. The lock only appears once a second
 device is actually in the game — the case the confusion was ever about.
 
+## The opponent bar, once you are down to one seat of your own
+
+Once this device plays exactly one seat and somebody else has actually
+joined the rest — `localSeats(state, authorId).length === 1 &&
+remoteSeats(...).length > 0` — the full grid gives way to that one panel,
+full size, plus a compact bar above it (`OpponentBar.svelte`) showing every
+other seat's name and life total. Every panel in the bar is a plain reading,
+not a control: there is nothing to lock there, because there was never
+anything to tap.
+
+Two things this is deliberately not:
+
+- **Not the local-multiplayer shape.** A host with three unclaimed seats
+  still plays all three, and the grid shows all three, exactly as before —
+  `localSeats` for an author matching no player already returns every
+  unclaimed seat, so the bar only appears once local really does mean one.
+  A local pod with a remote seat mixed in (some seats local, one seat
+  remote) keeps the full grid with that one seat locked, per the seat-lock
+  work — its own bar, one shown _between_ the local panels, is a later PR.
+- **Not commander-damage-aware yet.** The bar shows life only. Attribution
+  itself still works from the panel that remains on the board — `GameBoard`
+  takes `seats` (every seat, for "who dealt it") separately from `players`
+  (who gets a panel), so an opponent who moved to the bar can still be
+  blamed for damage taken. Showing commander damage _in_ the bar is tracked
+  for its own PR.
+
+The "First" toolbar action is hidden while the bar is showing: it drives a
+spotlight that is an index into the board's own seat list, and once that
+list is down to one seat the index has nothing left to travel across.
+Choosing who goes first across a real connection is its own problem, not
+solved here.
+
 ## Trust model
 
 Be explicit, because P2P invites wishful thinking.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import GameBoard from './GameBoard.svelte';
 import { playerId } from '$domain/ids';
 import { MANA_COLOURS } from '$domain/rules';
@@ -92,5 +92,30 @@ describe('game board', () => {
       }
     });
     expect(panels(container).map((p) => p.dataset.locked)).toEqual(['true', 'false', 'true']);
+  });
+
+  it('offers every seat for commander-damage attribution, even one with no panel of its own', async () => {
+    const players = [seat(0)];
+    const everyone = [seat(0), seat(1)];
+    render(GameBoard, {
+      props: {
+        players,
+        seats: everyone,
+        tracksCommanderDamage: true,
+        onLifeChange: vi.fn(),
+        onOpenCounters: vi.fn(),
+        onOpenCommander: vi.fn(),
+        onRename: vi.fn(),
+        onElimination: vi.fn()
+      }
+    });
+
+    const zone = screen.getByRole('button', { name: 'Player 1, lose one life' });
+    await fireEvent.pointerDown(zone, { pointerId: 1, pointerType: 'touch', button: 0 });
+    await fireEvent.pointerUp(zone, { pointerId: 1, pointerType: 'touch' });
+
+    // Player 2 has no panel on this board at all, but their commander could
+    // still have dealt the damage — so they must still be an option.
+    expect(screen.getByRole('button', { name: /player 2's commander/i })).toBeInTheDocument();
   });
 });
