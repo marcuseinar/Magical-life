@@ -15,11 +15,9 @@
   --gold-500: #c9a227;
   --gold-400: #dfbf5a;
   --gold-300: #f0dda2;
-  --bronze-600: #6b5320;
 
   /* Printed card stock. */
   --parchment-100: #f3ecd8;
-  --parchment-200: #e3d8ba;
   --parchment-400: #b4a985;
   /* Both of these clear 4.5:1 against the page ground; do not darken them. */
   --parchment-500: #8b8168;
