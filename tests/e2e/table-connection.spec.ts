@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { COMMITTED, startGame } from './support';
+import { COMMITTED, expectLife, settled, startGame } from './support';
 
 /*
  * The real thing, not the spike: two independent browser contexts, standing
@@ -88,9 +88,7 @@ test('a joined table converges to the same game, in both directions', async ({ b
   await joinContext.close();
 });
 
-test('a claimed seat leaves the grid even while several local seats remain', async ({
-  browser
-}) => {
+test('a claimed seat leaves the grid, and a rematch does not hand it back', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const joinContext = await browser.newContext();
   const host = await hostContext.newPage();
@@ -133,6 +131,30 @@ test('a claimed seat leaves the grid even while several local seats remain', asy
   await expect(host.getByRole('button', { name: 'Player 1, lose one life' })).toBeEnabled();
   await expect(host.getByRole('button', { name: 'Player 3, lose one life' })).toBeEnabled();
   await expect(host.getByRole('button', { name: 'Player 2, lose one life' })).toHaveCount(0);
+
+  /*
+   * And a rematch is the same table playing again, not a new one: it resets
+   * the totals and nothing about who is playing where. The host used to get
+   * the joined seat back as a panel of its own here — playable from the
+   * wrong phone, and a board that grew a player between games.
+   */
+  await host.getByRole('button', { name: 'Player 1, lose one life' }).click();
+  await settled(host);
+  await host.getByRole('button', { name: 'Rematch' }).click();
+  await host.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+
+  await expectLife(host, 'Player 1').toBe(40);
+  await expect(
+    host.getByRole('group', { name: /opponents/i }).getByLabel('Player 2: 40 life')
+  ).toBeVisible();
+  await expect(host.getByRole('button', { name: 'Player 2, lose one life' })).toHaveCount(0);
+  await expect(host.getByRole('button', { name: 'Player 1, lose one life' })).toBeEnabled();
+  await expect(host.getByRole('button', { name: 'Player 3, lose one life' })).toBeEnabled();
+
+  // The joiner is looking at the fresh game too, still playing only its seat.
+  await expectLife(joiner, 'Player 2').toBe(40);
+  await expect(joiner.getByRole('button', { name: 'Player 2, lose one life' })).toBeEnabled();
+  await expect(joiner.getByRole('button', { name: 'Player 1, lose one life' })).toHaveCount(0);
 
   await hostContext.close();
   await joinContext.close();
