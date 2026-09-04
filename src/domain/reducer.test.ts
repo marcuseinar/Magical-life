@@ -207,6 +207,34 @@ describe('claiming a seat', () => {
     const events = newGame([{ kind: 'seat/claimed', target: CARA }]);
     expect(fold(events)?.players.every((p) => !p.claimed)).toBe(true);
   });
+
+  /*
+   * A rematch is a `game/started` over the same seats. It resets the game —
+   * totals, counters, who went first — and a claim is not part of the game:
+   * it says which device is playing a seat, which the same people playing
+   * again does not change. Reset it and every joined device's seat lands
+   * back on the host's screen, playable there as well as on its own phone.
+   */
+  it('survives a rematch, because the same people are still at the same seats', () => {
+    const events = [
+      ...newGame([{ kind: 'seat/claimed', target: BJORN }]),
+      ...makeLog('anna', [started(commanderConfig, [anna, bjorn])], 100)
+    ];
+    const state = fold(events);
+
+    expect(state?.players.find((p) => p.id === BJORN)?.claimed).toBe(true);
+    expect(state?.players.find((p) => p.id === ANNA)?.claimed).toBe(false);
+    // And it is still a rematch: the totals are fresh.
+    expect(state?.players.map((p) => p.life)).toEqual([40, 40]);
+  });
+
+  it('does not reach a seat the new game invented, which nobody has joined', () => {
+    const events = [
+      ...newGame([{ kind: 'seat/claimed', target: BJORN }]),
+      ...makeLog('anna', [started(standardConfig, [anna, seat(CARA, 'Cara')])], 100)
+    ];
+    expect(fold(events)?.players.every((p) => !p.claimed)).toBe(true);
+  });
 });
 
 describe('who goes first', () => {
