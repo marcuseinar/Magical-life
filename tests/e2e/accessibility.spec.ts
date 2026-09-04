@@ -2,22 +2,18 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { startGame } from './support';
 
-/* A pretty theme that fails contrast cannot ship, so both are gated. */
-for (const scheme of ['light', 'dark'] as const) {
-  test(`the opening screen is clean in ${scheme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.goto('/');
-    const { violations } = await new AxeBuilder({ page }).analyze();
-    expect(violations).toEqual([]);
-  });
+/* Dark is the only theme; a pretty theme that fails contrast cannot ship. */
+test('the opening screen is clean', async ({ page }) => {
+  await page.goto('/');
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations).toEqual([]);
+});
 
-  test(`a four-player pod is clean in ${scheme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme });
-    await startGame(page, /commander/i, 4);
-    const { violations } = await new AxeBuilder({ page }).analyze();
-    expect(violations).toEqual([]);
-  });
-}
+test('a four-player pod is clean', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations).toEqual([]);
+});
 
 test('life can be changed without ever touching the screen', async ({ page }) => {
   await startGame(page, /constructed/i, 2);

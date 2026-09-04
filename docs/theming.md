@@ -31,33 +31,19 @@ caught by a Stylelint rule that bans raw colour literals outside the token file.
 
 ## Switching themes
 
-```html
-<html data-theme="dark"></html>
-```
-
-Each theme redefines the semantic layer only, never the components:
+Dark is the only theme — there is no light mode and no `data-theme` toggle.
+The semantic layer in `:root` is the complete, permanent definition:
 
 ```css
 :root {
-  /* light — the complete set */
-}
-:root[data-theme='dark'] {
-  /* overrides */
-}
-:root[data-theme='mono'] {
-  /* high contrast */
-}
-:root[data-theme='pauper'] {
-  /* a community theme */
+  /* dark — the complete set, and the only set */
 }
 ```
 
-`@media (prefers-color-scheme: dark)` supplies the default when the user has
-made no explicit choice, guarded with `:root:not([data-theme="light"])` so an
-explicit light choice still wins.
-
-Adding a theme is one CSS block. No TypeScript changes, no component changes,
-no build changes — which is the actual test of whether this worked.
+A future theme (`mono`, a community theme) would still be one CSS block
+overriding the semantic layer, same as before — no TypeScript changes, no
+component changes, no build changes. But nothing opts into light: it looked
+worse than dark and was removed.
 
 ## Per-player colour
 
@@ -86,5 +72,5 @@ spacing — those scale fluidly with `clamp()`.
 - Every animation respects `prefers-reduced-motion`.
 - `env(safe-area-inset-*)` respected everywhere — a life total behind a notch is
   the kind of bug that makes people uninstall.
-- Dark theme is the default. People play Magic in dim rooms, and a white screen
-  at a table at midnight is hostile.
+- Dark theme is the only theme. People play Magic in dim rooms, and a white
+  screen at a table at midnight is hostile.
