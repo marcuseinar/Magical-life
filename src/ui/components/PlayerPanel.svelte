@@ -551,8 +551,8 @@
 
   .zone__glyph {
     font-family: var(--font-display);
-    font-size: clamp(1rem, 6cqmin, 2.5rem);
-    font-weight: 700;
+    font-size: clamp(1.25rem, 7.5cqmin, 3rem);
+    font-weight: 900;
     line-height: 1;
     color: var(--text-muted);
     opacity: 0.85;
