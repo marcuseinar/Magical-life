@@ -5,6 +5,7 @@
 
   let {
     players,
+    seats = players,
     firstPlayer = null,
     spotlight = null,
     celebrating = null,
@@ -16,7 +17,15 @@
     onRename,
     onElimination
   }: {
+    /** Who gets a panel. Everyone at the table, unless the opponent bar has
+     *  taken the rest of them off the board — see `seats` below. */
     players: readonly PlayerState[];
+    /** Every seat in the game, for commander-damage attribution: who a loss
+     *  can be blamed on. Defaults to `players`, which is every seat whenever
+     *  the board itself is showing the whole table. Passed separately once
+     *  it is not — an opponent moved to the bar can still have dealt the
+     *  damage a local panel is asking who dealt it to. */
+    seats?: readonly PlayerState[];
     firstPlayer?: PlayerId | null;
     /** Seat index under the travelling spotlight, if one is running. */
     spotlight?: number | null;
@@ -35,10 +44,6 @@
   } = $props();
 
   /* One and two players read best stacked; three and up want a grid. */
-  /* Every seat, in order: the panel needs them all, since a stolen commander
-     can hit its own owner. */
-  const seats = $derived(players);
-
   const columns = $derived(players.length <= 2 ? 1 : 2);
   const rows = $derived(Math.ceil(players.length / columns));
 

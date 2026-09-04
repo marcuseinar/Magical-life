@@ -96,8 +96,10 @@
       <ul class="players">
         {#each store.state?.players ?? [] as player (player.id)}
           <li>
-            <button class="row" onclick={() => invite(player.id)}>
-              Invite {player.name}
+            <!-- An already-claimed seat has nothing left to invite: another
+                 device is already playing it. -->
+            <button class="row" disabled={player.claimed} onclick={() => invite(player.id)}>
+              {player.claimed ? `${player.name} — joined` : `Invite ${player.name}`}
             </button>
           </li>
         {/each}
@@ -255,6 +257,11 @@
     background: var(--surface-sunken);
     color: var(--text-primary);
     text-align: left;
+  }
+
+  .row:disabled {
+    color: var(--text-muted);
+    opacity: 0.6;
   }
 
   .short-code {
