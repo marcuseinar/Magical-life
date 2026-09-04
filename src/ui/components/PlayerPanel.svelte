@@ -550,12 +550,12 @@
   }
 
   .zone__glyph {
-    align-self: end;
-    padding-bottom: var(--space-4);
     font-family: var(--font-display);
     font-size: clamp(1rem, 6cqmin, 2.5rem);
+    font-weight: 700;
     line-height: 1;
-    opacity: 0.5;
+    color: var(--text-muted);
+    opacity: 0.85;
   }
 
   /*
