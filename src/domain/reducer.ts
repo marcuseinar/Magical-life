@@ -10,14 +10,26 @@ const zeroCounters = (): Record<CounterKind, number> =>
 const noFlagHolders = (): Record<FlagKind, PlayerId | null> =>
   Object.fromEntries(FLAG_KINDS.map((flag) => [flag, null])) as Record<FlagKind, PlayerId | null>;
 
-const seatPlayer = (seat: PlayerSeat, life: number): PlayerState => ({
+const seatPlayer = (seat: PlayerSeat, life: number, claimed: boolean): PlayerState => ({
   ...seat,
   life,
   counters: zeroCounters(),
   commanderDamage: {},
   eliminated: false,
-  claimed: false
+  claimed
 });
+
+/**
+ * Who is playing which seat, carried across the game boundary.
+ *
+ * A claim is not a fact about a game — it says which device is playing a
+ * seat, and a rematch re-seats the same ids without moving anybody's phone.
+ * Reset it and every joined seat lands back on the host's screen, playable
+ * from the wrong device. A genuinely new game seats new ids, so nothing
+ * carries and it still starts unclaimed.
+ */
+const claimsHeld = (state: GameState | null): ReadonlySet<PlayerId> =>
+  new Set((state?.players ?? []).filter((player) => player.claimed).map((player) => player.id));
 
 /** Apply `change` to the named player and leave everyone else exactly as they were. */
 const mapPlayer = (
@@ -42,9 +54,12 @@ const mapPlayer = (
  */
 export function reduce(state: GameState | null, event: GameEvent): GameState | null {
   if (event.kind === 'game/started') {
+    const claimed = claimsHeld(state);
     return {
       config: event.config,
-      players: event.players.map((seat) => seatPlayer(seat, event.config.startingLife)),
+      players: event.players.map((seat) =>
+        seatPlayer(seat, event.config.startingLife, claimed.has(seat.id))
+      ),
       flags: noFlagHolders(),
       firstPlayer: null,
       ended: false,

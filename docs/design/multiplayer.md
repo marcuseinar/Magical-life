@@ -178,6 +178,25 @@ and one device is playing all four, which is what `localSeats` already
 returns for an author matching no seat. The lock only appears once a second
 device is actually in the game — the case the confusion was ever about.
 
+### A claim outlives the game it was made in
+
+`game/started` resets the game — totals, counters, eliminations, who went
+first — and a claim is none of those. It says which device is playing a
+seat, and a rematch (`src/application/usecases/rematch.ts`) re-seats the
+same player ids without anybody putting their phone down. So `reduce`
+carries `claimed` across a `game/started` for any seat id already at the
+table, and only for those: a genuinely new game seats freshly minted ids,
+which match nothing, so it still starts unclaimed exactly as before.
+
+Reset it instead and the host's next game silently absorbs the table —
+every joined seat comes back as a full panel on the host's own screen,
+editable from a phone that is not playing it, and the board grows a player
+between two games of the same match. The joiner's screen looks fine
+throughout, because a joiner's author id _is_ a seat and `localSeats`
+matches it directly; it is the host, whose author id matches no seat and
+therefore falls through to "everything nobody has claimed", that sees the
+whole table return.
+
 ## The opponent bar
 
 The moment anyone has actually joined a seat, that seat leaves the grid —

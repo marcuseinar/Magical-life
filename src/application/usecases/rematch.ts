@@ -17,7 +17,8 @@ export const rematch =
     await deps.session.record({
       kind: 'game/started',
       config: state.config,
-      // Seats keep their identity, so names and colours survive the rematch.
+      // Seats keep their identity, so names, colours — and which device is
+      // playing which seat — all survive the rematch. See `reduce`.
       players: state.players.map(({ id, name, colour }) => ({ id, name, colour }))
     });
     return ok(undefined);

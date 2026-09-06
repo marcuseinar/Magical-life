@@ -319,6 +319,16 @@ describe('use cases', () => {
       expect(session.state?.firstPlayer).toBeNull();
     });
 
+    it('leaves a joined device playing its own seat and nothing else', async () => {
+      // The seat is claimed on the joiner's phone; the rematch is the host's.
+      await claimSeat({ session })(seats[1]!);
+      await rematch({ session })();
+
+      expect(session.state?.players[1]?.claimed).toBe(true);
+      // So the host still plays only the seat nobody has joined.
+      expect(localSeats(session.state!, HOST).map((p) => p.id)).toEqual([seats[0]]);
+    });
+
     it('appends rather than erasing — the finished game stays in the log', async () => {
       await applyLifeDelta({ session })(seats[0]!, -25);
       const before = session.events.length;
