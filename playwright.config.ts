@@ -22,8 +22,12 @@ export default defineConfig({
     trace: 'on-first-retry'
   },
   projects: [
+    // Dark is the only theme, so both projects render identically regardless
+    // of this — pinned explicitly rather than left to Playwright's own
+    // default (light) so nothing here implies a theme split that no longer
+    // exists.
     { name: 'mobile-chrome', use: { ...devices['Pixel 7'], colorScheme: 'dark', ...chromium } },
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], colorScheme: 'light', ...chromium } },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], colorScheme: 'dark', ...chromium } },
     ...webkit
   ],
   webServer: [
