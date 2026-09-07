@@ -110,8 +110,8 @@ which is also the thing Clean Architecture is supposed to stop us doing.
 | Styling              | Plain CSS + custom-property design tokens     | No utility framework — see `docs/theming.md` |
 | State                | Svelte stores over a pure reducer             | Domain state is framework-free               |
 | Persistence          | IndexedDB via `idb`, `localStorage` for prefs | Offline first                                |
-| P2P                  | WebRTC `RTCDataChannel`                       | See `docs/design/multiplayer.md`             |
-| Signalling           | Cloudflare Worker + Durable Object            | Plus a QR-code offline path                  |
+| P2P                  | WebRTC `RTCDataChannel`                       | See `docs/design/multiplayer.md`, ADR 0004   |
+| Signalling           | Cloudflare Worker + Durable Object            | Plus a QR-code offline path; see ADR 0004    |
 | Native shell         | Capacitor                                     | Wraps the same static build                  |
 | Unit/component tests | Vitest + `@testing-library/svelte`            |                                              |
 | Property/fuzz tests  | `fast-check`                                  | Against the reducer and pairing              |
