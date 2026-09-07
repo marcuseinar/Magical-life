@@ -2,8 +2,8 @@
  * Semantic tokens. Components reference only these, never the palette, so a new
  * theme is one block of overrides and no component changes at all.
  *
- * Dark is the base: people play Magic in dim rooms, and a white screen at a
- * table at midnight is hostile. Light is an explicit opt-in.
+ * Dark is the only theme: people play Magic in dim rooms, and a white screen
+ * at a table at midnight is hostile.
  */
 
 :root {
@@ -122,47 +122,6 @@
   --player-ink: var(--mana-multicolour-ink);
   --player-lit: var(--mana-multicolour-lit);
   --player-glow: var(--mana-multicolour-glow);
-}
-
-/* Explicit light choice, and the system preference when no choice was made. */
-:root[data-theme='light'],
-:root[data-theme='light'] [data-colour] {
-  --surface-page: var(--parchment-200);
-  --surface-page-glow: #fffaea;
-  --surface-panel: var(--parchment-100);
-  --surface-raised: #fff;
-  --surface-sunken: var(--parchment-200);
-  --surface-scrim: rgb(60 52 34 / 45%);
-  --surface-pressed: rgb(0 0 0 / 8%);
-  --frame-edge: rgb(40 32 16 / 70%);
-  --frame-highlight: rgb(255 255 255 / 60%);
-  --text-primary: #241d0e;
-  --text-muted: #574c33;
-  --text-faint: #5f5540;
-  --text-gold: var(--bronze-600);
-  --player-ink: transparent;
-  --player-lit: transparent;
-
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    --surface-page: var(--parchment-200);
-    --surface-page-glow: #fffaea;
-    --surface-panel: var(--parchment-100);
-    --surface-raised: #fff;
-    --surface-sunken: var(--parchment-200);
-    --surface-scrim: rgb(60 52 34 / 45%);
-    --frame-edge: rgb(40 32 16 / 70%);
-    --frame-highlight: rgb(255 255 255 / 60%);
-    --text-primary: #241d0e;
-    --text-muted: #574c33;
-    --text-faint: #5f5540;
-    --text-gold: var(--bronze-600);
-
-    color-scheme: light;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
