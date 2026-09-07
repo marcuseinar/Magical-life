@@ -24,6 +24,7 @@ npm run lint           # eslint, prettier, stylelint and the dependency rule
 - [ADR 0001](docs/adr/0001-tech-stack.md) — why Svelte/TypeScript over Rust/WASM
 - [ADR 0002](docs/adr/0002-state-and-sync-model.md) — event log, ownership, merge
 - [ADR 0003](docs/adr/0003-identity-and-auth.md) — passkeys and email links
+- [ADR 0004](docs/adr/0004-p2p-transport-and-signalling.md) — QR handshake, short-code signalling, relay fallback
 - [Interaction design](docs/design/interaction.md) — the two life-change styles
 - [Multiplayer](docs/design/multiplayer.md) — P2P, commander damage
 - [Tournaments](docs/design/tournaments.md) — formats, pairing, Challonge

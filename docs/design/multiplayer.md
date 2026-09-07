@@ -1,5 +1,9 @@
 # Multiplayer — connecting players without a dedicated server
 
+The three connection paths below, and the order they're tried in, are a
+structural decision recorded in [ADR 0004](../adr/0004-p2p-transport-and-signalling.md).
+This document is the detail of how each one works.
+
 ## What "no server" actually means
 
 WebRTC gives you a direct data channel between two browsers. It does not give
