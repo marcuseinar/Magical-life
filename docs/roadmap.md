@@ -82,14 +82,19 @@ an offer, paste a reply, no QR, no server — proven end to end with two
 independent browser contexts converging on the same game
 (`tests/e2e/table-connection.spec.ts`); the Cloudflare Worker and Durable
 Object for short-code signalling (`workers/signalling/`), independently
-deployable and tested against the real Workers runtime; and the client wiring
+deployable and tested against the real Workers runtime; the client wiring
 that connects the two — a short code, a QR, and a shareable link as the
 default join path, falling back to the manual code without asking anyone to
-read an error if the worker can't be reached.
+read an error if the worker can't be reached; and the QR handshake path
+itself (ADR 0004's path 1) — a real camera scanner
+(`src/adapters/platform/cameraQrScanner.ts`, `getUserMedia` + `jsQR`) reading
+the manual code's offer/reply as a QR instead of a paste, on both the host
+and joiner side, proven in `tests/e2e/qr-handshake.spec.ts` against a real
+`<video>` element fed by a synthesised camera stream. See
+`docs/design/multiplayer.md` for why the QR turned out denser than the
+spike's original estimate.
 
-Not started: the QR handshake path (encoding an offer straight into a QR code
-with no server involved, for when the network can't reach the worker), the
-relay fallback, and the connection-quality chip.
+Not started: the relay fallback and the connection-quality chip.
 
 ## M4 — Native shells
 

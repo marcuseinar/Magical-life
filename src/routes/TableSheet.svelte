@@ -6,10 +6,13 @@
   import { defaultSignalling } from '$lib/signalling';
   import { resolve } from '$app/paths';
   import QrCode from '$ui/components/QrCode.svelte';
+  import QrScanSheet from '$ui/components/QrScanSheet.svelte';
+  import { createCameraQrScanner } from '$adapters/platform/cameraQrScanner';
 
   let { store, onclose }: { store: GameStore; onclose: () => void } = $props();
 
   const signalling = defaultSignalling();
+  const scanner = createCameraQrScanner();
 
   type Active =
     | { readonly mode: 'code'; readonly playerId: PlayerId; readonly invite: TableInviteByCode }
@@ -19,6 +22,7 @@
   let replyDraft = $state('');
   let replyError = $state(false);
   let copied = $state(false);
+  let scanning = $state(false);
 
   function invite(playerId: PlayerId) {
     active = { mode: 'code', playerId, invite: inviteToTableByCode(store, playerId, signalling) };
@@ -61,15 +65,25 @@
     }
   }
 
-  async function submitReply(event: SubmitEvent) {
-    event.preventDefault();
+  async function acceptReply(reply: string) {
     if (active === null || active.mode !== 'manual') return;
     try {
-      await active.invite.accept(replyDraft);
+      await active.invite.accept(reply);
       replyError = false;
     } catch {
       replyError = true;
     }
+  }
+
+  function submitReply(event: SubmitEvent) {
+    event.preventDefault();
+    void acceptReply(replyDraft);
+  }
+
+  function scanReply(text: string) {
+    scanning = false;
+    replyDraft = text;
+    void acceptReply(text);
   }
 
   function close() {
@@ -80,7 +94,10 @@
 
 <svelte:window
   onkeydown={(event) => {
-    if (event.key === 'Escape') close();
+    // While the scan sheet is open, its own Escape handler closes just
+    // that — closing the table sheet underneath it too would take the
+    // player back further than one Escape should.
+    if (event.key === 'Escape' && !scanning) close();
   }}
 />
 
@@ -160,6 +177,12 @@
       {#if active.invite.code === null}
         <p class="body" role="status">Preparing a code…</p>
       {:else}
+        <!-- No server touches this, either direction — the QR carries the
+             offer itself, not a link, so this works with no network at
+             all (ADR 0004's path 1). -->
+        <div class="qr-row">
+          <QrCode value={active.invite.code} />
+        </div>
         <div class="code-row">
           <textarea class="code" readonly value={active.invite.code} rows="3"></textarea>
           <button class="action" type="button" onclick={() => copyText(active!.invite.code!)}>
@@ -182,6 +205,9 @@
               That did not look like a reply code. Check it was copied in full.
             </p>
           {/if}
+          <button class="fallback" type="button" onclick={() => (scanning = true)}>
+            Scan their reply instead
+          </button>
           <div class="actions">
             <button class="action" type="button" onclick={close}>Cancel</button>
             <button class="action action--go" type="submit" disabled={replyDraft.trim() === ''}>
@@ -193,6 +219,16 @@
     {/if}
   </div>
 </div>
+
+{#if scanning}
+  <QrScanSheet
+    {scanner}
+    title="Scan their reply"
+    body="Point the camera at their code."
+    onscan={scanReply}
+    onclose={() => (scanning = false)}
+  />
+{/if}
 
 <style>
   .scrim {

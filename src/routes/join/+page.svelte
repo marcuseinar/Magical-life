@@ -9,9 +9,13 @@
   import type { Invitation, TableJoin, TableJoinByCode } from '$lib/tableConnection.svelte';
   import type { OfferPayload } from '$application/ports/signalling';
   import { defaultSignalling } from '$lib/signalling';
+  import { createCameraQrScanner } from '$adapters/platform/cameraQrScanner';
+  import QrCode from '$ui/components/QrCode.svelte';
+  import QrScanSheet from '$ui/components/QrScanSheet.svelte';
   import GameScreen from '../GameScreen.svelte';
 
   const signalling = defaultSignalling();
+  const scanner = createCameraQrScanner();
 
   type Stage =
     | { readonly kind: 'entry'; readonly manual: boolean }
@@ -39,6 +43,7 @@
   let joinedCode = $state<TableJoinByCode | null>(null);
   let joinedManual = $state<TableJoin | null>(null);
   let copied = $state(false);
+  let scanning = $state(false);
   let triedLinkCode = false;
 
   async function lookUpShortCode(code: string) {
@@ -82,6 +87,12 @@
     }
     manualError = false;
     stage = { kind: 'confirm-manual', invitation, draftCode: manualDraft };
+  }
+
+  function scanManualCode(text: string) {
+    scanning = false;
+    manualDraft = text;
+    readManualCode();
   }
 
   function beginJoinCode() {
@@ -186,6 +197,9 @@
           Continue
         </button>
       </form>
+      <button class="fallback" type="button" onclick={() => (scanning = true)}>
+        Scan their code instead
+      </button>
       <button
         class="fallback"
         type="button"
@@ -228,6 +242,11 @@
         {#if joinedManual.reply === null}
           <p class="body" role="status">Preparing a reply…</p>
         {:else}
+          <!-- Lets the host scan this back rather than type it, the same
+               way their own offer reached this device (ADR 0004's path 1). -->
+          <div class="qr-row">
+            <QrCode value={joinedManual.reply} />
+          </div>
           <div class="code-row">
             <textarea class="code" readonly value={joinedManual.reply} rows="4"></textarea>
             <button class="action" type="button" onclick={copyReply}>
@@ -239,6 +258,16 @@
       </div>
     {/if}
   </main>
+{/if}
+
+{#if scanning}
+  <QrScanSheet
+    {scanner}
+    title="Scan their code"
+    body="Point the camera at the code they showed you."
+    onscan={scanManualCode}
+    onclose={() => (scanning = false)}
+  />
 {/if}
 
 <style>
@@ -321,6 +350,14 @@
     /* stylelint-disable-next-line property-no-vendor-prefix -- iOS Safari still needs it */
     -webkit-user-select: text;
     user-select: text;
+  }
+
+  .qr-row {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: white;
   }
 
   .code-row {

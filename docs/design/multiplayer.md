@@ -27,18 +27,41 @@ and no server is involved for the rest of the game.
 Players at a Magic table are physically together, which is a huge advantage most
 apps don't have. Use it:
 
-- Host taps **Start table**. The device creates an offer, gathers ICE candidates
-  with `iceCandidatePoolSize` set so the SDP is complete before display, strips
-  the SDP down to the fields that matter, compresses it, and renders a QR code.
-- Joiner scans it, produces an answer, and shows their own QR back.
-- Host scans that. Channel open.
+- Host taps **Invite**, then **Trouble connecting? Use a code you paste
+  instead** — the manual-code path below, which this path is built on rather
+  than beside. The device creates an offer with the same bounded-ICE-gathering
+  mechanism every path shares, and shows it two ways at once: the same text a
+  paste needs, and a QR of that exact text.
+- Joiner scans it (**Scan their code instead**, on the same manual-entry
+  screen the paste box lives on) instead of typing it in, and is shown who
+  they're about to join exactly as a pasted code would show them — decoding
+  is not treated as more trustworthy than pasting.
+- The joiner's reply is shown the same two ways. The host scans it back
+  (**Scan their reply instead**) or pastes it — either reaches
+  `WebRtcOfferer.accept()` identically. Channel open.
 
-A data-channel-only offer, measured across three runs of
-`spikes/webrtc-handshake/`, lands at ~585 bytes raw and ~427 deflate-compressed
-— under the original 600–900 byte estimate, and comfortably inside a QR code's
-binary capacity at error correction level L. No codec trimming needed: creating
-a data channel with no media tracks never puts audio/video lines in the SDP to
-begin with. Two scans per joining player.
+**Built**, in `src/adapters/platform/cameraQrScanner.ts` (`getUserMedia` +
+`jsQR`, proven in `tests/e2e/qr-handshake.spec.ts` against a real `<video>`
+fed by a synthesised camera stream) and `src/ui/components/QrScanSheet.svelte`
+(camera preview, permission-denied messaging, Escape/Cancel always releasing
+the camera). `BarcodeDetector` was considered and rejected: Safari does not
+implement it, and this app cannot afford a QR path that only works on some
+phones.
+
+**The QR is denser than the original estimate, because it carries more than
+the SDP.** That estimate — ~585 bytes raw, ~427 deflate-compressed, from
+`spikes/webrtc-handshake/` — measured the data-channel offer alone.
+`connectionCode.ts`'s actual wire format is that SDP plus the invited seat's
+id and name, JSON-wrapped and base64'd with **no compression** — a deliberate
+choice there, for paste-friendliness, made before this path existed. A real
+offer measured through this path lands around 950–1000 characters, a QR of
+roughly 117 modules (version ~24) — comfortably within a QR code's capacity,
+but dense enough that decoding it back through a _synthesised_ camera frame
+in a test needed an implausibly large canvas to survive resampling reliably.
+Real camera optics are not usually this exposed to that loss, but it is
+untested against one; if scanning a real offer turns out harder in practice
+than a short code suggests, trimming or compressing the SDP the way the
+spike did is the fix, not building a second encoding.
 
 **Gathering ICE candidates before showing the code needs a timeout, not an
 unqualified wait.** The spike found that when the STUN server never answers —
@@ -55,7 +78,9 @@ all, which the spike confirmed still opens a channel on its own.
 Honest downsides: two scans is more friction than a code, and it scales
 awkwardly to a 4-player pod (the host scans three times). Mitigated by having
 the host relay peers to each other once the first channel is up — only the host
-does QR, and joiners two and three are introduced over the existing mesh.
+does QR, and joiners two and three are introduced over the existing mesh. That
+relaying is not built yet; today each seat is invited from the host in turn,
+same as the manual-code path.
 
 **This path is offline-capable**, which matters: game shops have bad signal.
 
@@ -99,11 +124,12 @@ Because `Transport` is a port (see `docs/architecture.md`), this is one more
 adapter. The UI shows a small connection-quality chip — direct, relayed, or
 offline — and nothing else in the app changes.
 
-## What is actually built today: manual-code join
+## What is actually built today: manual-code join, pasted or scanned
 
 The three paths above are the target shape. Before any of the QR or
 Cloudflare signalling layers, there is a fourth, deliberately smaller path
-already shipped: paste-a-code, with no server and no camera.
+already shipped: no server, and — since path 1 above landed — no requirement
+to type anything either, since the same code can be scanned instead.
 
 - The host taps **Connect a table**, picks which seat is joining, and the
   device runs `offerConnection()` (`src/adapters/transport/webRtcTransport.ts`)
@@ -111,12 +137,17 @@ already shipped: paste-a-code, with no server and no camera.
   typed `Transport` port adapter rather than spike code. The offer, plus the
   target seat's id and name, is base64-encoded (`src/ui/interaction/connectionCode.ts`)
   into one code meant to be copied and sent by hand — a text message, read
-  aloud, whatever is easiest.
-- The joiner opens `/join`, pastes it, and is shown which seat they are about
-  to become before committing to anything (`whoIsThisFor`). Accepting runs
-  `answerConnection`, encodes the answer the same way, and shows it as the
-  reply to send back.
-- The host pastes the reply and taps **Connect**. Once the data channel
+  aloud, whatever is easiest — and shown as a QR alongside it for scanning
+  instead.
+- The joiner opens `/join`, and either pastes it and taps **Continue** or
+  scans it — which reads straight into `whoIsThisFor` with no separate tap,
+  same reasoning as the reply below — and is shown which seat they are about
+  to become before committing to anything. Accepting runs `answerConnection`,
+  encodes the answer the same way, and shows it — again as text and as a
+  QR — as the reply to send back.
+- The host pastes the reply and taps **Connect**, or scans it — which accepts
+  it immediately, with no separate tap, since a decoded reply needs no
+  reviewing the way a mistyped paste might. Once the data channel
   opens, the host sends its entire event history as the joiner's first batch
   — a joiner's "catch up" and an ordinary life change are the same mechanism,
   in `connectTransport` (`src/lib/tableConnection.svelte.ts`): whatever this
