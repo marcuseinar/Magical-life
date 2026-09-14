@@ -92,9 +92,16 @@ the manual code's offer/reply as a QR instead of a paste, on both the host
 and joiner side, proven in `tests/e2e/qr-handshake.spec.ts` against a real
 `<video>` element fed by a synthesised camera stream. See
 `docs/design/multiplayer.md` for why the QR turned out denser than the
-spike's original estimate.
+spike's original estimate; and the connection-quality chip
+(`src/ui/components/ConnectionChip.svelte`) — "Direct connection" once a
+tracked transport connects, "Connection lost" the moment any tracked
+transport has ever dropped, driven by `GameStore.linkState`
+(`src/lib/gameStore.svelte.ts`) and proven fast and deterministically at the
+unit level against a fake `Transport` (`gameStore.svelte.test.ts`), since a
+real peer's ICE failure has no bounded timeout to wait on in an e2e test the
+way the connecting phase does.
 
-Not started: the relay fallback and the connection-quality chip.
+Not started: the relay fallback.
 
 ## M4 — Native shells
 

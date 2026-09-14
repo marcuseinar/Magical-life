@@ -14,6 +14,7 @@
   import GameBoard from '$ui/components/GameBoard.svelte';
   import NewGameSheet from '$ui/components/NewGameSheet.svelte';
   import OpponentBar from '$ui/components/OpponentBar.svelte';
+  import ConnectionChip from '$ui/components/ConnectionChip.svelte';
   import TableSheet from './TableSheet.svelte';
 
   let { store }: { store: GameStore } = $props();
@@ -146,7 +147,14 @@
 
     <div class="playfield">
       {#if showOpponentBar}
-        <OpponentBar players={remoteList} />
+        <div class="table-status">
+          {#if store.linkState !== null}
+            <ConnectionChip state={store.linkState} />
+          {/if}
+          <div class="opponents">
+            <OpponentBar players={remoteList} />
+          </div>
+        </div>
       {/if}
       <div class="board-slot">
         <GameBoard
@@ -274,6 +282,21 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+
+  .table-status {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    padding-left: var(--space-2);
+  }
+
+  /* The bar is the one part of this row allowed to shrink and scroll on its
+     own; the chip next to it stays fixed-size and always visible. */
+  .opponents {
+    flex: 1;
+    min-width: 0;
   }
 
   .board-slot {

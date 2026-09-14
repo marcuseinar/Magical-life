@@ -154,12 +154,35 @@ the strict sense, but it is a few kilobytes per game and it only engages when th
 preferred path is impossible.
 
 Because `Transport` is a port (see `docs/architecture.md`), this is one more
-adapter. The UI shows a small connection-quality chip — direct, relayed, or
-offline — and nothing else in the app changes.
+adapter — not built yet. If a data channel can't be opened at all today, the
+join simply doesn't complete; there is no fallback beyond retrying.
 
-**Not built today.** No relay-of-events adapter exists yet, and no
-connection-quality chip. If a data channel can't be opened at all today, the
-join simply doesn't complete — there is no fallback beyond retrying.
+**The connection-quality chip is built**, ahead of the relay adapter it was
+originally scoped alongside — it doesn't need one to be useful, since a
+direct connection can be lost with nothing to fall back to just as easily as
+a relayed one could be. `GameStore.linkState`
+(`src/lib/gameStore.svelte.ts`) tracks every transport `connectTransport` is
+ever handed (`$lib/tableConnection.svelte.ts`, so host and joiner both get it
+for free) and reports `'direct'` once any is connected, `'lost'` the moment
+any has ever dropped — sticky for the rest of that `GameStore`'s life, since
+nothing here reconnects a specific dropped transport, so "lost" is an honest
+record that something already went wrong, not a live readout that might
+recover. `ConnectionChip.svelte` renders that as a plain status pill or, for
+"lost", a `role="alert"` — a stale opponent panel is a correctness problem
+worth interrupting for, not a passing mention. Sitting in `GameScreen.svelte`
+next to the opponent bar, so it only ever shows once a table is actually
+connected.
+
+The aggregation itself is proven exhaustively and fast against a fake
+`Transport` (`gameStore.svelte.test.ts`); only the "shows 'direct' once a
+real connection is up" wiring is proven end to end
+(`tests/e2e/connection-quality.spec.ts`). The "lost" transition deliberately
+is not — a real peer's ICE failure has no bounded timeout to wait on the way
+the app's own _connecting_ phase does (this same document, path 1), so an
+e2e test for it would be trading a fast, deterministic unit test for a slow,
+load-sensitive one proving the same logic twice. A relayed state will need
+its own value once path 3 lands; nothing about the aggregation rule above
+changes to add one.
 
 ## What is actually built today: manual-code join, pasted or scanned
 

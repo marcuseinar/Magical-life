@@ -20,6 +20,7 @@ import { systemClock } from '$adapters/platform/systemClock';
 import { systemRng } from '$adapters/platform/systemRng';
 import { createIndexedDbEventLog } from '$adapters/storage/indexedDbEventLog';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
+import type { Transport } from '$application/ports/transport';
 import type { GameEvent } from '$domain/events';
 import { playerId } from '$domain/ids';
 import type { PlayerId } from '$domain/ids';
@@ -65,6 +66,18 @@ export function createGameStore(
   let events = $state<readonly GameEvent[]>([]);
   let ready = $state(false);
 
+  /*
+   * The connection-quality chip's data: how many tracked transports are
+   * currently connected, and whether any tracked transport has ever dropped
+   * after being connected. `lostLinks` only ever increases — nothing
+   * reconnects a specific dropped transport, so once one has gone down this
+   * game is honestly reporting "something already went wrong", not
+   * "everything is fine right now", even if a later, different connection
+   * happens to be up.
+   */
+  let connectedLinks = $state(0);
+  let lostLinks = $state(0);
+
   const sync = () => {
     state = session.state;
     events = session.events;
@@ -79,6 +92,14 @@ export function createGameStore(
     },
     get ready() {
       return ready;
+    },
+    /** `null` before any table connection has ever been tracked (solo and
+     *  shared-device play never call `trackConnection` at all). `'direct'`
+     *  once at least one tracked transport is connected and none has ever
+     *  dropped; `'lost'` the moment any has. */
+    get linkState(): 'direct' | 'lost' | null {
+      if (connectedLinks === 0 && lostLinks === 0) return null;
+      return lostLinks > 0 ? 'lost' : 'direct';
     },
     /** Which player this device authors events as — see `localSeats`, which
      *  is what turns this into "which seats can I actually play". */
@@ -167,6 +188,27 @@ export function createGameStore(
     async merge(incoming: readonly GameEvent[]) {
       await session.merge(incoming);
       sync();
+    },
+
+    /** Feeds one transport's connection health into `linkState`, for as long
+     *  as that transport lasts. Called alongside `connectTransport`
+     *  (`$lib/tableConnection.svelte.ts`), never instead of it — the two
+     *  track the same connection for different reasons, one for the game
+     *  log, one for this chip. */
+    trackConnection(transport: Transport) {
+      let wasConnected = false;
+      const observe = (next: Transport['state']) => {
+        if (next === 'connected' && !wasConnected) {
+          wasConnected = true;
+          connectedLinks++;
+        } else if (next !== 'connected' && wasConnected) {
+          wasConnected = false;
+          connectedLinks--;
+          lostLinks++;
+        }
+      };
+      observe(transport.state);
+      transport.onStateChange(observe);
     }
   };
 }
