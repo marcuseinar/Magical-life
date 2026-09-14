@@ -82,13 +82,31 @@ does QR, and joiners two and three are introduced over the existing mesh. That
 relaying is not built yet; today each seat is invited from the host in turn,
 same as the manual-code path.
 
-**This path is offline-capable**, which matters: game shops have bad signal.
+A second, separate QR also exists in the app (`TableSheet.svelte`, rendered
+by `QrCode.svelte`): the short-code path's own join link, scanned by the
+phone's own camera app rather than this in-app scanner, and needing the
+Cloudflare Worker reachable — not this path, just another use of the same
+`QrCode.svelte` component.
+
+**"Offline-capable" means no internet, not no network.** WebRTC still needs
+some IP path between the two devices. A local WiFi router both phones have
+joined is enough — even one whose own uplink to the internet is dead, since
+host candidates travel over the LAN and never need to leave the building.
+With no shared network of any kind, there is no path this app (or any
+browser app) can create on its own: a browser cannot stand up a hotspot or
+do WiFi Direct the way a native OS feature like AirDrop can. Manually
+turning one phone into a hotspot and joining the other to it would supply
+exactly the network this path needs — it just cannot be automated from
+inside the app.
 
 ### 2. Short-code signalling — the default
 
-A Cloudflare Worker plus one Durable Object per table. **Built**, in
-`workers/signalling/` — its own README covers deploying it. Not yet wired
-into the client; see that README's "Wiring it into the app".
+A Cloudflare Worker plus one Durable Object per table, in
+`workers/signalling/` — its own README covers deploying it. **Built and
+wired into the client**: this is the path `TableSheet.svelte` actually
+offers first (`inviteToTableByCode`, `src/lib/tableConnection.svelte.ts`),
+falling back to the manual-paste code below only when a player chooses to,
+typically because the worker can't be reached.
 
 - Host gets a 4-character room code (`XKCD`). It is a room key, not a secret
   — codes exclude `0`/`O` and `1`/`I`/`L`, so it is also readable aloud
@@ -124,12 +142,17 @@ Because `Transport` is a port (see `docs/architecture.md`), this is one more
 adapter. The UI shows a small connection-quality chip — direct, relayed, or
 offline — and nothing else in the app changes.
 
+**Not built today.** No relay-of-events adapter exists yet, and no
+connection-quality chip. If a data channel can't be opened at all today, the
+join simply doesn't complete — there is no fallback beyond retrying.
+
 ## What is actually built today: manual-code join, pasted or scanned
 
-The three paths above are the target shape. Before any of the QR or
-Cloudflare signalling layers, there is a fourth, deliberately smaller path
-already shipped: no server, and — since path 1 above landed — no requirement
-to type anything either, since the same code can be scanned instead.
+Path 2 above is shipped and is the default a player actually sees. This
+section covers its fallback specifically — for when the short-code path
+can't be used, or a player chooses it directly — and, since path 1 above
+landed, that fallback no longer means typing: the same code can be scanned
+instead of pasted, on both ends of the exchange.
 
 - The host taps **Connect a table**, picks which seat is joining, and the
   device runs `offerConnection()` (`src/adapters/transport/webRtcTransport.ts`)
