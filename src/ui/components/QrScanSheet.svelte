@@ -1,19 +1,23 @@
-<script lang="ts">
+<script lang="ts" module>
   import type { QrScanner } from '$application/ports/scanner';
 
+  export type QrScanSheetProps = {
+    scanner: QrScanner;
+    title?: string;
+    body?: string;
+    onscan: (text: string) => void;
+    onclose: () => void;
+  };
+</script>
+
+<script lang="ts">
   let {
     scanner,
     title = 'Scan a code',
     body = 'Point the camera at the code.',
     onscan,
     onclose
-  }: {
-    scanner: QrScanner;
-    title?: string;
-    body?: string;
-    onscan: (text: string) => void;
-    onclose: () => void;
-  } = $props();
+  }: QrScanSheetProps = $props();
 
   let video = $state<HTMLVideoElement | null>(null);
   let cameraError = $state(false);

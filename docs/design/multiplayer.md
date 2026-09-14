@@ -45,8 +45,23 @@ apps don't have. Use it:
 fed by a synthesised camera stream) and `src/ui/components/QrScanSheet.svelte`
 (camera preview, permission-denied messaging, Escape/Cancel always releasing
 the camera). `BarcodeDetector` was considered and rejected: Safari does not
-implement it, and this app cannot afford a QR path that only works on some
-phones.
+implement it, and — checked directly against the Chromium this app's own e2e
+suite uses — neither does desktop Linux Chrome, so relying on it would have
+meant the feature is both untestable in CI and broken on more than "just
+Safari" in practice.
+
+`jsQR` alone is heavier than the solo route's entire 60 kB bundle budget
+(`docs/architecture.md`), so `src/lib/scanner.ts` loads it and
+`QrScanSheet.svelte` with a dynamic `import()`, fetched only once a player
+taps a **Scan** button — nobody pays for it who never asks for it, the same
+principle as the route-level splitting between solo and multiplayer, applied
+one level deeper. `scripts/check-bundle-size.mjs` was rewritten alongside
+this to actually measure that: it now walks the Vite manifest from the solo
+route's real entry points, following only static imports, rather than
+summing every chunk the build ever emits regardless of which route loads
+it — the old version would have passed or failed by accident depending on
+what else happened to exist in the build, not on what a solo player's
+browser actually fetches.
 
 **The QR is denser than the original estimate, because it carries more than
 the SDP.** That estimate — ~585 bytes raw, ~427 deflate-compressed, from

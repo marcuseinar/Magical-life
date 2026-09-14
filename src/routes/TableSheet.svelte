@@ -4,15 +4,13 @@
   import type { TableInvite, TableInviteByCode } from '$lib/tableConnection.svelte';
   import type { PlayerId } from '$domain/ids';
   import { defaultSignalling } from '$lib/signalling';
+  import { loadQrScanSheet } from '$lib/scanner';
   import { resolve } from '$app/paths';
   import QrCode from '$ui/components/QrCode.svelte';
-  import QrScanSheet from '$ui/components/QrScanSheet.svelte';
-  import { createCameraQrScanner } from '$adapters/platform/cameraQrScanner';
 
   let { store, onclose }: { store: GameStore; onclose: () => void } = $props();
 
   const signalling = defaultSignalling();
-  const scanner = createCameraQrScanner();
 
   type Active =
     | { readonly mode: 'code'; readonly playerId: PlayerId; readonly invite: TableInviteByCode }
@@ -23,6 +21,12 @@
   let replyError = $state(false);
   let copied = $state(false);
   let scanning = $state(false);
+  let loadedScanner = $state<Awaited<ReturnType<typeof loadQrScanSheet>> | null>(null);
+
+  async function openScanner() {
+    loadedScanner = await loadQrScanSheet();
+    scanning = true;
+  }
 
   function invite(playerId: PlayerId) {
     active = { mode: 'code', playerId, invite: inviteToTableByCode(store, playerId, signalling) };
@@ -205,7 +209,7 @@
               That did not look like a reply code. Check it was copied in full.
             </p>
           {/if}
-          <button class="fallback" type="button" onclick={() => (scanning = true)}>
+          <button class="fallback" type="button" onclick={openScanner}>
             Scan their reply instead
           </button>
           <div class="actions">
@@ -220,9 +224,10 @@
   </div>
 </div>
 
-{#if scanning}
+{#if scanning && loadedScanner}
+  {@const QrScanSheet = loadedScanner.QrScanSheet}
   <QrScanSheet
-    {scanner}
+    scanner={loadedScanner.scanner}
     title="Scan their reply"
     body="Point the camera at their code."
     onscan={scanReply}

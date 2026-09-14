@@ -9,13 +9,11 @@
   import type { Invitation, TableJoin, TableJoinByCode } from '$lib/tableConnection.svelte';
   import type { OfferPayload } from '$application/ports/signalling';
   import { defaultSignalling } from '$lib/signalling';
-  import { createCameraQrScanner } from '$adapters/platform/cameraQrScanner';
+  import { loadQrScanSheet } from '$lib/scanner';
   import QrCode from '$ui/components/QrCode.svelte';
-  import QrScanSheet from '$ui/components/QrScanSheet.svelte';
   import GameScreen from '../GameScreen.svelte';
 
   const signalling = defaultSignalling();
-  const scanner = createCameraQrScanner();
 
   type Stage =
     | { readonly kind: 'entry'; readonly manual: boolean }
@@ -44,7 +42,13 @@
   let joinedManual = $state<TableJoin | null>(null);
   let copied = $state(false);
   let scanning = $state(false);
+  let loadedScanner = $state<Awaited<ReturnType<typeof loadQrScanSheet>> | null>(null);
   let triedLinkCode = false;
+
+  async function openScanner() {
+    loadedScanner = await loadQrScanSheet();
+    scanning = true;
+  }
 
   async function lookUpShortCode(code: string) {
     if (code === '') return;
@@ -197,7 +201,7 @@
           Continue
         </button>
       </form>
-      <button class="fallback" type="button" onclick={() => (scanning = true)}>
+      <button class="fallback" type="button" onclick={openScanner}>
         Scan their code instead
       </button>
       <button
@@ -260,9 +264,10 @@
   </main>
 {/if}
 
-{#if scanning}
+{#if scanning && loadedScanner}
+  {@const QrScanSheet = loadedScanner.QrScanSheet}
   <QrScanSheet
-    {scanner}
+    scanner={loadedScanner.scanner}
     title="Scan their code"
     body="Point the camera at the code they showed you."
     onscan={scanManualCode}
