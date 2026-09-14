@@ -24,8 +24,13 @@ import type { GameStore } from './gameStore.svelte';
  * costs one redundant message per event, not a loop, because the cursor
  * advances past it immediately and there is nothing left to re-send after
  * that.
+ *
+ * Also feeds `store.linkState` (the connection-quality chip) — every caller
+ * gets that for free rather than having to remember it at each of the four
+ * call sites below.
  */
 export function connectTransport(store: GameStore, transport: Transport): () => void {
+  store.trackConnection(transport);
   let sent = 0;
 
   const catchUp = () => {
