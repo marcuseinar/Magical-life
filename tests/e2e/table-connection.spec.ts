@@ -8,6 +8,7 @@ import {
   openTable,
   rematch,
   settled,
+  shownCode,
   startGame
 } from './support';
 
@@ -31,18 +32,14 @@ test('a joined table converges to the same game, in both directions', async ({ b
   await openTable(host);
   await inviteBySeat(host, 'Player 2');
 
-  const hostCode = host.locator('.sheet textarea.code[readonly]');
-  await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });
-  const offerCode = await hostCode.inputValue();
+  const offerCode = await shownCode(host);
 
   await joiner.goto('/join');
   await joinByPastedCode(joiner, offerCode);
   await expect(joiner.getByText('Join as')).toContainText('Player 2');
   await joiner.getByRole('button', { name: 'Join' }).click();
 
-  const replyCode = joiner.locator('textarea.code[readonly]');
-  await expect(replyCode).not.toHaveValue('', { timeout: 10_000 });
-  const answerCode = await replyCode.inputValue();
+  const answerCode = await shownCode(joiner, 'p.code');
 
   await host.getByLabel('Paste their reply').fill(answerCode);
   await host.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -104,17 +101,13 @@ test('a claimed seat leaves the grid, and a rematch does not hand it back', asyn
   await openTable(host);
   await inviteBySeat(host, 'Player 2');
 
-  const hostCode = host.locator('.sheet textarea.code[readonly]');
-  await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });
-  const offerCode = await hostCode.inputValue();
+  const offerCode = await shownCode(host);
 
   await joiner.goto('/join');
   await joinByPastedCode(joiner, offerCode);
   await joiner.getByRole('button', { name: 'Join' }).click();
 
-  const replyCode = joiner.locator('textarea.code[readonly]');
-  await expect(replyCode).not.toHaveValue('', { timeout: 10_000 });
-  const answerCode = await replyCode.inputValue();
+  const answerCode = await shownCode(joiner, 'p.code');
 
   await host.getByLabel('Paste their reply').fill(answerCode);
   await host.getByRole('button', { name: 'Connect', exact: true }).click();

@@ -128,10 +128,7 @@
       {#if table?.code == null}
         <p class="body" role="status">Opening a table…</p>
       {:else}
-        <p class="body">
-          One code for everyone. Show it, say it, or send the link — each person joins and picks
-          their own seat.
-        </p>
+        <p class="body">One code for everyone — each person picks their own seat.</p>
 
         <p class="short-code">{table.code}</p>
 
@@ -139,19 +136,24 @@
           <div class="qr-row">
             <QrCode value={joinLink} />
           </div>
-          <div class="code-row">
-            <textarea class="code" readonly value={joinLink} rows="2"></textarea>
-            <button class="action" type="button" onclick={() => copyText(joinLink!)}>
-              {copied ? 'Copied' : 'Copy link'}
-            </button>
-          </div>
+          <!-- The link is a thing to send, not to read. A readonly textarea
+               showing it cost a third of the sheet's height and, at 0.7rem,
+               made iOS zoom the whole page in on focus — with pinch blocked,
+               there was no way back out. A button and a long-press-selectable
+               line do the same job. -->
+          <button class="action" type="button" onclick={() => copyText(joinLink!)}>
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
         {/if}
       {/if}
 
       <!-- Who is in. `claimed` is the shared truth, folded from the log, so
            every device agrees on it without anyone being asked. -->
       <h3 class="legend">Seats</h3>
-      <ul class="players">
+      <!-- Two to a row and compact: six full-width rows were most of why
+           this sheet could not fit a phone, and a seat needs to say only
+           who it is and whether anyone is in it. -->
+      <ul class="players players--compact">
         {#each seats as player (player.id)}
           <li class="seat" data-claimed={player.claimed}>
             <span class="seat__name">{player.name}</span>
@@ -164,7 +166,7 @@
         <button class="action action--go" type="button" onclick={close}>Done</button>
       </div>
       <button class="fallback" type="button" onclick={() => (mode = { kind: 'pick-a-seat' })}>
-        Trouble connecting? Use a code you paste instead.
+        Trouble connecting? Paste a code instead.
       </button>
     {:else if mode.kind === 'pick-a-seat'}
       <!-- The no-server path needs to know whose seat it is offering, because
@@ -204,7 +206,9 @@
           <QrCode value={manual.code} />
         </div>
         <div class="code-row">
-          <textarea class="code" readonly value={manual.code} rows="3"></textarea>
+          <!-- Selectable by long press, but not focusable, so iOS has no
+               reason to zoom. A code this long is pasted, never typed. -->
+          <p class="code">{manual.code}</p>
           <button class="action" type="button" onclick={() => copyText(manual!.code!)}>
             {copied ? 'Copied' : 'Copy'}
           </button>
@@ -258,7 +262,7 @@
     inset: 0;
     display: grid;
     place-items: center;
-    padding: var(--space-4);
+    padding: clamp(var(--space-2), 2vh, var(--space-4));
     background: var(--surface-scrim);
   }
 
@@ -270,16 +274,14 @@
   .sheet {
     position: relative;
     display: grid;
-    gap: var(--space-3);
+    gap: clamp(var(--space-1), 1.2vh, var(--space-3));
     width: min(24rem, 100%);
-    max-height: 90vh;
-    padding: var(--space-4);
-    overflow-y: auto;
+    max-height: 100%;
+    padding: clamp(var(--space-2), 2vh, var(--space-4));
     border: 1px solid var(--frame-rule-strong);
     border-radius: var(--radius-lg);
     background: var(--surface-panel);
     box-shadow: var(--shadow-float);
-    touch-action: pan-y;
   }
 
   .title {
@@ -305,6 +307,11 @@
     list-style: none;
   }
 
+  .players--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
   .row {
     width: 100%;
     min-height: 2.75rem;
@@ -323,7 +330,7 @@
 
   .short-code {
     margin: 0;
-    padding: var(--space-2);
+    padding: var(--space-1) var(--space-2);
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
@@ -334,10 +341,17 @@
     text-align: center;
   }
 
+  /* The QR gives up height first when there is not enough: it only has to
+     be big enough for a camera across a table, not as big as it can be. */
   .qr-row {
     display: flex;
     justify-content: center;
-    padding: var(--space-2);
+
+    /* Bounded by the height available, not only by taste: on a short phone
+       this is the one element with enough size to give back. */
+    --qr-size: min(11rem, 20vh);
+
+    padding: var(--space-1);
     border-radius: var(--radius-md);
     background: white;
   }
@@ -359,17 +373,26 @@
     text-transform: uppercase;
   }
 
+  /*
+   * Never below 1rem on anything focusable: iOS Safari zooms the page in
+   * when a field under 16px takes focus, and this app blocks pinch, so the
+   * zoom is a one-way door. The readonly codes are paragraphs now; only a
+   * field somebody actually types or pastes into is still a textarea.
+   */
   .code {
     width: 100%;
+
+    /* The blob is pasted, not read: it needs to be reachable, not roomy. */
+    max-height: clamp(2.75rem, 8vh, 4.5rem);
     padding: var(--space-2);
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
     color: var(--text-primary);
     font-family: monospace;
-    font-size: 0.7rem;
-    line-height: 1.4;
-    overflow-wrap: break-word;
+    font-size: 1rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
     resize: none;
 
     /* This is the one thing on the sheet a player must be able to select and
@@ -436,17 +459,22 @@
 
   .seat {
     display: flex;
-    gap: var(--space-2);
+    gap: var(--space-1);
     align-items: baseline;
     justify-content: space-between;
-    padding: var(--space-2) var(--space-3);
+    min-width: 0;
+    padding: var(--space-1) var(--space-2);
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
   }
 
   .seat__name {
+    overflow: hidden;
     color: var(--text-muted);
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .seat[data-claimed='true'] .seat__name {

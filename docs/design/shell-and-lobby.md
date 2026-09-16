@@ -675,3 +675,41 @@ rearrangement of existing ones.
 - **Should the setup screen name players?** The roadmap defers it; this screen
   is where it belongs; it costs vertical space on a surface that must not
   scroll.
+
+## Fitting a phone
+
+Reported from a real iPhone, twice, and worth recording because neither
+failure was visible on an emulated device that happened to be a little wider
+or a little taller.
+
+**A screen was laid out at the width of its own title.** `.sheet` set
+`max-width` with `margin-inline: auto`, and an auto inline margin defeats a
+grid item's stretch — the item falls back to its content width and the margin
+centres it there. "Magical Life" at `clamp(2rem, 9vw, 3.25rem)` measures about
+275px on a 390px phone, just under the 280px the preset grid needs for two
+columns, so the presets stacked one to a row and the screen grew tall enough
+to push its primary action off the bottom. `.app` had the same shape one level
+up: a bare `display: grid` with only `grid-template-rows` has an implicit
+`auto` column, sized to whatever screen is showing. That is why only some
+screens were affected — the board's max-content exceeds a phone, so the game
+filled the width and looked correct.
+
+**Tapping a field zoomed the page in with no way back.** iOS Safari zooms
+whenever a focusable field under 16px takes focus. The app blocks pinch —
+deliberately, and `user-scalable=no` is not an option because it fails the
+accessibility gate — so the zoom could not be undone. The offenders were four
+`textarea.code` at 0.7rem. A readonly blob is a paragraph now, long-press
+selectable and unfocusable; the fields somebody types into are 1rem.
+
+**And the scroll opt-ins went.** Rule 10 allowed a screen to opt back into
+scrolling locally, and seven did. That turned "does not fit" into "scrolls",
+which on a phone means the button you came to press is below the fold. Every
+screen now fits at 320×568 and up, which took: a rhythm that scales with
+viewport height rather than being fixed, a QR bounded by the height available
+rather than only by taste, seats two to a row instead of six full-width ones,
+and — under 620px tall — the tagline and the colour preview giving way, with
+the two ways out sharing a row.
+
+`tests/e2e/viewport.spec.ts` is the guard for all of it. Nothing in the suite
+had ever looked at a screen other than the game: both older viewport tests run
+after `startGame`.

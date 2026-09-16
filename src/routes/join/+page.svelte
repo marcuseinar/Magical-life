@@ -249,7 +249,7 @@
             <textarea
               bind:value={manualDraft}
               class="code"
-              rows="4"
+              rows="2"
               autocomplete="off"
               spellcheck="false"
               placeholder="Paste it here"></textarea>
@@ -330,7 +330,9 @@
             <QrCode value={joinedManual.reply} />
           </div>
           <div class="code-row">
-            <textarea class="code" readonly value={joinedManual.reply} rows="4"></textarea>
+            <!-- Shown, not typed into: a paragraph is long-press
+                 selectable and gives iOS nothing to zoom into. -->
+            <p class="code">{joinedManual.reply}</p>
             <button class="action" type="button" onclick={copyReply}>
               {copied ? 'Copied' : 'Copy'}
             </button>
@@ -363,11 +365,9 @@
   .join {
     display: grid;
     align-content: start;
-    gap: var(--space-4);
+    gap: clamp(var(--space-2), 2vh, var(--space-4));
     height: 100%;
-    padding: var(--space-5) var(--space-4);
-    overflow-y: auto;
-    touch-action: pan-y;
+    padding: clamp(var(--space-3), 3vh, var(--space-5)) var(--space-4);
   }
 
   .masthead {
@@ -380,7 +380,7 @@
     margin: 0;
     color: var(--text-gold);
     font-family: var(--font-display);
-    font-size: 1.6rem;
+    font-size: clamp(1.25rem, 3.5vh, 1.6rem);
     letter-spacing: var(--tracking-display);
   }
 
@@ -422,18 +422,21 @@
     text-transform: uppercase;
   }
 
+  /* Never below 1rem: iOS zooms the page in on a smaller field taking
+     focus, and pinch is blocked, so that zoom cannot be undone. */
   .code,
   .code-row .code {
     width: 100%;
+    max-height: 4.5rem;
     padding: var(--space-2);
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
     color: var(--text-primary);
     font-family: monospace;
-    font-size: 0.7rem;
-    line-height: 1.4;
-    overflow-wrap: break-word;
+    font-size: 1rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
     resize: none;
 
     /* stylelint-disable-next-line property-no-vendor-prefix -- iOS Safari still needs it */

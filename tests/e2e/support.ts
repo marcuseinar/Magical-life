@@ -42,19 +42,30 @@ export async function rematch(page: Page) {
 export const openTable = (page: Page) => page.getByRole('button', { name: /^Table/ }).click();
 
 /**
+ * A code the app is showing rather than taking. These are paragraphs, not
+ * fields: a readonly textarea at 0.7rem made iOS zoom the page in on focus,
+ * and with pinch blocked there was no way back out.
+ */
+export async function shownCode(page: Page, selector = '.sheet p.code') {
+  const code = page.locator(selector);
+  await expect(code).not.toHaveText('', { timeout: 15_000 });
+  return (await code.textContent())?.trim() ?? '';
+}
+
+/**
  * The host's no-server path. The table's own code is one for everybody now,
  * so the per-seat handshake — inherently one offer per scanner — asks whose
  * seat it is for first.
  */
 export async function inviteBySeat(page: Page, seat: string) {
-  await page.getByRole('button', { name: /paste instead/i }).click();
+  await page.getByRole('button', { name: /paste a code instead/i }).click();
   await page.getByRole('button', { name: `Invite ${seat}` }).click();
 }
 
 /**
  * The joiner's no-server path. Every way in sits on one screen now, so the
  * paste field is revealed rather than a mode reached through the others —
- * and the host's own "use a code you paste instead" in the table sheet is a
+ * and the host's own "Trouble connecting? Paste a code instead." is a
  * different button with a similar name, which is why this names its own in
  * full.
  */

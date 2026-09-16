@@ -41,8 +41,14 @@ body {
    * Kills pinch-zoom and double-tap-zoom over the whole app. This is the part
    * that actually works: `user-scalable=no` in the viewport meta has been
    * ignored by Safari on iOS since iOS 10, and it fails the accessibility gate,
-   * so it is deliberately not used. Anything that genuinely needs to scroll
-   * opts back in with `touch-action: pan-y`.
+   * so it is deliberately not used.
+   *
+   * Nothing opts back in. A screen that needed to scroll was a screen that
+   * did not fit, and on a phone the part that fell off the bottom was
+   * usually the thing you had come to press. Blocking pinch and then
+   * requiring a scroll is also a trap: iOS zooms into any focusable field
+   * under 16px on focus, and with pinch gone there is no way back out — so
+   * no field here is smaller than that either.
    */
   touch-action: none;
 }

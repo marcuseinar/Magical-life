@@ -125,9 +125,7 @@ test.describe('QR scanning', () => {
     await startGame(page, /commander/i, 2);
     await openTable(page);
     await inviteBySeat(page, 'Player 2');
-    await expect(page.locator('.sheet textarea.code[readonly]')).not.toHaveValue('', {
-      timeout: 10_000
-    });
+    await expect(page.locator('.sheet p.code')).not.toHaveText('', { timeout: 10_000 });
 
     await page.getByRole('button', { name: 'Scan their reply instead' }).click();
 

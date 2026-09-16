@@ -34,8 +34,16 @@
 </svg>
 
 <style>
+  /* The attributes keep the intrinsic size for anything that asks; the
+     width lets a cramped sheet shrink it rather than overflow. A camera
+     across a table needs it legible, not large. */
   .qr {
     display: block;
+    width: 100%;
+
+    /* A caller that knows how little room it has sets `--qr-size`. */
+    max-width: var(--qr-size, 11rem);
+    height: auto;
     border-radius: var(--radius-md);
   }
 </style>

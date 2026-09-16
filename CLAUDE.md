@@ -44,9 +44,16 @@ Playwright · Capacitor · Cloudflare Workers for the later backend.
    auth code path, and must never load auth code into the bundle.
 9. **Respect the performance budget** in `docs/architecture.md`. "Fast to start"
    is a requirement, not a preference.
-10. **Nothing scrolls and nothing zooms.** The app is a fixed surface. Anything
-    that can exceed the screen opts back in locally with `touch-action: pan-y`
-    and its own `overflow`; never by relaxing the rule globally.
+10. **Nothing scrolls and nothing zooms.** The app is a fixed surface, with no
+    local opt-outs: a screen that needs to scroll is a screen that does not
+    fit, and on a phone the part below the fold is usually the control someone
+    came to press. Make it fit — give up decoration, scale a QR or a heading
+    with the viewport, put two secondary buttons on one row — rather than
+    letting it scroll. Two consequences worth knowing: nothing may be styled
+    `overflow-y: auto` or `touch-action: pan-y`, and **no focusable field may
+    be smaller than 16px**, because iOS Safari zooms the page in on focus
+    below that and pinch is blocked, so the zoom is a one-way door.
+    `tests/e2e/viewport.spec.ts` holds both lines.
 
 ## Commands
 

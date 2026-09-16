@@ -101,12 +101,10 @@
     width: min(24rem, 100%);
     max-height: 90vh;
     padding: var(--space-4);
-    overflow-y: auto;
     border: 1px solid var(--frame-rule-strong);
     border-radius: var(--radius-lg);
     background: var(--surface-panel);
     box-shadow: var(--shadow-float);
-    touch-action: pan-y;
   }
 
   .title {

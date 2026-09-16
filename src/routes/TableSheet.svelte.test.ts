@@ -50,7 +50,7 @@ describe('table sheet', () => {
     await store.claimSeat(bjorn.id);
 
     mount(store);
-    await fireEvent.click(screen.getByRole('button', { name: /paste instead/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /paste a code instead/i }));
 
     expect(screen.getByRole('button', { name: 'Invite Anna' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Invite Cara' })).toBeEnabled();

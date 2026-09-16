@@ -210,17 +210,21 @@
     Begin at {startingLife}
   </button>
 
-  {#if onback}
-    <!-- The whole point of ADR 0005: the game this was opened over is still
-         running, so leaving without starting anything is a real option — and
-         a real option deserves a real control, not underlined small print. -->
-    <button class="secondary" type="button" onclick={onback}>Back to the game</button>
-  {/if}
+  <!-- The two ways out share a row on a screen too short for three stacked
+       buttons; on anything taller they stack as before. -->
+  <div class="ways-out">
+    {#if onback}
+      <!-- The whole point of ADR 0005: the game this was opened over is still
+           running, so leaving without starting anything is a real option — and
+           a real option deserves a real control, not underlined small print. -->
+      <button class="secondary" type="button" onclick={onback}>Back to the game</button>
+    {/if}
 
-  <!-- Still an anchor rather than a button: it goes to a route, and on a
-       first run this is the only way to reach joining at all — the menu it
-       also lives in belongs to a game that does not exist yet. -->
-  <a class="secondary" href={resolve('/join')}>Join a table</a>
+    <!-- Still an anchor rather than a button: it goes to a route, and on a
+         first run this is the only way to reach joining at all — the menu it
+         also lives in belongs to a game that does not exist yet. -->
+    <a class="secondary" href={resolve('/join')}>Join a table</a>
+  </div>
 </main>
 
 <style>
@@ -243,7 +247,7 @@
      * fixed at, and on a 568px screen they give back the ~70px that was the
      * difference between fitting and not.
      */
-    gap: clamp(var(--space-2), 2.5vh, var(--space-5));
+    gap: clamp(var(--space-1), 2.2vh, var(--space-5));
     align-content: center;
 
     /*
@@ -255,10 +259,6 @@
     width: min(32rem, 100%);
     min-height: 100%;
     margin-inline: auto;
-    overflow-y: auto;
-
-    /* Opts back in to vertical scrolling, which the app disables globally. */
-    touch-action: pan-y;
     padding: clamp(var(--space-4), 4vh, var(--space-6)) var(--space-4);
     text-align: center;
   }
@@ -272,7 +272,9 @@
     margin: 0;
     color: var(--text-gold);
     font-family: var(--font-display);
-    font-size: clamp(2rem, 9vw, 3.25rem);
+    /* Height as well as width: on a short phone the masthead is the least
+       useful thing on screen and the first that should give way. */
+    font-size: clamp(1.75rem, min(9vw, 5vh), 3.25rem);
     font-weight: 900;
     letter-spacing: var(--tracking-display);
     text-shadow: 0 2px 18px var(--frame-shadow);
@@ -340,6 +342,33 @@
     border-color: var(--frame-rule-strong);
     color: var(--text-gold);
     box-shadow: inset 0 0 22px -8px var(--accent);
+  }
+
+  /*
+   * The two decorative things go first on a screen too short for
+   * everything: a tagline and a row of colour pips are worth less than the
+   * button you came here to press. One threshold rather than a scale,
+   * because this is about a class of very small phone, not a gradient.
+   */
+  @media (height <= 620px) {
+    .tagline,
+    .preview {
+      display: none;
+    }
+
+    .ways-out {
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+    }
+
+    .secondary {
+      font-size: 0.85rem;
+    }
+  }
+
+  .ways-out {
+    display: grid;
+    gap: var(--space-2);
   }
 
   .preview {
