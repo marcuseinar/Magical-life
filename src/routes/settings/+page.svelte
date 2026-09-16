@@ -35,7 +35,9 @@
     <button class="danger" type="button" onclick={() => (confirming = true)}>Clear history</button>
   </section>
 
-  <button class="back" type="button" onclick={() => goto(resolve('/'))}>Back to the game</button>
+  <button class="secondary" type="button" onclick={() => goto(resolve('/'))}>
+    Back to the game
+  </button>
 </main>
 
 {#if confirming}
@@ -114,13 +116,16 @@
     text-transform: uppercase;
   }
 
-  .back {
-    justify-self: center;
-    padding: var(--space-1) var(--space-3);
+  .secondary {
+    width: 100%;
+    min-height: 3rem;
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
     color: var(--text-muted);
-    font-size: 0.8rem;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
   }
 
   .scrim {

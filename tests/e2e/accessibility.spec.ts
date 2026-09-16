@@ -5,6 +5,14 @@ import { openMenu, openNewGame, startGame } from './support';
 /* Dark is the only theme; a pretty theme that fails contrast cannot ship. */
 test('the opening screen is clean', async ({ page }) => {
   await page.goto('/');
+  /*
+   * `/` sends a device with no game to `/setup` (ADR 0005), and `goto`
+   * resolves before that client-side navigation lands. Every other assertion
+   * here retries; `analyze()` does not, so without this it can scan the
+   * frame in between and fail on a screen nobody ever sees. Waiting is not
+   * loosening the check — it is scanning the screen the test names.
+   */
+  await page.getByRole('button', { name: /begin at/i }).waitFor();
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations).toEqual([]);
 });

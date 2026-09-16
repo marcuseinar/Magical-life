@@ -287,7 +287,7 @@
 
     <!-- Until ADR 0005 this screen was a cliff: nothing on it led anywhere
          but forward, and the browser's own Back was the only way out. -->
-    <button class="fallback" type="button" onclick={() => goto(resolve('/'))}>
+    <button class="secondary" type="button" onclick={() => goto(resolve('/'))}>
       Back to your own game
     </button>
   </main>
@@ -438,6 +438,21 @@
     height: 1px;
     background: var(--frame-rule);
     content: '';
+  }
+
+  /* "Paste a code instead" stays quiet below — it is a third way in, not a
+     way out, and the hierarchy between them is the point. */
+  .secondary {
+    width: min(26rem, 100%);
+    min-height: 3rem;
+    margin-inline: auto;
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
   }
 
   .fallback {

@@ -112,11 +112,15 @@
 
   {#if onback}
     <!-- The whole point of ADR 0005: the game this was opened over is still
-         running, so leaving without starting anything is a real option. -->
-    <button class="join-link" type="button" onclick={onback}>Back to the game</button>
+         running, so leaving without starting anything is a real option — and
+         a real option deserves a real control, not underlined small print. -->
+    <button class="secondary" type="button" onclick={onback}>Back to the game</button>
   {/if}
 
-  <a class="join-link" href={resolve('/join')}>Join a table instead</a>
+  <!-- Still an anchor rather than a button: it goes to a route, and on a
+       first run this is the only way to reach joining at all — the menu it
+       also lives in belongs to a game that does not exist yet. -->
+  <a class="secondary" href={resolve('/join')}>Join a table</a>
 </main>
 
 <style>
@@ -231,14 +235,22 @@
     min-height: 26px;
   }
 
-  .join-link {
-    justify-self: center;
-    padding: var(--space-1) var(--space-3);
+  /* The same shape as Begin, carrying less weight: one hierarchy, read by
+     colour and size rather than by one control being a link and the other a
+     button. */
+  .secondary {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    min-height: 3rem;
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
     color: var(--text-muted);
-    font-size: 0.75rem;
-    letter-spacing: 0.03em;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+    text-decoration: none;
   }
 
   .start {
