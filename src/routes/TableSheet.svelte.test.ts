@@ -1,3 +1,4 @@
+import { presetConfig } from '$domain/rules';
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import TableSheet from './TableSheet.svelte';
@@ -6,7 +7,7 @@ import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
 
 const seatPlayers = async () => {
   const store = createGameStore({ log: createMemoryEventLog() });
-  await store.begin('commander', [
+  await store.begin(presetConfig('commander'), [
     { name: 'Anna', colour: 'green' },
     { name: 'Björn', colour: 'blue' },
     { name: 'Cara', colour: 'red' }

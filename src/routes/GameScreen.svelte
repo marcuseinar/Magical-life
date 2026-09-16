@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FORMATS } from '$domain/rules';
+  import { formatName } from '$domain/rules';
   import type { CounterKind } from '$domain/rules';
   import type { PlayerId } from '$domain/ids';
   import { localSeats, remoteSeats } from '$domain/selectors';
@@ -159,7 +159,7 @@
 {:else}
   <main class="game">
     <h1 class="sr-only">
-      Magical Life — {FORMATS[store.state.config.format].name}, {store.state.players.length}
+      Magical Life — {formatName(store.state.config.format)}, {store.state.players.length}
       {store.state.players.length === 1 ? 'player' : 'players'}
     </h1>
 

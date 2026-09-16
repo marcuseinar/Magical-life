@@ -11,7 +11,7 @@ test('plays a full game when served from a subdirectory', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Magical Life' })).toBeVisible();
 
   await page.getByRole('button', { name: /commander/i }).click();
-  await page.getByRole('button', { name: '4', exact: true }).click();
+  await page.getByRole('spinbutton', { name: 'Players' }).fill('4');
   await page.getByRole('button', { name: /begin at 40/i }).click();
 
   await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();

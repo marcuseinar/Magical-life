@@ -24,8 +24,8 @@ import type { Transport } from '$application/ports/transport';
 import type { GameEvent } from '$domain/events';
 import { playerId } from '$domain/ids';
 import type { PlayerId } from '$domain/ids';
-import type { CounterKind, FormatId } from '$domain/rules';
-import type { GameState } from '$domain/state';
+import type { CounterKind } from '$domain/rules';
+import type { GameConfig, GameState } from '$domain/state';
 
 /**
  * The composition root: the only place that knows both which adapters exist and
@@ -113,8 +113,8 @@ export function createGameStore(
       ready = true;
     },
 
-    async begin(formatId: FormatId, seats: readonly SeatRequest[]) {
-      await startGame({ session, ids })(formatId, seats);
+    async begin(config: GameConfig, seats: readonly SeatRequest[]) {
+      await startGame({ session, ids })(config, seats);
       sync();
     },
 

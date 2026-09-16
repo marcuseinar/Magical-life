@@ -405,3 +405,58 @@ describe('player identity', () => {
     expect(fold(events)?.players.map((p) => p.id)).toEqual(['c', 'a']);
   });
 });
+
+/*
+ * Presets replaced formats (phase 2 of docs/design/shell-and-lobby.md), and
+ * the one real risk in that change is a device that already has games in its
+ * log. `GameConfig` did not change shape — starting life and commander
+ * damage were always fields of their own, and `format` only widened to admit
+ * `'custom'` — so a game recorded before the change must fold to exactly what
+ * it folded to before. This is that, written as the bytes a stored event
+ * actually carries rather than as anything the current code would produce.
+ */
+describe('a game recorded before presets became presets', () => {
+  const storedGameStarted = {
+    id: eventId('device:1'),
+    authorId: playerId('device'),
+    seq: 1,
+    at: 1_700_000_000_000,
+    lamport: 1,
+    kind: 'game/started',
+    config: { format: 'twoHeadedGiant', startingLife: 30, tracksCommanderDamage: false },
+    players: [
+      { id: playerId('p1'), name: 'Anna', colour: 'green' },
+      { id: playerId('p2'), name: 'Björn', colour: 'blue' }
+    ]
+  } as GameEvent;
+
+  it('folds to the game it always folded to', () => {
+    const state = fold([storedGameStarted]);
+
+    expect(state?.config).toEqual({
+      format: 'twoHeadedGiant',
+      startingLife: 30,
+      tracksCommanderDamage: false
+    });
+    expect(state?.players.map((player) => player.life)).toEqual([30, 30]);
+    expect(state?.players.map((player) => player.name)).toEqual(['Anna', 'Björn']);
+  });
+
+  it('carries on taking changes, because nothing about it is legacy', () => {
+    const state = fold([
+      storedGameStarted,
+      {
+        id: eventId('device:2'),
+        authorId: playerId('device'),
+        seq: 2,
+        at: 1_700_000_000_001,
+        lamport: 2,
+        kind: 'life/changed',
+        target: playerId('p1'),
+        delta: -7
+      } as GameEvent
+    ]);
+
+    expect(state?.players[0]?.life).toBe(23);
+  });
+});

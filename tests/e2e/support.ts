@@ -15,11 +15,13 @@ export const settled = (page: Page) =>
     timeout: COMMITTED
   });
 
-export async function startGame(page: Page, format: RegExp, players: number) {
+export async function startGame(page: Page, preset: RegExp, players: number) {
   await page.goto('/');
-  // With no game yet, `/` sends the player to `/setup` (ADR 0005).
-  await page.getByRole('button', { name: format }).click();
-  await page.getByRole('button', { name: String(players), exact: true }).click();
+  // With no game yet, `/` sends the player to `/setup` (ADR 0005). The
+  // preset fills the controls in; the player count is one of them now,
+  // rather than a row of buttons the preset silently capped.
+  await page.getByRole('button', { name: preset }).click();
+  await page.getByRole('spinbutton', { name: 'Players' }).fill(String(players));
   await page.getByRole('button', { name: /begin at/i }).click();
 }
 

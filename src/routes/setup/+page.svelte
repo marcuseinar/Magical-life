@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import type { FormatId } from '$domain/rules';
+  import type { GameConfig } from '$domain/state';
   import type { SeatRequest } from '$application/usecases/startGame';
   import { useGameStore } from '$lib/context';
   import NewGameSheet from '$ui/components/NewGameSheet.svelte';
@@ -13,8 +13,8 @@
      back to Player N and drop whoever had joined on their own phone. */
   const running = $derived(store.state);
 
-  async function start(formatId: FormatId, seats: SeatRequest[]) {
-    await store.begin(formatId, seats);
+  async function start(config: GameConfig, seats: SeatRequest[]) {
+    await store.begin(config, seats);
     await goto(resolve('/'));
   }
 </script>
@@ -27,5 +27,5 @@
   onstart={start}
   onback={running === null ? undefined : () => goto(resolve('/'))}
   existing={running?.players ?? []}
-  format={running?.config.format}
+  config={running?.config}
 />

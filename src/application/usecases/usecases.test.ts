@@ -12,7 +12,7 @@ import { moveFlag } from './moveFlag';
 import { setElimination } from './setElimination';
 import { undoLast } from './undoLast';
 import { renamePlayer, tidyName } from './renamePlayer';
-import { MAX_PLAYER_NAME } from '$domain/rules';
+import { MAX_PLAYER_NAME, presetConfig } from '$domain/rules';
 import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
 import { recordCommanderDamage } from './recordCommanderDamage';
@@ -33,7 +33,7 @@ describe('use cases', () => {
   let seats: readonly PlayerId[];
 
   const newGame = () =>
-    startGame({ session, ids: countingIdSource() })('commander', [
+    startGame({ session, ids: countingIdSource() })(presetConfig('commander'), [
       { name: 'Anna', colour: 'green' },
       { name: 'Björn', colour: 'blue' }
     ]);
@@ -55,13 +55,20 @@ describe('use cases', () => {
       expect(session.state?.config.tracksCommanderDamage).toBe(true);
     });
 
-    it('honours an overridden starting life', async () => {
+    /* The config arrives whole rather than being looked up from a format
+       name, so a table can start anywhere it likes — not only at the four
+       totals that happen to have names. */
+    it('seats a game at whatever life the config asks for', async () => {
       await startGame({ session, ids: countingIdSource('x') })(
-        'commander',
-        [{ name: 'Solo', colour: 'red' }],
-        60
+        { format: 'custom', startingLife: 60, tracksCommanderDamage: false },
+        [{ name: 'Solo', colour: 'red' }]
       );
       expect(session.state?.players[0]?.life).toBe(60);
+      expect(session.state?.config).toEqual({
+        format: 'custom',
+        startingLife: 60,
+        tracksCommanderDamage: false
+      });
     });
 
     it('starts a rematch without erasing the old game from the log', async () => {
@@ -82,7 +89,7 @@ describe('use cases', () => {
     it('keeps a seat that arrives with an identity already', async () => {
       await claimSeat({ session })(seats[1]!);
 
-      await startGame({ session, ids: countingIdSource('fresh') })('commander', [
+      await startGame({ session, ids: countingIdSource('fresh') })(presetConfig('commander'), [
         { id: seats[0]!, name: 'Anna', colour: 'green' },
         { id: seats[1]!, name: 'Björn', colour: 'blue' }
       ]);
@@ -92,7 +99,7 @@ describe('use cases', () => {
     });
 
     it('mints an identity for a seat that arrives without one', async () => {
-      await startGame({ session, ids: countingIdSource('fresh') })('commander', [
+      await startGame({ session, ids: countingIdSource('fresh') })(presetConfig('commander'), [
         { id: seats[0]!, name: 'Anna', colour: 'green' },
         { name: 'Someone new', colour: 'red' }
       ]);

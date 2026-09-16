@@ -1,3 +1,4 @@
+import { presetConfig } from '$domain/rules';
 import { describe, expect, it } from 'vitest';
 import { createGameStore } from './gameStore.svelte';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
@@ -115,11 +116,11 @@ describe('game store — the game lifecycle', () => {
   it('leaves the previous game in the log when a new one begins', async () => {
     const game = store();
     await game.hydrate();
-    await game.begin('commander', commander(2));
+    await game.begin(presetConfig('commander'), commander(2));
     await game.changeLife(game.state!.players[0]!.id, -10);
     const before = game.events.length;
 
-    await game.begin('standard', commander(2));
+    await game.begin(presetConfig('standard'), commander(2));
 
     expect(game.state?.config.startingLife).toBe(20);
     // The whole point: the old game is still there to be read back.
@@ -135,7 +136,7 @@ describe('game store — the game lifecycle', () => {
   it('clears the history only when asked to, explicitly', async () => {
     const game = store();
     await game.hydrate();
-    await game.begin('commander', commander(2));
+    await game.begin(presetConfig('commander'), commander(2));
     expect(game.events.length).toBeGreaterThan(0);
 
     await game.clearHistory();
@@ -147,7 +148,7 @@ describe('game store — the game lifecycle', () => {
   it('carries a seat through a reconfigure, claims and all', async () => {
     const game = store();
     await game.hydrate();
-    await game.begin('commander', commander(2));
+    await game.begin(presetConfig('commander'), commander(2));
     const seats = game.state!.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -156,7 +157,7 @@ describe('game store — the game lifecycle', () => {
     await game.claimSeat(seats[1]!.id);
 
     // "We said 30, not 40" — same people, different game.
-    await game.begin('twoHeadedGiant', seats);
+    await game.begin(presetConfig('twoHeadedGiant'), seats);
 
     expect(game.state?.players.map((player) => player.id)).toEqual(seats.map((seat) => seat.id));
     expect(game.state?.players[1]?.claimed).toBe(true);

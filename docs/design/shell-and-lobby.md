@@ -219,14 +219,18 @@ shortcut into the settings, not a mode the settings live inside.
 
 ### What changes in the domain
 
-Less than it looks:
+Less than it looks, and less than this sketch expected:
 
 ```ts
 // src/domain/rules.ts
-export type FormatId = 'commander' | 'standard' | 'twoHeadedGiant' | 'brawl' | 'custom';
+export type PresetId = 'commander' | 'standard' | 'twoHeadedGiant' | 'brawl';
+export type FormatId = PresetId | 'custom';
+export const MAX_PLAYERS = 6;
 ```
 
-That is the whole domain change. `GameConfig` already carries `startingLife`
+Splitting `PresetId` out of `FormatId` is what makes `'custom'` unable to
+appear where a preset is meant — the setup screen's quick-start row can only
+offer things that exist. `GameConfig` already carries `startingLife`
 and `tracksCommanderDamage`; `format` stays in it as the preset label, which
 also keeps every already-saved game readable — the reason the `twoHeadedGiant`
 id was kept when its name changed.
@@ -605,13 +609,24 @@ joined the button's accessible name — "Rematch Same players, fresh totals" —
 and the name of an action should be the action; `aria-describedby` is how the
 hint still reaches a screen reader.
 
-**Phase 2 — Settings instead of modes.** `'custom'` joins `FormatId`;
-`startGame` takes a `GameSetup`; `FORMATS` becomes presets; `maxPlayers` becomes
-one app-wide cap; the setup screen gets the three controls.
+**Phase 2 — Settings instead of modes. Built.** `'custom'` joins `FormatId`;
+`FORMATS` becomes `PRESETS`; `maxPlayers` becomes one app-wide `MAX_PLAYERS`;
+the setup screen gets the three controls.
 
-_Ships:_ independently useful, and it is the smaller half of the domain work.
-_Watch:_ already-saved games must still fold. A test that loads a
-pre-change log and gets the same state is the one that matters.
+`startGame` did not need a `GameSetup` type after all — it takes a
+`GameConfig` directly. The config is already exactly what a game runs on, so
+inventing a parallel shape would have been ceremony; the use case now mints
+seat ids and records an event, and the application layer no longer imports the
+preset table at all. Presets became purely a UI concern, which is what they
+always were.
+
+The risk this plan flagged did not materialise, and the reason is worth
+keeping: `GameConfig` never changed shape. Starting life and commander damage
+were always fields of their own and `format` only widened to admit one more
+value, so a game recorded before the change folds to exactly what it folded to
+before. `reducer.test.ts` now asserts that against a stored event written out
+as bytes rather than built by current code, which is the only version of that
+test worth having.
 
 **Phase 3 — The lobby screen, over today's signalling.** Per-seat connection
 state in the store; the lobby route; `releaseSeat` and Leave table. Still one

@@ -408,3 +408,40 @@ test('fits a 320 pixel screen', async ({ page }) => {
   expect(overflows).toBe(false);
   await expect(page.getByLabel('Player 4: 40 life')).toBeVisible();
 });
+
+/*
+ * Phase 2 of docs/design/shell-and-lobby.md: the controls are what a game
+ * runs on, and a preset is a way of filling them in. A table can start
+ * anywhere, not only at the four totals that happen to have names.
+ */
+test('starts a game at a life total no preset offers', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('spinbutton', { name: 'Starting life' }).fill('13');
+  await page.getByRole('spinbutton', { name: 'Players' }).fill('3');
+  await page.getByRole('button', { name: 'Begin at 13' }).click();
+
+  await expect(page.getByLabel('Player 1: 13 life')).toBeVisible();
+  await expect(page.getByLabel('Player 3: 13 life')).toBeVisible();
+});
+
+test('seats six however the table was set up, with no preset capping it', async ({ page }) => {
+  // Brawl used to cap the table at four, which nothing on the button said.
+  await startGame(page, /brawl/i, 6);
+  await expect(page.getByRole('heading', { name: 'Player 6' })).toBeVisible();
+  await expect(page.getByLabel('Player 6: 25 life')).toBeVisible();
+});
+
+test('turns commander damage on for a preset that never had it', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /constructed/i }).click();
+  await page.getByRole('switch', { name: 'Commander damage' }).click();
+  await page.getByRole('button', { name: /begin at 20/i }).click();
+
+  /*
+   * Constructed asks nobody whose commander dealt it — see the matching
+   * assertion in commander-damage.spec.ts. Switching it on is the whole
+   * point of the setting existing apart from the preset that suggested it.
+   */
+  await zone(page, 'Player 1', 'lose').click();
+  await expect(page.getByRole('group', { name: /whose commander/i })).toHaveCount(1);
+});
