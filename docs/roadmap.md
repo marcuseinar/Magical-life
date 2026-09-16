@@ -51,6 +51,14 @@ and naming players during setup rather than once the game has started.
   their phone becomes that panel. This is the shape the signalling design in
   `docs/design/multiplayer.md` should serve, and it is what the QR handshake
   there is for.
+
+  **Superseded in shape, not in intent**, by `docs/design/shell-and-lobby.md`:
+  a code per _seat_ means the host runs the same errand once per player and
+  never sees the table. The lobby there makes it one code, one QR and one link
+  for the whole table, with joiners picking their own seat. The QR handshake
+  and the short-code worker are unchanged; what changes is how many rooms a
+  host opens and what they can see while people arrive.
+
 - WebRTC transport adapter, log merge, convergence
 - QR handshake and short-code signalling (Cloudflare Worker + Durable Object)
 - Relay fallback for hostile networks
