@@ -54,6 +54,13 @@ Playwright · Capacitor · Cloudflare Workers for the later backend.
     be smaller than 16px**, because iOS Safari zooms the page in on focus
     below that and pinch is blocked, so the zoom is a one-way door.
     `tests/e2e/viewport.spec.ts` holds both lines.
+11. **Nothing jumps, either.** A screen is the size it will be from the first
+    frame, before it has anything to put in it. Whatever is still on its way —
+    a code, a QR, a link — holds its own box open, with dots in it and the
+    button that needs it saying what it is waiting for, rather than appearing
+    when it arrives and pushing what is under it out from beneath a thumb
+    already on the way down. Say the wait in words as well: the element that
+    will hold the content is the live region that announces both states.
 
 ## Commands
 

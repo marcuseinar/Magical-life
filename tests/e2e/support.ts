@@ -45,11 +45,17 @@ export const openTable = (page: Page) => page.getByRole('button', { name: /^Tabl
  * A code the app is showing rather than taking. These are paragraphs, not
  * fields: a readonly textarea at 0.7rem made iOS zoom the page in on focus,
  * and with pinch blocked there was no way back out.
+ *
+ * The box now holds its place from the first frame with dots in it, so it
+ * being present — or even non-empty, since it announces the wait — no longer
+ * means there is a code in it. Copy is the honest signal: it is disabled
+ * until there is something to take.
  */
 export async function shownCode(page: Page, selector = '.sheet p.code') {
-  const code = page.locator(selector);
-  await expect(code).not.toHaveText('', { timeout: 15_000 });
-  return (await code.textContent())?.trim() ?? '';
+  await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeEnabled({
+    timeout: 15_000
+  });
+  return (await page.locator(selector).textContent())?.trim() ?? '';
 }
 
 /**

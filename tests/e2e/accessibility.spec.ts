@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { openMenu, openNewGame, startGame } from './support';
+import { openMenu, openNewGame, openTable, startGame } from './support';
 
 /* Dark is the only theme; a pretty theme that fails contrast cannot ship. */
 test('the opening screen is clean', async ({ page }) => {
@@ -56,5 +56,29 @@ test('settings is clean, and so is the confirmation guarding it', async ({ page 
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.getByRole('button', { name: 'Clear history' }).click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+/*
+ * Both halves of the table sheet, because the half nobody scans is the one
+ * that is only on screen while something is loading: an empty box with dots
+ * in it has to announce what it is waiting for, or it is a hole in the page
+ * to anybody not looking at it.
+ */
+test('the table sheet is clean while it opens, and once it has opened', async ({ page }) => {
+  let open = () => {};
+  const held = new Promise<void>((resolve) => (open = resolve));
+  await page.route('**/tables', async (route) => {
+    await held;
+    await route.continue();
+  });
+
+  await startGame(page, /commander/i, 4);
+  await openTable(page);
+  await page.getByRole('button', { name: /preparing the link/i }).waitFor();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  open();
+  await page.getByRole('button', { name: 'Copy link' }).waitFor();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

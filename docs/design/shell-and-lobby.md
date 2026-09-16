@@ -713,3 +713,29 @@ the two ways out sharing a row.
 `tests/e2e/viewport.spec.ts` is the guard for all of it. Nothing in the suite
 had ever looked at a screen other than the game: both older viewport tests run
 after `startGame`.
+
+**And then a screen that fits still moved.** Opening a table is a round trip,
+and the sheet spent it as a single line of text — then grew a code, a QR and a
+copy button underneath whatever the player was already reaching for. Same on
+the two hand-carried screens, which wait on ICE gathering. So a box holds its
+own size from the first frame now, with dots in it and the copy button saying
+what it is still waiting for, rather than appearing once it has something to
+show. It cost nothing to fix and it is the difference between a screen that is
+loading and a screen that is broken: a box with a frame and dots reads as a
+promise, where a gap reads as a mistake.
+
+Three details make it exact rather than approximate. The placeholder QR is a
+square of the same `--qr-size` the real one takes, so the row is the same
+height either way, and its ring is an inset shadow rather than a border
+because a border would take a pixel of layout the QR wants back. The short
+code's box carries `min-height: 1lh`, since three dots are shorter than a line
+of display type. And the shown-code paragraph is a fixed height rather than a
+capped one — which also caught a real bug: `max-height` alone let a 1kB blob
+paint straight over the copy button, the reply field and both actions under
+it, because a paragraph does not clip what will not fit the way the textarea
+it replaced did.
+
+The live region is the same element in both states, so a screen reader hears
+"Opening a table…" and then the code itself, rather than silence followed by a
+button appearing. The dots are `aria-hidden`: they say "wait" by looking like
+waiting, which is nothing at all if you are not looking.

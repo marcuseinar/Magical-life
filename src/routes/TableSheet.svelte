@@ -7,6 +7,8 @@
   import { loadQrScanSheet } from '$lib/scanner';
   import { resolve } from '$app/paths';
   import QrCode from '$ui/components/QrCode.svelte';
+  import LoadingDots from '$ui/components/LoadingDots.svelte';
+  import QrPending from '$ui/components/QrPending.svelte';
 
   let { store, onclose }: { store: GameStore; onclose: () => void } = $props();
 
@@ -121,31 +123,54 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="scrim__hit" onclick={close}></div>
 
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="table-title">
+  <div
+    class="sheet"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="table-title"
+    aria-busy={mode.kind === 'table' && table?.code == null}
+  >
     <h2 id="table-title" class="title">Connect a table</h2>
 
     {#if mode.kind === 'table'}
-      {#if table?.code == null}
-        <p class="body" role="status">Opening a table…</p>
-      {:else}
-        <p class="body">One code for everyone — each person picks their own seat.</p>
+      <p class="body">One code for everyone — each person picks their own seat.</p>
 
-        <p class="short-code">{table.code}</p>
-
-        {#if joinLink !== null}
-          <div class="qr-row">
-            <QrCode value={joinLink} />
-          </div>
-          <!-- The link is a thing to send, not to read. A readonly textarea
-               showing it cost a third of the sheet's height and, at 0.7rem,
-               made iOS zoom the whole page in on focus — with pinch blocked,
-               there was no way back out. A button and a long-press-selectable
-               line do the same job. -->
-          <button class="action" type="button" onclick={() => copyText(joinLink!)}>
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
+      <!--
+        Opening a table is a round trip, and the sheet used to spend it as a
+        single line of text — then grow a code, a QR and a button underneath
+        whatever the player was already reaching for. All three are pending
+        here rather than absent, so the sheet is the size it will be from the
+        first frame, and the one live region says which state it is in.
+      -->
+      <p class="short-code" role="status">
+        {#if table?.code == null}
+          <span class="sr-only">Opening a table…</span>
+          <LoadingDots />
+        {:else}
+          {table.code}
         {/if}
-      {/if}
+      </p>
+
+      <div class="qr-row" class:qr-row--waiting={joinLink === null}>
+        {#if joinLink === null}
+          <QrPending />
+        {:else}
+          <QrCode value={joinLink} />
+        {/if}
+      </div>
+      <!-- The link is a thing to send, not to read. A readonly textarea
+           showing it cost a third of the sheet's height and, at 0.7rem,
+           made iOS zoom the whole page in on focus — with pinch blocked,
+           there was no way back out. A button and a long-press-selectable
+           line do the same job. -->
+      <button
+        class="action"
+        type="button"
+        disabled={joinLink === null}
+        onclick={() => copyText(joinLink!)}
+      >
+        {#if joinLink === null}Preparing the link…{:else}{copied ? 'Copied' : 'Copy link'}{/if}
+      </button>
 
       <!-- Who is in. `claimed` is the shared truth, folded from the log, so
            every device agrees on it without anyone being asked. -->
@@ -196,50 +221,63 @@
         Send this code to whoever is joining — a text message, read aloud, however is easiest.
       </p>
 
-      {#if manual === null || manual.code === null}
-        <p class="body" role="status">Preparing a code…</p>
-      {:else}
-        <!-- No server touches this, either direction — the QR carries the
-             offer itself, not a link, so this works with no network at
-             all (ADR 0004's path 1). -->
-        <div class="qr-row">
+      <!-- No server touches this, either direction — the QR carries the
+           offer itself, not a link, so this works with no network at
+           all (ADR 0004's path 1). Gathering the candidates for it takes a
+           moment, and the same rule applies as above: pending, not absent. -->
+      <div class="qr-row" class:qr-row--waiting={manual?.code == null}>
+        {#if manual?.code == null}
+          <QrPending />
+        {:else}
           <QrCode value={manual.code} />
-        </div>
-        <div class="code-row">
-          <!-- Selectable by long press, but not focusable, so iOS has no
-               reason to zoom. A code this long is pasted, never typed. -->
-          <p class="code">{manual.code}</p>
-          <button class="action" type="button" onclick={() => copyText(manual!.code!)}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        </div>
-
-        <form class="reply" onsubmit={submitReply}>
-          <label class="field">
-            <span class="label">Paste their reply</span>
-            <textarea
-              bind:value={replyDraft}
-              class="code"
-              rows="3"
-              autocomplete="off"
-              spellcheck="false"></textarea>
-          </label>
-          {#if replyError}
-            <p class="error" role="alert">
-              That did not look like a reply code. Check it was copied in full.
-            </p>
+        {/if}
+      </div>
+      <div class="code-row">
+        <!-- Selectable by long press, but not focusable, so iOS has no
+             reason to zoom. A code this long is pasted, never typed. -->
+        <p class="code" class:code--waiting={manual?.code == null} role="status">
+          {#if manual?.code == null}
+            <span class="sr-only">Preparing a code…</span>
+            <LoadingDots />
+          {:else}
+            {manual.code}
           {/if}
-          <button class="fallback" type="button" onclick={openScanner}>
-            Scan their reply instead
+        </p>
+        <button
+          class="action"
+          type="button"
+          disabled={manual?.code == null}
+          onclick={() => copyText(manual!.code!)}
+        >
+          {#if manual?.code == null}Preparing the code…{:else}{copied ? 'Copied' : 'Copy'}{/if}
+        </button>
+      </div>
+
+      <form class="reply" onsubmit={submitReply}>
+        <label class="field">
+          <span class="label">Paste their reply</span>
+          <textarea
+            bind:value={replyDraft}
+            class="code"
+            rows="3"
+            autocomplete="off"
+            spellcheck="false"></textarea>
+        </label>
+        {#if replyError}
+          <p class="error" role="alert">
+            That did not look like a reply code. Check it was copied in full.
+          </p>
+        {/if}
+        <button class="fallback" type="button" onclick={openScanner}>
+          Scan their reply instead
+        </button>
+        <div class="actions">
+          <button class="action" type="button" onclick={close}>Cancel</button>
+          <button class="action action--go" type="submit" disabled={replyDraft.trim() === ''}>
+            Connect
           </button>
-          <div class="actions">
-            <button class="action" type="button" onclick={close}>Cancel</button>
-            <button class="action action--go" type="submit" disabled={replyDraft.trim() === ''}>
-              Connect
-            </button>
-          </div>
-        </form>
-      {/if}
+        </div>
+      </form>
     {/if}
   </div>
 </div>
@@ -329,6 +367,9 @@
   }
 
   .short-code {
+    /* The dots that stand in for it are shorter than the code, and a box
+       that shrinks around them is a box that moves when the code lands. */
+    min-height: 1lh;
     margin: 0;
     padding: var(--space-1) var(--space-2);
     border: 1px solid var(--frame-rule);
@@ -354,6 +395,16 @@
     padding: var(--space-1);
     border-radius: var(--radius-md);
     background: white;
+  }
+
+  /* The white is the QR's own contrast requirement, so it arrives with the
+     QR; the square it will occupy is held from the start either way. */
+  .qr-row--waiting {
+    /* An inset ring rather than a border: it matches the box the code sits
+       in, without taking a pixel of layout the QR will want back. */
+    background: var(--surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--frame-rule);
+    color: var(--text-faint);
   }
 
   .code-row {
@@ -400,6 +451,23 @@
     /* stylelint-disable-next-line property-no-vendor-prefix -- iOS Safari still needs it */
     -webkit-user-select: text;
     user-select: text;
+  }
+
+  /* The shown code only — fixed rather than capped, so the box is the same
+     size while the code is still being gathered as it is once the code fills
+     it, and a blob this long does not spill over the reply field under it.
+     Copy takes all of it regardless. The reply field itself is left to
+     scroll its own content, which is what somebody pasting into it needs. */
+  .code-row .code {
+    height: clamp(2.75rem, 8vh, 4.5rem);
+    overflow: hidden;
+  }
+
+  /* Centred in the box it is holding open, rather than in a corner of it. */
+  .code--waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .reply {

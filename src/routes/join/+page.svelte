@@ -15,6 +15,8 @@
   import { loadQrScanSheet } from '$lib/scanner';
   import { readJoinTarget } from '$ui/interaction/joinTarget';
   import QrCode from '$ui/components/QrCode.svelte';
+  import QrPending from '$ui/components/QrPending.svelte';
+  import LoadingDots from '$ui/components/LoadingDots.svelte';
   import GameScreen from '../GameScreen.svelte';
 
   const signalling = defaultSignalling();
@@ -321,24 +323,38 @@
         <p class="body">
           Send this back to {stage.invitation.playerName} — whoever invited you.
         </p>
-        {#if joinedManual.reply === null}
-          <p class="body" role="status">Preparing a reply…</p>
-        {:else}
-          <!-- Lets the host scan this back rather than type it, the same
-               way their own offer reached this device (ADR 0004's path 1). -->
-          <div class="qr-row">
+        <!-- Lets the host scan this back rather than type it, the same
+             way their own offer reached this device (ADR 0004's path 1).
+             Held at full size while the reply is still being gathered: this
+             screen used to be one line of text until it had a reply, and
+             then became all of this at once. -->
+        <div class="qr-row" class:qr-row--waiting={joinedManual.reply === null}>
+          {#if joinedManual.reply === null}
+            <QrPending />
+          {:else}
             <QrCode value={joinedManual.reply} />
-          </div>
-          <div class="code-row">
-            <!-- Shown, not typed into: a paragraph is long-press
-                 selectable and gives iOS nothing to zoom into. -->
-            <p class="code">{joinedManual.reply}</p>
-            <button class="action" type="button" onclick={copyReply}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <p class="body" role="status">Waiting for them to connect…</p>
-        {/if}
+          {/if}
+        </div>
+        <div class="code-row">
+          <!-- Shown, not typed into: a paragraph is long-press
+               selectable and gives iOS nothing to zoom into. -->
+          <p class="code" class:code--waiting={joinedManual.reply === null}>
+            {#if joinedManual.reply === null}<LoadingDots />{:else}{joinedManual.reply}{/if}
+          </p>
+          <button
+            class="action"
+            type="button"
+            disabled={joinedManual.reply === null}
+            onclick={copyReply}
+          >
+            {#if joinedManual.reply === null}Preparing…{:else}{copied ? 'Copied' : 'Copy'}{/if}
+          </button>
+        </div>
+        <!-- One line, two states: the wait for a reply and the wait for them
+             to take it are the same wait as far as this screen is concerned. -->
+        <p class="body" role="status">
+          {joinedManual.reply === null ? 'Preparing a reply…' : 'Waiting for them to connect…'}
+        </p>
       </div>
     {/if}
 
@@ -450,6 +466,31 @@
     padding: var(--space-2);
     border-radius: var(--radius-md);
     background: white;
+  }
+
+  /* The white is the QR's own contrast requirement, so it arrives with the
+     QR; the square it will occupy is held from the start either way. */
+  .qr-row--waiting {
+    /* An inset ring rather than a border: it matches the box the code sits
+       in, without taking a pixel of layout the QR will want back. */
+    background: var(--surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--frame-rule);
+    color: var(--text-faint);
+  }
+
+  /* Fixed rather than capped, so the box is the same size while the reply is
+     being gathered as it is once the reply fills it — and a blob this long
+     does not spill over what sits under it. Copy takes all of it regardless. */
+  .code-row .code {
+    height: 4.5rem;
+    overflow: hidden;
+  }
+
+  /* Centred in the box it is holding open, rather than in a corner of it. */
+  .code--waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .code-row {

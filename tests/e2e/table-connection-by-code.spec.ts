@@ -14,12 +14,13 @@ import { COMMITTED, openTable, startGame } from './support';
  */
 
 /** The one code for the table, which appears as soon as the sheet opens —
- *  there is nobody to choose first any more. */
+ *  there is nobody to choose first any more. The box it appears in is there
+ *  from the first frame, holding its size, so Copy link being enabled is
+ *  what says a code has actually landed in it. */
 async function tableCode(host: Page): Promise<string> {
   await openTable(host);
-  const shortCode = host.locator('.sheet p.short-code');
-  await expect(shortCode).toBeVisible({ timeout: 15_000 });
-  return (await shortCode.textContent())?.trim() ?? '';
+  await expect(host.getByRole('button', { name: 'Copy link' })).toBeEnabled({ timeout: 15_000 });
+  return (await host.locator('.sheet p.short-code').textContent())?.trim() ?? '';
 }
 
 async function joinAs(joiner: Page, code: string, seat: string) {
@@ -130,4 +131,35 @@ test('shows a seat somebody already took as taken, not as a choice', async ({ br
   await hostContext.close();
   await firstContext.close();
   await secondContext.close();
+});
+
+/*
+ * The sheet is its finished size before it has anything to show in it. The
+ * table takes a round trip to open, and the sheet used to spend that moment
+ * as a single line of text — then grow a code, a QR and a button under the
+ * player's thumb. Holding the round trip open is the only way to see that
+ * moment on purpose; in real life it is over in about a second, which is
+ * exactly why it was easy to ship.
+ */
+test('does not grow under the player when the code arrives', async ({ page }) => {
+  let open = () => {};
+  const held = new Promise<void>((resolve) => (open = resolve));
+  await page.route('**/tables', async (route) => {
+    await held;
+    await route.continue();
+  });
+
+  await startGame(page, /commander/i, 4);
+  await openTable(page);
+
+  const sheet = page.getByRole('dialog', { name: 'Connect a table' });
+  await expect(page.getByRole('button', { name: /preparing the link/i })).toBeDisabled();
+  const opening = (await sheet.boundingBox())!;
+
+  open();
+  await expect(page.getByRole('button', { name: 'Copy link' })).toBeEnabled({ timeout: 15_000 });
+  const opened = (await sheet.boundingBox())!;
+
+  expect(Math.round(opened.height)).toBe(Math.round(opening.height));
+  expect(Math.round(opened.y)).toBe(Math.round(opening.y));
 });

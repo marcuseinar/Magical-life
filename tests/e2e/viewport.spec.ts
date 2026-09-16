@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { inviteBySeat, openMenu, openTable, startGame } from './support';
+import { inviteBySeat, openMenu, openTable, shownCode, startGame } from './support';
 
 /*
  * Every screen is laid out inside one `.app` grid, and a bare `display: grid`
@@ -164,7 +164,7 @@ for (const phone of [...PHONES, { name: 'a very small phone', width: 320, height
       // used to need a scroll before anyone could reach Connect.
       await openTable(page);
       await inviteBySeat(page, 'Player 2');
-      await expect(page.locator('.sheet p.code')).not.toHaveText('', { timeout: 15_000 });
+      await shownCode(page);
       expect(await unreachable(page), 'a hand-carried invite').toEqual([]);
 
       await page.goto('/join');
