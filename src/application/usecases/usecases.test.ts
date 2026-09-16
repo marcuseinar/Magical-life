@@ -71,6 +71,37 @@ describe('use cases', () => {
       expect(session.state?.players[0]?.life).toBe(40);
       expect(session.events.length).toBeGreaterThan(before);
     });
+
+    /*
+     * Reconfiguring a game is not meeting new people. A seat whose identity
+     * the caller supplies keeps it, which is what lets "we said 30, not 40"
+     * change the life total without renaming everyone back to Player N —
+     * and, because `reduce` carries claims forward by seat id, without
+     * throwing every joined device off the table.
+     */
+    it('keeps a seat that arrives with an identity already', async () => {
+      await claimSeat({ session })(seats[1]!);
+
+      await startGame({ session, ids: countingIdSource('fresh') })('commander', [
+        { id: seats[0]!, name: 'Anna', colour: 'green' },
+        { id: seats[1]!, name: 'Björn', colour: 'blue' }
+      ]);
+
+      expect(session.state?.players.map((p) => p.id)).toEqual([seats[0], seats[1]]);
+      expect(session.state?.players[1]?.claimed).toBe(true);
+    });
+
+    it('mints an identity for a seat that arrives without one', async () => {
+      await startGame({ session, ids: countingIdSource('fresh') })('commander', [
+        { id: seats[0]!, name: 'Anna', colour: 'green' },
+        { name: 'Someone new', colour: 'red' }
+      ]);
+
+      const ids = session.state!.players.map((p) => p.id);
+      expect(ids[0]).toBe(seats[0]);
+      expect(ids[1]).not.toBe(seats[1]);
+      expect(new Set(ids).size).toBe(2);
+    });
   });
 
   describe('applyLifeDelta', () => {
