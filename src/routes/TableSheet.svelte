@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { GameStore } from '$lib/gameStore.svelte';
-  import { inviteToTable, inviteToTableByCode } from '$lib/tableConnection.svelte';
-  import type { TableInvite, TableInviteByCode } from '$lib/tableConnection.svelte';
+  import { hostTable, inviteToTable } from '$lib/tableConnection.svelte';
+  import type { TableHost, TableInvite } from '$lib/tableConnection.svelte';
   import type { PlayerId } from '$domain/ids';
   import { defaultSignalling } from '$lib/signalling';
   import { loadQrScanSheet } from '$lib/scanner';
@@ -12,52 +12,64 @@
 
   const signalling = defaultSignalling();
 
-  type Active =
-    | { readonly mode: 'code'; readonly playerId: PlayerId; readonly invite: TableInviteByCode }
-    | { readonly mode: 'manual'; readonly playerId: PlayerId; readonly invite: TableInvite };
+  /*
+   * One code for the table, not one per person (ADR 0006). The manual path
+   * below it stays per-seat because it has to: a QR handshake with no server
+   * is one offer shown to one scanner, which is inherent to holding a phone
+   * up to somebody.
+   */
+  type Mode =
+    | { readonly kind: 'table' }
+    | { readonly kind: 'pick-a-seat' }
+    | { readonly kind: 'manual'; readonly playerId: PlayerId; readonly invite: TableInvite };
 
-  let active = $state<Active | null>(null);
+  let mode = $state<Mode>({ kind: 'table' });
   let replyDraft = $state('');
   let replyError = $state(false);
   let copied = $state(false);
   let scanning = $state(false);
   let loadedScanner = $state<Awaited<ReturnType<typeof loadQrScanSheet>> | null>(null);
 
+  /*
+   * Started in an effect rather than at setup: reading a prop in a top-level
+   * expression captures it once, and this way the table also stops offering
+   * places when the sheet goes away — including when it is closed by
+   * something other than the Done button.
+   */
+  let table = $state<TableHost | null>(null);
+
+  $effect(() => {
+    const host = hostTable(store, signalling);
+    table = host;
+    return () => host.stop();
+  });
+
+  const seats = $derived(store.state?.players ?? []);
+  /** Narrowing `mode` does not survive into an event handler's closure, and
+   *  the manual branch needs it in several. */
+  const manual = $derived(mode.kind === 'manual' ? mode.invite : null);
+  const joinLink = $derived(
+    table?.code == null ? null : `${window.location.origin}${resolve('/join')}?code=${table.code}`
+  );
+
+  // The worker being unreachable at all is not a state worth showing — it is
+  // the state the manual fallback exists for, so drop into it rather than
+  // making a player read an error.
+  $effect(() => {
+    if (table?.error && mode.kind === 'table') mode = { kind: 'pick-a-seat' };
+  });
+
   async function openScanner() {
     loadedScanner = await loadQrScanSheet();
     scanning = true;
   }
 
-  function invite(playerId: PlayerId) {
-    active = { mode: 'code', playerId, invite: inviteToTableByCode(store, playerId, signalling) };
+  function inviteByHand(playerId: PlayerId) {
+    mode = { kind: 'manual', playerId, invite: inviteToTable(store, playerId) };
     replyDraft = '';
     replyError = false;
     copied = false;
   }
-
-  function useManualCode() {
-    if (active === null) return;
-    const { playerId } = active;
-    if (active.mode === 'code') active.invite.stop();
-    active = { mode: 'manual', playerId, invite: inviteToTable(store, playerId) };
-    replyDraft = '';
-    replyError = false;
-    copied = false;
-  }
-
-  // The worker being unreachable at all (offline, not deployed, blocked
-  // network) is not a state worth showing — it is the state the manual
-  // fallback exists for, so drop into it the moment it's clear the
-  // short-code path cannot work rather than making a player read an error.
-  $effect(() => {
-    if (active?.mode === 'code' && active.invite.error) useManualCode();
-  });
-
-  const joinLink = $derived(
-    active?.mode === 'code' && active.invite.code !== null
-      ? `${window.location.origin}${resolve('/join')}?code=${active.invite.code}`
-      : null
-  );
 
   async function copyText(text: string) {
     try {
@@ -70,9 +82,9 @@
   }
 
   async function acceptReply(reply: string) {
-    if (active === null || active.mode !== 'manual') return;
+    if (manual === null) return;
     try {
-      await active.invite.accept(reply);
+      await manual.accept(reply);
       replyError = false;
     } catch {
       replyError = true;
@@ -91,7 +103,7 @@
   }
 
   function close() {
-    if (active?.mode === 'code') active.invite.stop();
+    // The effect's teardown stops the table; this only closes the sheet.
     onclose();
   }
 </script>
@@ -112,84 +124,88 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="table-title">
     <h2 id="table-title" class="title">Connect a table</h2>
 
-    {#if active === null}
-      <p class="body">Give another player's seat to their own phone.</p>
+    {#if mode.kind === 'table'}
+      {#if table?.code == null}
+        <p class="body" role="status">Opening a table…</p>
+      {:else}
+        <p class="body">
+          One code for everyone. Show it, say it, or send the link — each person joins and picks
+          their own seat.
+        </p>
+
+        <p class="short-code">{table.code}</p>
+
+        {#if joinLink !== null}
+          <div class="qr-row">
+            <QrCode value={joinLink} />
+          </div>
+          <div class="code-row">
+            <textarea class="code" readonly value={joinLink} rows="2"></textarea>
+            <button class="action" type="button" onclick={() => copyText(joinLink!)}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+          </div>
+        {/if}
+      {/if}
+
+      <!-- Who is in. `claimed` is the shared truth, folded from the log, so
+           every device agrees on it without anyone being asked. -->
+      <h3 class="legend">Seats</h3>
       <ul class="players">
-        {#each store.state?.players ?? [] as player (player.id)}
+        {#each seats as player (player.id)}
+          <li class="seat" data-claimed={player.claimed}>
+            <span class="seat__name">{player.name}</span>
+            <span class="seat__state">{player.claimed ? 'joined' : 'free'}</span>
+          </li>
+        {/each}
+      </ul>
+
+      <div class="actions">
+        <button class="action action--go" type="button" onclick={close}>Done</button>
+      </div>
+      <button class="fallback" type="button" onclick={() => (mode = { kind: 'pick-a-seat' })}>
+        Trouble connecting? Use a code you paste instead.
+      </button>
+    {:else if mode.kind === 'pick-a-seat'}
+      <!-- The no-server path needs to know whose seat it is offering, because
+           the code itself carries that rather than a table to pick from. -->
+      <p class="body">Which seat is this code for?</p>
+      <ul class="players">
+        {#each seats as player (player.id)}
           <li>
-            <!-- An already-claimed seat has nothing left to invite: another
-                 device is already playing it. -->
-            <button class="row" disabled={player.claimed} onclick={() => invite(player.id)}>
+            <button class="row" disabled={player.claimed} onclick={() => inviteByHand(player.id)}>
               {player.claimed ? `${player.name} — joined` : `Invite ${player.name}`}
             </button>
           </li>
         {/each}
       </ul>
-    {:else if active.invite.connected}
+      <div class="actions">
+        <button class="action" type="button" onclick={() => (mode = { kind: 'table' })}>
+          Back
+        </button>
+      </div>
+    {:else if manual?.connected}
       <p class="body" role="status">Connected. Their phone now has this game too.</p>
       <div class="actions">
         <button class="action action--go" type="button" onclick={close}>Done</button>
       </div>
-    {:else if active.mode === 'code'}
-      {#if active.invite.expired}
-        <p class="body" role="status">Nobody joined in time. That code has expired.</p>
-        <div class="actions">
-          <button class="action" type="button" onclick={close}>Cancel</button>
-          <button class="action action--go" type="button" onclick={() => invite(active!.playerId)}>
-            Try again
-          </button>
-        </div>
-      {:else}
-        {#if active.invite.code === null}
-          <p class="body" role="status">Preparing a code…</p>
-        {:else}
-          <p class="body">
-            Send this to whoever is joining, or let them scan it — either way, their phone connects
-            on its own once they do.
-          </p>
-
-          <p class="short-code">{active.invite.code}</p>
-
-          {#if joinLink !== null}
-            <div class="qr-row">
-              <QrCode value={joinLink} />
-            </div>
-            <div class="code-row">
-              <textarea class="code" readonly value={joinLink} rows="2"></textarea>
-              <button class="action" type="button" onclick={() => copyText(joinLink!)}>
-                {copied ? 'Copied' : 'Copy link'}
-              </button>
-            </div>
-          {/if}
-        {/if}
-
-        <div class="actions">
-          <button class="action" type="button" onclick={close}>Cancel</button>
-        </div>
-        <!-- Reachable even while a code is still being prepared — a slow
-             worker is exactly one of the "troubles" this exists for, not
-             only an already-failed one. -->
-        <button class="fallback" type="button" onclick={useManualCode}>
-          Trouble connecting? Use a code you paste instead.
-        </button>
-      {/if}
     {:else}
       <p class="body">
         Send this code to whoever is joining — a text message, read aloud, however is easiest.
       </p>
 
-      {#if active.invite.code === null}
+      {#if manual === null || manual.code === null}
         <p class="body" role="status">Preparing a code…</p>
       {:else}
         <!-- No server touches this, either direction — the QR carries the
              offer itself, not a link, so this works with no network at
              all (ADR 0004's path 1). -->
         <div class="qr-row">
-          <QrCode value={active.invite.code} />
+          <QrCode value={manual.code} />
         </div>
         <div class="code-row">
-          <textarea class="code" readonly value={active.invite.code} rows="3"></textarea>
-          <button class="action" type="button" onclick={() => copyText(active!.invite.code!)}>
+          <textarea class="code" readonly value={manual.code} rows="3"></textarea>
+          <button class="action" type="button" onclick={() => copyText(manual!.code!)}>
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
@@ -407,5 +423,44 @@
   .action:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+
+  .legend {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .seat {
+    display: flex;
+    gap: var(--space-2);
+    align-items: baseline;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+  }
+
+  .seat__name {
+    color: var(--text-muted);
+  }
+
+  .seat[data-claimed='true'] .seat__name {
+    color: var(--text-primary);
+  }
+
+  .seat__state {
+    color: var(--text-faint);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .seat[data-claimed='true'] .seat__state {
+    color: var(--text-gold);
   }
 </style>

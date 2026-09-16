@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { joinByPastedCode, openTable, startGame } from './support';
+import { inviteBySeat, joinByPastedCode, openTable, startGame } from './support';
 
 /*
  * The connection-quality chip, against a real `RTCDataChannel`: nothing
@@ -28,8 +28,7 @@ test('shows direct once a real table connection is up, and nothing before that',
   await expect(host.getByRole('status', { name: /direct connection/i })).toHaveCount(0);
 
   await openTable(host);
-  await host.getByRole('button', { name: 'Invite Player 2' }).click();
-  await host.getByRole('button', { name: /paste instead/i }).click();
+  await inviteBySeat(host, 'Player 2');
 
   const hostCode = host.locator('.sheet textarea.code[readonly]');
   await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });

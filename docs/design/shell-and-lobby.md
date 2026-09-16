@@ -340,9 +340,9 @@ the chip a player has already learned.
 
 ### One code for the table
 
-Today one signalling room holds one offer and one answer, keyed to one seat.
-A table code that several people can use needs a room that hands out a fresh
-offer per joiner.
+**Built** — see [ADR 0006](../adr/0006-one-code-for-the-table.md), which
+records the room shape and the trade-offs. What follows is the sketch it was
+built from.
 
 ```
 Host    createTable(seats)  ─────────> room XKCD, offer #1 published
@@ -619,13 +619,29 @@ code per seat, shown per row.
 
 _Ships:_ J2, J5, J7 and J9 all get materially better with no worker change.
 
-**Phase 4 — One code for the table.** The room shape, the rotating offer, the
-TTL refresh, the claim race. Needs its own ADR before it is built, and probably
-a spike the way the handshake got one — the compare-and-swap under concurrent
-joiners is the part that is easy to get subtly wrong.
+**Phase 4 — One code for the table. Built**, and recorded in
+[ADR 0006](../adr/0006-one-code-for-the-table.md). The room holds the seat
+list, one claimable offer and one answer; the host's poll became a heartbeat
+carrying the seat list; the window runs from that heartbeat rather than from
+creation, so a table stays open all game.
 
 _Ships:_ the single QR and the single link, which is what J2 and J7 actually
 want.
+
+The claim race turned out not to exist. Because a fresh offer only goes out
+once the previous joiner is connected, only one handshake is ever in flight —
+so two joiners cannot be picking a seat at the same time, and the total-order
+tiebreak this plan plans for never has to fire. The second person sees
+"somebody else is joining right now" and waits a beat. Four people scanning at
+once take turns rather than connecting in parallel, which at a table is
+invisible and buys away a whole class of race.
+
+The one thing that did bite was staleness, exactly where the plan said it
+might: the host publishes its next offer _before_ the new arrival's
+`seat/claimed` comes back over the data channel, so the published seat list
+was always one person behind. The heartbeat carrying the seat list is the fix,
+and the joiner's picker re-reads while it is open so seats fill in as people
+sit down.
 
 **Phase 5, optional — `seat/added`.** Adding a seat to a running game (J3). A
 new domain event, and the only new one in the whole plan. Deliberately last,

@@ -40,6 +40,16 @@ export async function rematch(page: Page) {
 export const openTable = (page: Page) => page.getByRole('button', { name: /^Table/ }).click();
 
 /**
+ * The host's no-server path. The table's own code is one for everybody now,
+ * so the per-seat handshake — inherently one offer per scanner — asks whose
+ * seat it is for first.
+ */
+export async function inviteBySeat(page: Page, seat: string) {
+  await page.getByRole('button', { name: /paste instead/i }).click();
+  await page.getByRole('button', { name: `Invite ${seat}` }).click();
+}
+
+/**
  * The joiner's no-server path. Every way in sits on one screen now, so the
  * paste field is revealed rather than a mode reached through the others —
  * and the host's own "use a code you paste instead" in the table sheet is a

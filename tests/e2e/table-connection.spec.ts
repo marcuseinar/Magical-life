@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   COMMITTED,
   expectLife,
+  inviteBySeat,
   joinByPastedCode,
   openMenu,
   openTable,
@@ -28,10 +29,7 @@ test('a joined table converges to the same game, in both directions', async ({ b
   await startGame(host, /commander/i, 2);
 
   await openTable(host);
-  await host.getByRole('button', { name: 'Invite Player 2' }).click();
-  // The short code is the default path now; this journey exercises its
-  // manual-paste fallback specifically.
-  await host.getByRole('button', { name: /paste instead/i }).click();
+  await inviteBySeat(host, 'Player 2');
 
   const hostCode = host.locator('.sheet textarea.code[readonly]');
   await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });
@@ -104,8 +102,7 @@ test('a claimed seat leaves the grid, and a rematch does not hand it back', asyn
   await startGame(host, /commander/i, 3);
 
   await openTable(host);
-  await host.getByRole('button', { name: 'Invite Player 2' }).click();
-  await host.getByRole('button', { name: /paste instead/i }).click();
+  await inviteBySeat(host, 'Player 2');
 
   const hostCode = host.locator('.sheet textarea.code[readonly]');
   await expect(hostCode).not.toHaveValue('', { timeout: 10_000 });

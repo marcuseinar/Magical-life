@@ -1,6 +1,6 @@
 import { generateRoomCode } from './codes';
 import { SignallingRoom } from './room';
-import type { AnswerPayload, OfferPayload } from './roomLogic';
+import type { AnswerPayload, SeatSummary } from './roomLogic';
 
 export { SignallingRoom };
 
@@ -19,76 +19,51 @@ function corsHeaders(request: Request, env: Env): HeadersInit {
   };
 }
 
-function isOfferPayload(value: unknown): value is OfferPayload {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as OfferPayload).sdp === 'string' &&
-    typeof (value as OfferPayload).invitePlayerId === 'string' &&
-    typeof (value as OfferPayload).invitePlayerName === 'string'
-  );
-}
+const isSeat = (value: unknown): value is SeatSummary =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as SeatSummary).id === 'string' &&
+  typeof (value as SeatSummary).name === 'string' &&
+  typeof (value as SeatSummary).colour === 'string' &&
+  typeof (value as SeatSummary).claimed === 'boolean';
 
-function isAnswerPayload(value: unknown): value is AnswerPayload {
-  return (
-    typeof value === 'object' && value !== null && typeof (value as AnswerPayload).sdp === 'string'
-  );
-}
+type SeatsBody = { seats: readonly SeatSummary[] };
+type OfferBody = SeatsBody & { sdp: string };
 
-async function createRoom(request: Request, env: Env, headers: HeadersInit): Promise<Response> {
+const isSeatsBody = (value: unknown): value is SeatsBody =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as SeatsBody).seats) &&
+  (value as SeatsBody).seats.every(isSeat);
+
+const isOfferBody = (value: unknown): value is OfferBody =>
+  isSeatsBody(value) && typeof (value as OfferBody).sdp === 'string';
+
+const isAnswerBody = (value: unknown): value is AnswerPayload =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as AnswerPayload).sdp === 'string' &&
+  typeof (value as AnswerPayload).ticket === 'string' &&
+  typeof (value as AnswerPayload).seatId === 'string';
+
+/** Identifies one offer, so a joiner who took too long cannot answer the one
+ *  that replaced theirs. Opaque to everyone but the room. */
+const newTicket = () => crypto.randomUUID();
+
+const room = (env: Env, code: string) => env.ROOMS.get(env.ROOMS.idFromName(code.toUpperCase()));
+
+async function createTable(request: Request, env: Env, headers: HeadersInit): Promise<Response> {
   const body: unknown = await request.json();
-  if (!isOfferPayload(body)) return new Response('invalid offer', { status: 400, headers });
+  if (!isOfferBody(body)) return new Response('invalid offer', { status: 400, headers });
 
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const code = generateRoomCode((n) => crypto.getRandomValues(new Uint8Array(n)));
-    const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-    if ((await stub.createOffer(body)) === 'created') {
-      return Response.json({ code }, { headers });
-    }
+    const created = await room(env, code).createTable(body.seats, body.sdp, newTicket());
+    if (created === 'created') return Response.json({ code }, { headers });
   }
-  return new Response('could not allocate a room code', { status: 503, headers });
+  return new Response('could not allocate a table code', { status: 503, headers });
 }
 
-async function getOffer(env: Env, code: string, headers: HeadersInit): Promise<Response> {
-  const stub = env.ROOMS.get(env.ROOMS.idFromName(code.toUpperCase()));
-  const offer = await stub.getOffer();
-  if (offer === null) return new Response('not found', { status: 404, headers });
-  return Response.json({ offer }, { headers });
-}
-
-async function postAnswer(
-  request: Request,
-  env: Env,
-  code: string,
-  headers: HeadersInit
-): Promise<Response> {
-  const body: unknown = await request.json();
-  if (!isAnswerPayload(body)) return new Response('invalid answer', { status: 400, headers });
-
-  const stub = env.ROOMS.get(env.ROOMS.idFromName(code.toUpperCase()));
-  const accepted = await stub.submitAnswer(body);
-  if (!accepted) return new Response('not found', { status: 404, headers });
-  return new Response(null, { status: 204, headers });
-}
-
-async function getAnswer(env: Env, code: string, headers: HeadersInit): Promise<Response> {
-  const stub = env.ROOMS.get(env.ROOMS.idFromName(code.toUpperCase()));
-  const result = await stub.getAnswer();
-  if (!result.found) return new Response('not found', { status: 404, headers });
-  return Response.json({ answer: result.answer }, { headers });
-}
-
-/**
- * `GET  /health`             — for a deploy check or a local dev server to
- *                              poll, not for a client to call
- * `POST /rooms`             — host offers a table, gets back a short code
- * `GET  /rooms/:code`       — joiner reads the offer for a code
- * `POST /rooms/:code/answer`— joiner posts their answer
- * `GET  /rooms/:code/answer`— host polls for the answer
- *
- * Sees only opaque SDP blobs and player names volunteered for the invite —
- * never a game event. See docs/design/multiplayer.md's trust model.
- */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const headers = corsHeaders(request, env);
@@ -102,15 +77,57 @@ export default {
     }
 
     try {
-      if (root === 'rooms' && code === undefined && request.method === 'POST') {
-        return await createRoom(request, env, headers);
+      if (root === 'tables' && code === undefined && request.method === 'POST') {
+        return await createTable(request, env, headers);
       }
-      if (root === 'rooms' && code !== undefined && sub === undefined && request.method === 'GET') {
-        return await getOffer(env, code, headers);
-      }
-      if (root === 'rooms' && code !== undefined && sub === 'answer' && rest.length === 0) {
-        if (request.method === 'POST') return await postAnswer(request, env, code, headers);
-        if (request.method === 'GET') return await getAnswer(env, code, headers);
+
+      if (root === 'tables' && code !== undefined && rest.length === 0) {
+        const stub = room(env, code);
+
+        // What is at this table, without taking anything from it.
+        if (sub === undefined && request.method === 'GET') {
+          const summary = await stub.summary();
+          if (summary === null) return new Response('not found', { status: 404, headers });
+          return Response.json(summary, { headers });
+        }
+
+        // Takes the offer off the table — exactly one joiner gets it.
+        if (sub === 'claim' && request.method === 'POST') {
+          const claimed = await stub.claim();
+          if (claimed === null) {
+            // Either the table is gone or somebody else is mid-handshake.
+            // A joiner is told to try again in a moment either way.
+            return new Response('nothing to claim', { status: 409, headers });
+          }
+          return Response.json(claimed, { headers });
+        }
+
+        if (sub === 'answer' && request.method === 'POST') {
+          const body: unknown = await request.json();
+          if (!isAnswerBody(body)) return new Response('invalid answer', { status: 400, headers });
+          const accepted = await stub.submitAnswer(body);
+          if (!accepted) return new Response('not found', { status: 404, headers });
+          return new Response(null, { status: 204, headers });
+        }
+
+        // The host's heartbeat: still here, here is the table as it now
+        // stands, and has anybody answered? One call rather than three.
+        if (sub === 'poll' && request.method === 'POST') {
+          const body: unknown = await request.json();
+          if (!isSeatsBody(body)) return new Response('invalid seats', { status: 400, headers });
+          const result = await stub.takeAnswer(body.seats);
+          if (!result.found) return new Response('not found', { status: 404, headers });
+          return Response.json({ answer: result.answer }, { headers });
+        }
+
+        // The host putting the next offer out under the same code.
+        if (sub === 'offer' && request.method === 'POST') {
+          const body: unknown = await request.json();
+          if (!isOfferBody(body)) return new Response('invalid offer', { status: 400, headers });
+          const published = await stub.publishOffer(body.seats, body.sdp, newTicket());
+          if (!published) return new Response('not found', { status: 404, headers });
+          return new Response(null, { status: 204, headers });
+        }
       }
     } catch {
       return new Response('bad request', { status: 400, headers });

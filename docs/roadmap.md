@@ -52,12 +52,13 @@ and naming players during setup rather than once the game has started.
   `docs/design/multiplayer.md` should serve, and it is what the QR handshake
   there is for.
 
-  **Superseded in shape, not in intent**, by `docs/design/shell-and-lobby.md`:
-  a code per _seat_ means the host runs the same errand once per player and
-  never sees the table. The lobby there makes it one code, one QR and one link
-  for the whole table, with joiners picking their own seat. The QR handshake
-  and the short-code worker are unchanged; what changes is how many rooms a
-  host opens and what they can see while people arrive.
+  **Superseded in shape, not in intent, and now rebuilt** — see
+  `docs/design/shell-and-lobby.md` and ADR 0006. A code per _seat_ meant the
+  host ran the same errand once per player and never saw the table. It is now
+  one code, one QR and one link for the whole table, with the offer behind
+  them rotating and each joiner picking their own seat. The QR handshake is
+  unchanged and stays per-seat, because one offer shown to one scanner is
+  inherent to holding a phone up to somebody.
 
 - WebRTC transport adapter, log merge, convergence
 - QR handshake and short-code signalling (Cloudflare Worker + Durable Object)

@@ -119,19 +119,37 @@ inside the app.
 A Cloudflare Worker plus one Durable Object per table, in
 `workers/signalling/` — its own README covers deploying it. **Built and
 wired into the client**: this is the path `TableSheet.svelte` actually
-offers first (`inviteToTableByCode`, `src/lib/tableConnection.svelte.ts`),
-falling back to the manual-paste code below only when a player chooses to,
-typically because the worker can't be reached.
+offers first (`hostTable`, `src/lib/tableConnection.svelte.ts`), falling back
+to the manual-paste code below only when a player chooses to, typically
+because the worker can't be reached.
 
-- Host gets a 4-character room code (`XKCD`). It is a room key, not a secret
-  — codes exclude `0`/`O` and `1`/`I`/`L`, so it is also readable aloud
-  across a table.
-- Peers POST their offer/answer blobs to the Durable Object, which holds them
-  in storage and hands them to the other peer.
-- The room expires 10 minutes after creation, whether or not anyone joined.
+One code for the whole table, not one per person. The shape and the
+trade-offs are [ADR 0006](../adr/0006-one-code-for-the-table.md); the
+mechanics are:
 
-The server sees only opaque SDP blobs and the invited seat's id and name —
-never a game event. Cost is a handful of requests per game — inside a free
+- The host gets one 4-character code (`XKCD`), and that is the code, the QR
+  and the link for everybody. It is a room key, not a secret — codes exclude
+  `0`/`O` and `1`/`I`/`L`, so it is also readable aloud across a table.
+- The host publishes an offer. Exactly one joiner may claim it: the claim is a
+  compare-and-swap, so two people scanning the same QR in the same instant
+  cannot both answer the same SDP. A Durable Object serialises its own calls,
+  which is what makes that read-modify-write correct without locking.
+- The joiner reads the table's seats, picks a free one, and answers with a
+  ticket identifying the offer they took. A ticket from a superseded offer is
+  refused rather than connecting them to a peer the host has moved past.
+- The host accepts, connects, and publishes a fresh offer under the same code.
+  Only one handshake is ever in flight, which is also what stops two joiners
+  taking the same seat — they cannot be picking at the same time.
+- The host's poll is a heartbeat carrying its current seat list, because it
+  publishes the next offer before the new arrival's `seat/claimed` comes back
+  over the data channel. Without it, a joiner's list would always be one
+  person behind.
+- The table expires ten minutes after the host's **last heartbeat**, not after
+  creation: it stays open across a whole game so somebody can arrive on turn
+  nine, and it goes when the host closes the sheet.
+
+The server sees only opaque SDP blobs and the seat names a host volunteers so
+a joiner can pick one — never a game event. Cost is a handful of requests per game — inside a free
 tier by orders of magnitude. Verify current Cloudflare free-tier limits before
 launch; they change.
 

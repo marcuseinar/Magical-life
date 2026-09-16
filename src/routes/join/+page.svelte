@@ -4,12 +4,13 @@
   import { resolve } from '$app/paths';
   import {
     joinTable,
-    joinTableByCode,
-    whoIsThisFor,
-    whoIsThisForCode
+    joinTableAsSeat,
+    lookUpTable,
+    whoIsThisFor
   } from '$lib/tableConnection.svelte';
   import type { Invitation, TableJoin, TableJoinByCode } from '$lib/tableConnection.svelte';
-  import type { OfferPayload } from '$application/ports/signalling';
+  import type { SeatSummary, TableSummary } from '$application/ports/signalling';
+  import { playerId } from '$domain/ids';
   import { defaultSignalling } from '$lib/signalling';
   import { loadQrScanSheet } from '$lib/scanner';
   import { readJoinTarget } from '$ui/interaction/joinTarget';
@@ -26,11 +27,12 @@
     | { readonly kind: 'entry' }
     | { readonly kind: 'looking-up' }
     | { readonly kind: 'code-not-found' }
+    /* One code serves the whole table, so the code alone cannot say who the
+       joiner is — they pick a seat from the list it resolves to. */
     | {
-        readonly kind: 'confirm-code';
-        readonly invitation: Invitation;
+        readonly kind: 'pick-a-seat';
         readonly code: string;
-        readonly offer: OfferPayload;
+        readonly table: TableSummary;
       }
     | {
         readonly kind: 'confirm-manual';
@@ -66,7 +68,7 @@
     stage = { kind: 'looking-up' };
     let result;
     try {
-      result = await whoIsThisForCode(code, signalling);
+      result = await lookUpTable(code, signalling);
     } catch {
       result = null;
     }
@@ -74,7 +76,7 @@
       stage = { kind: 'code-not-found' };
       return;
     }
-    stage = { kind: 'confirm-code', invitation: result.invitation, code, offer: result.offer };
+    stage = { kind: 'pick-a-seat', code, table: result };
   }
 
   // A code arriving in the link (scanned or tapped) skips straight to
@@ -125,10 +127,38 @@
     readManualCode();
   }
 
-  function beginJoinCode() {
-    if (stage.kind !== 'confirm-code') return;
-    joinedCode = joinTableByCode(stage.code, stage.offer, signalling);
-    stage = { kind: 'connecting-code', invitation: stage.invitation };
+  /*
+   * The table fills up while somebody is still deciding, so the list they
+   * are deciding from has to keep up. Cheap: one small read every couple of
+   * seconds, and only while the picker is actually on screen.
+   */
+  const SEAT_REFRESH_MS = 2000;
+
+  $effect(() => {
+    if (stage.kind !== 'pick-a-seat') return;
+    const code = stage.code;
+
+    const timer = setInterval(() => {
+      void lookUpTable(code, signalling)
+        .then((table) => {
+          if (table !== null && stage.kind === 'pick-a-seat') stage = { ...stage, table };
+        })
+        .catch(() => {
+          // A refresh that fails changes nothing; the list on screen is
+          // still the last one that worked, and picking still tries.
+        });
+    }, SEAT_REFRESH_MS);
+
+    return () => clearInterval(timer);
+  });
+
+  function takeSeat(seat: SeatSummary) {
+    if (stage.kind !== 'pick-a-seat') return;
+    joinedCode = joinTableAsSeat(stage.code, playerId(seat.id), signalling);
+    stage = {
+      kind: 'connecting-code',
+      invitation: { playerId: playerId(seat.id), playerName: seat.name }
+    };
   }
 
   function beginJoinManual() {
@@ -247,10 +277,28 @@
         </p>
         <button class="action action--go" type="button" onclick={startOver}>Try again</button>
       </div>
-    {:else if stage.kind === 'confirm-code'}
+    {:else if stage.kind === 'pick-a-seat'}
       <div class="group">
-        <p class="body">Join as <strong>{stage.invitation.playerName}</strong>?</p>
-        <button class="action action--go" type="button" onclick={beginJoinCode}>Join</button>
+        <p class="body">Which seat are you?</p>
+        <ul class="seats">
+          {#each stage.table.seats as seat (seat.id)}
+            <li>
+              <button
+                class="row"
+                type="button"
+                disabled={seat.claimed}
+                onclick={() => takeSeat(seat)}
+              >
+                {seat.claimed ? `${seat.name} — taken` : seat.name}
+              </button>
+            </li>
+          {/each}
+        </ul>
+        {#if !stage.table.open}
+          <!-- Only one handshake is in flight at a time, which is exactly
+               what stops two people landing in the same seat. -->
+          <p class="body" role="status">Somebody else is joining right now — this will wait.</p>
+        {/if}
       </div>
     {:else if stage.kind === 'confirm-manual'}
       <div class="group">
@@ -258,7 +306,16 @@
         <button class="action action--go" type="button" onclick={beginJoinManual}>Join</button>
       </div>
     {:else if stage.kind === 'connecting-code'}
-      <p class="body" role="status">Connecting…</p>
+      {#if joinedCode?.failed}
+        <div class="group">
+          <p class="body" role="alert">
+            That seat could not be taken — somebody may have got there first.
+          </p>
+          <button class="action action--go" type="button" onclick={startOver}>Try again</button>
+        </div>
+      {:else}
+        <p class="body" role="status">Joining as {stage.invitation.playerName}…</p>
+      {/if}
     {:else if stage.kind === 'connecting-manual' && joinedManual}
       <div class="group">
         <p class="body">
@@ -461,6 +518,30 @@
     font-family: var(--font-display);
     font-size: 0.95rem;
     letter-spacing: 0.04em;
+  }
+
+  .seats {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    text-align: left;
+  }
+
+  .row:disabled {
+    color: var(--text-muted);
+    opacity: 0.6;
   }
 
   .fallback {

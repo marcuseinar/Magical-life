@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import qrcode from 'qrcode-generator';
-import { openTable, startGame } from './support';
+import { inviteBySeat, openTable, startGame } from './support';
 
 /*
  * ADR 0004's path 1 — no server, offer and answer carried in a QR code —
@@ -124,8 +124,7 @@ test.describe('QR scanning', () => {
     await installFakeCamera(page, replyCode);
     await startGame(page, /commander/i, 2);
     await openTable(page);
-    await page.getByRole('button', { name: 'Invite Player 2' }).click();
-    await page.getByRole('button', { name: /paste instead/i }).click();
+    await inviteBySeat(page, 'Player 2');
     await expect(page.locator('.sheet textarea.code[readonly]')).not.toHaveValue('', {
       timeout: 10_000
     });
