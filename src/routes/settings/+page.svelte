@@ -105,7 +105,11 @@
     line-height: 1.5;
   }
 
+  /* Deliberately not full width. Stacked above the way out, in the same
+     geometry, the only thing telling them apart was colour — and the louder
+     of the two was the one that destroys everything. */
   .danger {
+    justify-self: start;
     min-height: 2.75rem;
     padding: 0 var(--space-4);
     border: 1px solid var(--danger);

@@ -183,9 +183,7 @@
       <!-- Equal billing, top to bottom by how often each is the right one:
            scan at a table, type a code read out over a phone, paste when
            there is no network at all. -->
-      <button class="action action--go scan" type="button" onclick={openScanner}>
-        Scan a QR code
-      </button>
+      <button class="action scan" type="button" onclick={openScanner}>Scan a QR code</button>
 
       <p class="divider"><span>or</span></p>
 
@@ -412,10 +410,16 @@
     font-size: 0.8rem;
   }
 
+  /* The one primary on the screen. Continue keeps the outline treatment:
+     two identically-weighted gold pills is no hierarchy at all, and at a
+     real table the camera is the best path there is. */
   .scan {
     width: min(26rem, 100%);
     min-height: 3.25rem;
     margin-inline: auto;
+    border-color: var(--frame-rule-strong);
+    background: linear-gradient(180deg, var(--surface-raised), var(--surface-sunken));
+    color: var(--text-gold);
   }
 
   /* A rule with the word sitting in it, so the two are alternatives rather
@@ -445,6 +449,10 @@
   .secondary {
     width: min(26rem, 100%);
     min-height: 3rem;
+
+    /* Set apart from the ways in above it: this is how you leave, not a
+       fourth option. */
+    margin-block-start: var(--space-4);
     margin-inline: auto;
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);

@@ -91,7 +91,7 @@
 
   <fieldset class="group">
     <legend class="legend">Players</legend>
-    <div class="options options--tight">
+    <div class="options options--tight" style="--seats: {format.maxPlayers}">
       {#each Array.from({ length: format.maxPlayers }, (_, i) => i + 1) as n (n)}
         <button class="pill" aria-pressed={count === n} onclick={() => (chosenCount = n)}
           >{n}</button
@@ -186,8 +186,13 @@
     width: 100%;
   }
 
+  /* One row, always. `auto-fit` fitted five of the six on a phone and
+     dropped the last onto a line by itself, which read as though six were
+     somehow a different kind of choice. The count is known — there is never
+     more than a format allows — so ask for exactly that many columns and let
+     them shrink. */
   .options--tight {
-    grid-template-columns: repeat(auto-fit, minmax(3rem, 1fr));
+    grid-template-columns: repeat(var(--seats), minmax(0, 1fr));
   }
 
   .option {
