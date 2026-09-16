@@ -1,1 +1,0 @@
-import{I as e,X as t,Y as n,a as r,j as i,p as a}from"../chunks/Dix4RtxU.js";import"../chunks/xihTtKlq.js";import{l as o,t as s}from"../chunks/BNrSHI3h.js";function c(c,l){t(l,!1);let u=o();r(),a(`1uha8ag`,t=>{i(()=>{e.title=`Magical Life`})}),s(c,{get store(){return u}}),n()}export{c as component};
