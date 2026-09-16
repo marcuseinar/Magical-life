@@ -26,9 +26,14 @@ test(`survives ${STEPS} random actions (seed ${SEED})`, async ({ page }) => {
     const control = controls[Math.floor(next() * controls.length)];
     if (!control) continue;
 
-    // "End game" would restart the walk from the opening screen.
+    /*
+     * The controls that leave the game screen entirely. This is a walk over a
+     * game — its closing assertions read the panels — so wandering into setup
+     * or settings ends the walk rather than testing anything. "End game" used
+     * to be the only one; ADR 0005 replaced it with a menu that navigates.
+     */
     const label = (await control.getAttribute('aria-label')) ?? (await control.textContent()) ?? '';
-    if (/end game/i.test(label)) continue;
+    if (/new game|settings|clear history/i.test(label)) continue;
 
     await control.click({ timeout: 2000, force: true }).catch(() => {});
 

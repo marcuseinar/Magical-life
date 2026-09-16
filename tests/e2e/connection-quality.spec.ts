@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { startGame } from './support';
+import { openTable, startGame } from './support';
 
 /*
  * The connection-quality chip, against a real `RTCDataChannel`: nothing
@@ -27,7 +27,7 @@ test('shows direct once a real table connection is up, and nothing before that',
   // Solo play never tracks a connection at all.
   await expect(host.getByRole('status', { name: /direct connection/i })).toHaveCount(0);
 
-  await host.getByRole('button', { name: 'Connect a table' }).click();
+  await openTable(host);
   await host.getByRole('button', { name: 'Invite Player 2' }).click();
   await host.getByRole('button', { name: /paste instead/i }).click();
 

@@ -32,6 +32,13 @@ export async function rematch(page: Page) {
   await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
 }
 
+/**
+ * The table sheet. Reached from the toolbar now rather than a link beneath it,
+ * and its accessible name grows a count once seats are claimed — so match the
+ * start of it rather than the whole thing.
+ */
+export const openTable = (page: Page) => page.getByRole('button', { name: /^Table/ }).click();
+
 /** Opens the setup screen over the running game, without starting anything. */
 export async function openNewGame(page: Page) {
   await openMenu(page);

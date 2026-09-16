@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { COMMITTED, expectLife, rematch, settled, startGame } from './support';
+import { COMMITTED, expectLife, openTable, rematch, settled, startGame } from './support';
 
 /*
  * The real thing, not the spike: two independent browser contexts, standing
@@ -18,7 +18,7 @@ test('a joined table converges to the same game, in both directions', async ({ b
 
   await startGame(host, /commander/i, 2);
 
-  await host.getByRole('button', { name: 'Connect a table' }).click();
+  await openTable(host);
   await host.getByRole('button', { name: 'Invite Player 2' }).click();
   // The short code is the default path now; this journey exercises its
   // manual-paste fallback specifically.
@@ -96,7 +96,7 @@ test('a claimed seat leaves the grid, and a rematch does not hand it back', asyn
 
   await startGame(host, /commander/i, 3);
 
-  await host.getByRole('button', { name: 'Connect a table' }).click();
+  await openTable(host);
   await host.getByRole('button', { name: 'Invite Player 2' }).click();
   await host.getByRole('button', { name: /paste instead/i }).click();
 

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { COMMITTED, startGame } from './support';
+import { COMMITTED, openTable, startGame } from './support';
 
 /*
  * The short-code path, against the real signalling worker (workers/signalling/,
@@ -20,7 +20,7 @@ test('a joined table converges to the same game, arriving by the short-code link
 
   await startGame(host, /commander/i, 2);
 
-  await host.getByRole('button', { name: 'Connect a table' }).click();
+  await openTable(host);
   await host.getByRole('button', { name: 'Invite Player 2' }).click();
 
   const shortCode = host.locator('.sheet p.short-code');
@@ -65,7 +65,7 @@ test('a joiner can type the short code by hand instead of following a link', asy
 
   await startGame(host, /commander/i, 2);
 
-  await host.getByRole('button', { name: 'Connect a table' }).click();
+  await openTable(host);
   await host.getByRole('button', { name: 'Invite Player 2' }).click();
 
   const shortCode = host.locator('.sheet p.short-code');
