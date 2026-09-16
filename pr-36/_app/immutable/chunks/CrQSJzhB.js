@@ -1,1 +1,0 @@
-import{J as e,Z as t}from"./C0S6Hh8P.js";var n=Symbol(`magical-life:game`),r=e=>t(n,e),i=()=>e(n);export{i as n,r as t};
