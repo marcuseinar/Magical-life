@@ -375,6 +375,48 @@ Two things do change and need deciding when this is built:
   currently a deliberate no-op on an already-claimed seat, which is right for a
   rejoin and wrong for a race, because it tells the loser they succeeded.
 
+### Joining is a list, not a code
+
+The code is _one way_ a table gets onto the joiner's screen, not the definition
+of joining. Worth stating now, because the alternative framing — "type the code
+to join" — is the one that makes every later discovery mechanism a rewrite
+rather than an addition.
+
+So `/join` shows what it can see, and says where each one came from:
+
+```
+  TABLES
+
+  ○ Anna's table   ·  code XKCD
+  ○ Scanned        ·  from a QR
+
+  Or enter a code    [ _ _ _ _ ]
+```
+
+Today that list has at most one entry and it always came from a code or a QR,
+so the list is nearly invisible — which is the point. It costs nothing now and
+it is the difference between adding a discovery source later and rebuilding the
+screen around it.
+
+Three sources are plausible later, none of them in scope here:
+
+- **Bluetooth LE**, once there is a native shell (M4). Not before: Web
+  Bluetooth is central-role only — a browser can scan for peripherals but
+  cannot advertise as one, so two phones running the web app both scan and
+  neither is findable. iOS Safari has no Web Bluetooth at all. This is a
+  platform limit, not an effort one.
+- **Same network**, via the signalling worker grouping rooms by the coarse
+  network they were created from. Works on the web and on iOS today, needs no
+  permission — but it is new metadata at the worker, which ADR 0004 was
+  deliberate about, and it degrades exactly where it would be most useful: one
+  venue NAT at an M5 event lists every table in the hall.
+- **The code**, which already works, needs nothing, and stays the fallback that
+  is always available when the others find nothing.
+
+Deliberately _not_ a `Discovery` port today. Purity and a screen shaped like a
+list are what keep this cheap; a plugin system for a milestone that has not
+started is the speculative abstraction the working agreement warns about.
+
 ### Ship the screen before the signalling
 
 The lobby _screen_ does not depend on any of that. Over today's per-seat
