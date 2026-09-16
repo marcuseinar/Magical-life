@@ -226,17 +226,40 @@
 <style>
   .sheet {
     display: grid;
-    gap: var(--space-5);
+
+    /*
+     * Explicit, because the implicit column a bare `display: grid` creates is
+     * `auto` — sized to max-content, which here was the title. "Magical Life"
+     * at `clamp(2rem, 9vw, 3.25rem)` measures about 275px on a 390px phone,
+     * so the whole screen laid out 275px wide inside a 390px viewport, and
+     * the preset grid — which needs 280px for two columns — dropped to one.
+     * The heading's width was deciding the layout of everything under it.
+     */
+    grid-template-columns: minmax(0, 1fr);
+
+    /*
+     * Generous on a tall phone, tighter on a short one, with no breakpoint
+     * to pick wrong: at 844px tall these land on the tokens they used to be
+     * fixed at, and on a 568px screen they give back the ~70px that was the
+     * difference between fitting and not.
+     */
+    gap: clamp(var(--space-2), 2.5vh, var(--space-5));
     align-content: center;
-    justify-items: center;
-    max-width: 32rem;
+
+    /*
+     * An explicit width rather than `max-width`, because an `auto` inline
+     * margin defeats a grid item's stretch: the sheet fell back to its
+     * content width and centred there, which is how the title ended up
+     * deciding how wide the screen was.
+     */
+    width: min(32rem, 100%);
     min-height: 100%;
     margin-inline: auto;
     overflow-y: auto;
 
     /* Opts back in to vertical scrolling, which the app disables globally. */
     touch-action: pan-y;
-    padding: var(--space-6) var(--space-4);
+    padding: clamp(var(--space-4), 4vh, var(--space-6)) var(--space-4);
     text-align: center;
   }
 

@@ -103,6 +103,17 @@
 <style>
   .app {
     display: grid;
+
+    /*
+     * Explicit, because the implicit column a bare `display: grid` creates is
+     * `auto` — sized to the max-content of whatever screen is showing. The
+     * board's max-content exceeds a phone, so the game filled the width and
+     * looked fine; setup's does not, so it laid itself out at the width of
+     * its own widest line (the title, ~275px on a 390px phone) and every
+     * screen under it inherited that. Two-column layouts inside then dropped
+     * to one and the screen grew too tall to fit.
+     */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 1fr;
     height: 100dvh;
     overflow: hidden;
