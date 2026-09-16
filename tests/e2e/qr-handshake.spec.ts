@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import qrcode from 'qrcode-generator';
-import { startGame } from './support';
+import { inviteBySeat, openTable, startGame } from './support';
 
 /*
  * ADR 0004's path 1 — no server, offer and answer carried in a QR code —
@@ -92,12 +92,28 @@ test.describe('QR scanning', () => {
 
     await installFakeCamera(page, offerCode);
     await page.goto('/join');
-    await page.getByRole('button', { name: /paste instead/i }).click();
-    await page.getByRole('button', { name: 'Scan their code instead' }).click();
+    // One tap from the entry screen. It used to be behind the paste mode,
+    // which is two levels down from the best path at a physical table.
+    await page.getByRole('button', { name: 'Scan a QR code' }).click();
 
     await expect(page.getByText('Join as')).toContainText('Test Player', { timeout: 10_000 });
     // The dialog closes itself once it has decoded something usable.
     await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  /*
+   * The host's default path shows a QR of a join *link*, not of an offer.
+   * Sending that through the offer decoder reported "that did not look like
+   * an invite code" — on the most likely QR at a real table. Reaching the
+   * short-code lookup instead is the whole point; that the code is unknown
+   * here is what makes the assertion cheap.
+   */
+  test('a joiner scanning the default QR follows its link to the short code', async ({ page }) => {
+    await installFakeCamera(page, 'https://example.com/join?code=ZZZZ');
+    await page.goto('/join');
+    await page.getByRole('button', { name: 'Scan a QR code' }).click();
+
+    await expect(page.getByText(/code wasn't found/i)).toBeVisible({ timeout: 15_000 });
   });
 
   test('a host scanning a reply carries the decoded text into the same field pasting fills', async ({
@@ -107,9 +123,8 @@ test.describe('QR scanning', () => {
 
     await installFakeCamera(page, replyCode);
     await startGame(page, /commander/i, 2);
-    await page.getByRole('button', { name: 'Connect a table' }).click();
-    await page.getByRole('button', { name: 'Invite Player 2' }).click();
-    await page.getByRole('button', { name: /paste instead/i }).click();
+    await openTable(page);
+    await inviteBySeat(page, 'Player 2');
     await expect(page.locator('.sheet textarea.code[readonly]')).not.toHaveValue('', {
       timeout: 10_000
     });

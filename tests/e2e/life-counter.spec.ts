@@ -1,6 +1,17 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { COMMITTED, expectLife, readLife, scrub, settled, startGame, zone } from './support';
+import {
+  COMMITTED,
+  expectLife,
+  openMenu,
+  openNewGame,
+  readLife,
+  rematch,
+  scrub,
+  settled,
+  startGame,
+  zone
+} from './support';
 
 test('opens straight into a game with no login and no waiting', async ({ page }) => {
   await page.goto('/');
@@ -239,8 +250,7 @@ test('skips the spin entirely when motion is unwelcome', async ({ page }) => {
   const animated = await timeRoll();
 
   // A rematch clears the marker, so the second measurement starts from zero.
-  await page.getByRole('button', { name: 'Rematch' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+  await rematch(page);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const instant = await timeRoll();
@@ -276,8 +286,7 @@ test('rematches without walking back through setup', async ({ page }) => {
   await zone(page, 'Player 2', 'lose').click();
   await expect(page.getByLabel('Player 2: 39 life')).toBeVisible({ timeout: COMMITTED });
 
-  await page.getByRole('button', { name: 'Rematch' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+  await rematch(page);
 
   // Straight back into a game, same four players, fresh totals.
   await expect(page.getByLabel('Player 2: 40 life')).toBeVisible();
@@ -286,16 +295,56 @@ test('rematches without walking back through setup', async ({ page }) => {
   await expect(page.getByRole('button', { name: /begin at/i })).toHaveCount(0);
 });
 
-test('starts a fresh game only after confirming', async ({ page }) => {
+/*
+ * ADR 0005: setup is a screen you can be on while a game is still running,
+ * rather than what appears once there is no game left. The way back is the
+ * whole proof — before this, reaching setup meant the log had been cleared
+ * and there was nothing to go back to.
+ */
+test('keeps the game running while setup is open', async ({ page }) => {
   await startGame(page, /constructed/i, 2);
+  await zone(page, 'Player 2', 'lose').click();
 
-  await page.getByRole('button', { name: 'New game' }).click();
-  await page.getByRole('button', { name: /keep playing/i }).click();
+  // Deliberately not settled first: leaving the screen has to commit a change
+  // still counting down on a panel, or navigating away silently loses it.
+  await openNewGame(page);
+  await page.getByRole('button', { name: /back to the game/i }).click();
+
+  await expectLife(page, 'Player 2').toBe(19);
+});
+
+test('starts the new game the settings describe, without confirming anything', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
+
+  await openNewGame(page);
+  await page.getByRole('button', { name: /constructed/i }).click();
+  await page.getByRole('button', { name: /begin at 20/i }).click();
+
+  await expectLife(page, 'Player 1').toBe(20);
+});
+
+test('clears the history only from settings, and only when told twice', async ({ page }) => {
+  await startGame(page, /constructed/i, 2);
+  await openMenu(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+
+  await page.getByRole('button', { name: 'Clear history' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /keep it/i })
+    .click();
+  await page.getByRole('button', { name: /back to the game/i }).click();
   await expect(page.getByLabel('Player 1: 20 life')).toBeVisible();
 
-  await page.getByRole('button', { name: 'New game' }).click();
-  await page.getByRole('button', { name: /end game/i }).click();
-  await expect(page.getByRole('heading', { name: 'Magical Life' })).toBeVisible();
+  await openMenu(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Clear history' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Clear history' }).click();
+
+  // A first run again: setup, with nothing behind it to go back to.
+  await expect(page.getByRole('button', { name: /begin at/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /back to the game/i })).toHaveCount(0);
 });
 
 /** Resolves once a service worker is not merely registered but controlling this page. */

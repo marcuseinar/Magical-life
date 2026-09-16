@@ -51,6 +51,15 @@ and naming players during setup rather than once the game has started.
   their phone becomes that panel. This is the shape the signalling design in
   `docs/design/multiplayer.md` should serve, and it is what the QR handshake
   there is for.
+
+  **Superseded in shape, not in intent, and now rebuilt** — see
+  `docs/design/shell-and-lobby.md` and ADR 0006. A code per _seat_ meant the
+  host ran the same errand once per player and never saw the table. It is now
+  one code, one QR and one link for the whole table, with the offer behind
+  them rotating and each joiner picking their own seat. The QR handshake is
+  unchanged and stays per-seat, because one offer shown to one scanner is
+  inherent to holding a phone up to somebody.
+
 - WebRTC transport adapter, log merge, convergence
 - QR handshake and short-code signalling (Cloudflare Worker + Durable Object)
 - Relay fallback for hostile networks
@@ -109,6 +118,24 @@ Not started: the relay fallback.
 - Haptics, keep-awake, safe areas, back-button handling
 - App Store and Play Store listings, screenshots, privacy declarations
 - Automated builds from tags
+- **Bluetooth discovery — find the table without typing anything.** A fourth
+  connection path under ADR 0004, and the reason it sits here rather than in
+  M3: Web Bluetooth is central-role only. A browser can scan for peripherals
+  but cannot advertise as one, so two phones running the web app both scan and
+  neither is findable, and iOS Safari has no Web Bluetooth at all. Native BLE
+  is the first time this is possible, not the first time it is convenient.
+
+  Worth doing properly when it comes: BLE carries the _handshake_, not just a
+  beacon. The spike measured an offer at ~427 bytes compressed, which fits in a
+  couple of GATT writes — so this is zero-infrastructure like the QR path, with
+  the scanning step removed, rather than a fancier way to point at the worker.
+
+  Costs to weigh before committing: Android needs `BLUETOOTH_SCAN` on API 31+
+  or `ACCESS_FINE_LOCATION` below it, and a life counter asking for location is
+  a prompt people decline. iOS advertises reliably only in the foreground,
+  which is the host's actual situation but not a guarantee. `/join` being a
+  list of tables rather than a code box (`docs/design/shell-and-lobby.md`) is
+  what keeps this an addition instead of a rewrite.
 
 Deliberately after M3: the store review process is friction, and shipping it
 once against a feature-complete counter beats shipping it three times.

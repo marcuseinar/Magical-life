@@ -176,7 +176,14 @@ export function createGameStore(
       sync();
     },
 
-    async abandon() {
+    /**
+     * The one call that destroys history, and deliberately the only one.
+     * Starting a different game appends a `game/started` the way a rematch
+     * does (ADR 0005), so nothing on the way to a new game needs this — it
+     * exists because an append-only log grows forever and a phone gets
+     * handed to other people.
+     */
+    async clearHistory() {
       await session.reset();
       sync();
     },

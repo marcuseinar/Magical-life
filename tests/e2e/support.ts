@@ -17,9 +17,56 @@ export const settled = (page: Page) =>
 
 export async function startGame(page: Page, format: RegExp, players: number) {
   await page.goto('/');
+  // With no game yet, `/` sends the player to `/setup` (ADR 0005).
   await page.getByRole('button', { name: format }).click();
   await page.getByRole('button', { name: String(players), exact: true }).click();
   await page.getByRole('button', { name: /begin at/i }).click();
+}
+
+/** Rematch and New game moved off the toolbar and behind Menu (ADR 0005). */
+export const openMenu = (page: Page) => page.getByRole('button', { name: 'Menu' }).click();
+
+export async function rematch(page: Page) {
+  await openMenu(page);
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+}
+
+/**
+ * The table sheet. Reached from the toolbar now rather than a link beneath it,
+ * and its accessible name grows a count once seats are claimed — so match the
+ * start of it rather than the whole thing.
+ */
+export const openTable = (page: Page) => page.getByRole('button', { name: /^Table/ }).click();
+
+/**
+ * The host's no-server path. The table's own code is one for everybody now,
+ * so the per-seat handshake — inherently one offer per scanner — asks whose
+ * seat it is for first.
+ */
+export async function inviteBySeat(page: Page, seat: string) {
+  await page.getByRole('button', { name: /paste instead/i }).click();
+  await page.getByRole('button', { name: `Invite ${seat}` }).click();
+}
+
+/**
+ * The joiner's no-server path. Every way in sits on one screen now, so the
+ * paste field is revealed rather than a mode reached through the others —
+ * and the host's own "use a code you paste instead" in the table sheet is a
+ * different button with a similar name, which is why this names its own in
+ * full.
+ */
+export async function joinByPastedCode(page: Page, offerCode: string) {
+  await page.getByRole('button', { name: 'Paste a code instead' }).click();
+  await page.getByLabel('Their code').fill(offerCode);
+  await page.getByRole('button', { name: 'Use this code' }).click();
+}
+
+/** Opens the setup screen over the running game, without starting anything. */
+export async function openNewGame(page: Page) {
+  await openMenu(page);
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByRole('button', { name: /begin at/i })).toBeVisible();
 }
 
 export const lifeOf = (page: Page, name: string) =>

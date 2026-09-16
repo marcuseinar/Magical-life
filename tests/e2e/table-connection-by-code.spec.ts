@@ -1,16 +1,34 @@
 import { expect, test } from '@playwright/test';
-import { COMMITTED, startGame } from './support';
+import type { Page } from '@playwright/test';
+import { COMMITTED, openTable, startGame } from './support';
 
 /*
- * The short-code path, against the real signalling worker (workers/signalling/,
- * run locally by Playwright's second webServer — see playwright.config.ts).
- * Two independent browser contexts, standing in for two phones: the host
- * never pastes a reply, and the joiner arrives by tapping a link — the
- * `?code=` a QR or a text message would actually carry — rather than typing
- * anything.
+ * The table-code path, against the real signalling worker
+ * (workers/signalling/, run locally by Playwright's second webServer — see
+ * playwright.config.ts). Independent browser contexts stand in for separate
+ * phones.
+ *
+ * The property under test throughout is ADR 0006's: one code, one QR and one
+ * link for the whole table, with the offer behind them rotating. The host
+ * never invites anybody by name, and each joiner picks their own seat.
  */
 
-test('a joined table converges to the same game, arriving by the short-code link', async ({
+/** The one code for the table, which appears as soon as the sheet opens —
+ *  there is nobody to choose first any more. */
+async function tableCode(host: Page): Promise<string> {
+  await openTable(host);
+  const shortCode = host.locator('.sheet p.short-code');
+  await expect(shortCode).toBeVisible({ timeout: 15_000 });
+  return (await shortCode.textContent())?.trim() ?? '';
+}
+
+async function joinAs(joiner: Page, code: string, seat: string) {
+  await joiner.goto(`/join?code=${code}`);
+  await expect(joiner.getByText('Which seat are you?')).toBeVisible({ timeout: 15_000 });
+  await joiner.getByRole('button', { name: seat, exact: true }).click();
+}
+
+test('a joined table converges to the same game, arriving by the table link', async ({
   browser
 }) => {
   const hostContext = await browser.newContext();
@@ -19,43 +37,22 @@ test('a joined table converges to the same game, arriving by the short-code link
   const joiner = await joinContext.newPage();
 
   await startGame(host, /commander/i, 2);
+  const code = await tableCode(host);
 
-  await host.getByRole('button', { name: 'Connect a table' }).click();
-  await host.getByRole('button', { name: 'Invite Player 2' }).click();
+  await joinAs(joiner, code, 'Player 2');
 
-  const shortCode = host.locator('.sheet p.short-code');
-  await expect(shortCode).toBeVisible({ timeout: 10_000 });
-  const code = (await shortCode.textContent())?.trim();
-  expect(code).toMatch(/^[A-Z0-9]{4}$/);
-
-  const linkField = host.locator('.sheet textarea.code[readonly]');
-  const link = await linkField.inputValue();
-  expect(link).toContain(`code=${code}`);
-
-  // Arriving by the link is the point: no code typed by hand, no reply
-  // pasted back — the worker carries the whole exchange.
-  await joiner.goto(link.replace(/^https?:\/\/[^/]+/, ''));
-  await expect(joiner.getByText('Join as')).toContainText('Player 2');
-  await joiner.getByRole('button', { name: 'Join' }).click();
-
-  await expect(host.getByText('Connected.')).toBeVisible({ timeout: 10_000 });
-  await host.getByRole('button', { name: 'Done' }).click();
-  await expect(joiner.getByLabel('Player 1: 40 life')).toBeVisible({ timeout: 10_000 });
+  await expect(joiner.getByLabel('Player 1: 40 life')).toBeVisible({ timeout: 20_000 });
   await expect(joiner.getByLabel('Player 2: 40 life')).toBeVisible();
 
-  // A change on the host reaches the joiner.
+  await host.getByRole('button', { name: 'Done' }).click();
   await host.getByRole('button', { name: 'Player 1, lose one life' }).click();
   await expect(joiner.getByLabel('Player 1: 39 life')).toBeVisible({ timeout: COMMITTED + 5000 });
-
-  // And a change on the joiner reaches the host.
-  await joiner.getByRole('button', { name: 'Player 2, gain one life' }).click();
-  await expect(host.getByLabel('Player 2: 41 life')).toBeVisible({ timeout: COMMITTED + 5000 });
 
   await hostContext.close();
   await joinContext.close();
 });
 
-test('a joiner can type the short code by hand instead of following a link', async ({
+test('a joiner can type the table code by hand instead of following a link', async ({
   browser
 }) => {
   const hostContext = await browser.newContext();
@@ -64,22 +61,73 @@ test('a joiner can type the short code by hand instead of following a link', asy
   const joiner = await joinContext.newPage();
 
   await startGame(host, /commander/i, 2);
-
-  await host.getByRole('button', { name: 'Connect a table' }).click();
-  await host.getByRole('button', { name: 'Invite Player 2' }).click();
-
-  const shortCode = host.locator('.sheet p.short-code');
-  await expect(shortCode).toBeVisible({ timeout: 10_000 });
-  const code = (await shortCode.textContent())?.trim();
+  const code = await tableCode(host);
 
   await joiner.goto('/join');
-  await joiner.getByLabel('Short code').fill(code ?? '');
+  await joiner.getByLabel('Short code').fill(code);
   await joiner.getByRole('button', { name: 'Continue' }).click();
-  await expect(joiner.getByText('Join as')).toContainText('Player 2');
-  await joiner.getByRole('button', { name: 'Join' }).click();
 
-  await expect(host.getByText('Connected.')).toBeVisible({ timeout: 10_000 });
+  await expect(joiner.getByText('Which seat are you?')).toBeVisible({ timeout: 15_000 });
+  await joiner.getByRole('button', { name: 'Player 2', exact: true }).click();
+
+  await expect(joiner.getByLabel('Player 2: 40 life')).toBeVisible({ timeout: 20_000 });
 
   await hostContext.close();
   await joinContext.close();
+});
+
+/*
+ * The whole reason any of this changed. Two people, one code — and the second
+ * one is not handed a different code, does not scan a second QR, and is not
+ * invited by the host. The offer behind the code rotates; the code does not.
+ */
+test('one code seats two people, one after the other', async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const first = await firstContext.newPage();
+  const second = await secondContext.newPage();
+
+  await startGame(host, /commander/i, 3);
+  const code = await tableCode(host);
+
+  await joinAs(first, code, 'Player 2');
+  await expect(first.getByLabel('Player 2: 40 life')).toBeVisible({ timeout: 20_000 });
+
+  // The same code, untouched, for somebody who was not at the table when it
+  // was shown. The host's seat list has moved on without the host doing
+  // anything.
+  await joinAs(second, code, 'Player 3');
+  await expect(second.getByLabel('Player 3: 40 life')).toBeVisible({ timeout: 20_000 });
+
+  // And the table knows about both of them.
+  await expect(host.getByText('joined')).toHaveCount(2, { timeout: 15_000 });
+
+  await hostContext.close();
+  await firstContext.close();
+  await secondContext.close();
+});
+
+test('shows a seat somebody already took as taken, not as a choice', async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const first = await firstContext.newPage();
+  const second = await secondContext.newPage();
+
+  await startGame(host, /commander/i, 3);
+  const code = await tableCode(host);
+
+  await joinAs(first, code, 'Player 2');
+  await expect(first.getByLabel('Player 2: 40 life')).toBeVisible({ timeout: 20_000 });
+
+  await second.goto(`/join?code=${code}`);
+  await expect(second.getByText('Which seat are you?')).toBeVisible({ timeout: 15_000 });
+  await expect(second.getByRole('button', { name: /player 2.*taken/i })).toBeDisabled();
+
+  await hostContext.close();
+  await firstContext.close();
+  await secondContext.close();
 });

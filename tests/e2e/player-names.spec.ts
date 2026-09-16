@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { startGame } from './support';
+import { openNewGame, rematch, startGame } from './support';
 
 const rename = async (page: Page, from: string, to: string) => {
   await page.getByRole('button', { name: `Rename ${from}` }).click();
@@ -49,12 +49,28 @@ test('survives a reload, like everything else in the log', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Marcus' })).toBeVisible();
 });
 
+/*
+ * J4, "we said 30, not 40". Reconfiguring a game is not meeting new people:
+ * the seats carry their identity through, which is what keeps the names —
+ * and, once a table is connected, whoever is playing each seat.
+ */
+test('carries a renamed player into a reconfigured game', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await rename(page, 'Player 1', 'Marcus');
+
+  await openNewGame(page);
+  await page.getByRole('button', { name: /multiplayer/i }).click();
+  await page.getByRole('button', { name: /begin at 30/i }).click();
+
+  await expect(page.getByRole('heading', { name: 'Marcus' })).toBeVisible();
+  await expect(page.getByLabel('Marcus: 30 life')).toBeVisible();
+});
+
 test('carries into a rematch, because it is the same people playing again', async ({ page }) => {
   await startGame(page, /commander/i, 4);
   await rename(page, 'Player 1', 'Marcus');
 
-  await page.getByRole('button', { name: 'Rematch' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+  await rematch(page);
 
   await expect(page.getByRole('heading', { name: 'Marcus' })).toBeVisible();
   await expect(page.getByLabel('Marcus: 40 life')).toBeVisible();

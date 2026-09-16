@@ -1,9 +1,15 @@
 import type { Transport } from '$application/ports/transport';
-import type { OfferPayload, Signalling } from '$application/ports/signalling';
+import type {
+  ClaimedOffer,
+  SeatSummary,
+  Signalling,
+  TableSummary
+} from '$application/ports/signalling';
 import type { PlayerId } from '$domain/ids';
 import { playerId } from '$domain/ids';
 import { answerConnection, offerConnection } from '$adapters/transport/webRtcTransport';
 import { decodeCode, encodeCode, isOfferPayload } from '$ui/interaction/connectionCode';
+import type { ManualOffer } from '$ui/interaction/connectionCode';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
 import { createGameStore } from './gameStore.svelte';
 import type { GameStore } from './gameStore.svelte';
@@ -205,7 +211,7 @@ export function joinTable(offerCode: string): TableJoin {
 
 export type Invitation = { readonly playerId: PlayerId; readonly playerName: string };
 
-function toInvitation(offer: OfferPayload): Invitation {
+function toInvitation(offer: ManualOffer): Invitation {
   return { playerId: playerId(offer.invitePlayerId), playerName: offer.invitePlayerName };
 }
 
@@ -219,107 +225,131 @@ export function whoIsThisFor(offerCode: string): Invitation | null {
 
 /**
  * The short-code path: a `Signalling` adapter carries the offer/answer
- * exchange instead of a person copying a blob by hand. Everything past that
- * exchange — the data channel, `connectTransport`, the joiner's own
- * in-memory store — is identical to the manual-code path above, because the
- * exchange is the only thing that differs between them.
+ * exchange instead of a person copying a blob by hand.
+ *
+ * One code for the whole table, not one per person (ADR 0006). The host
+ * publishes an offer, exactly one joiner claims it, the host accepts their
+ * answer and immediately publishes a fresh offer under the same code. The
+ * code, the QR and the link never change; what rotates behind them is the
+ * offer. Everything past the exchange — the data channel, `connectTransport`,
+ * the joiner's own in-memory store — is identical to the manual-code path
+ * above, because the exchange is the only thing that differs.
  */
 
-/** How often the host checks whether the joiner has answered yet. A person
- *  is reading a code aloud or typing one in on the other end; there is no
- *  reason to poll faster than that. */
+/** How often the host looks for somebody having answered. A person is
+ *  reading a code aloud or scanning at the other end; there is no reason to
+ *  poll faster than that. Asking is also what tells the worker the host is
+ *  still here, which is what holds the table open across a whole game. */
 const ANSWER_POLL_MS = 1500;
 
-export type TableInviteByCode = {
-  /** The short code to send the other player, once the worker has issued
-   *  one. `null` until then. */
+/** How long a joiner waits out somebody else's handshake before looking
+ *  again. Only one offer is outstanding at a time, so arriving together
+ *  means taking turns rather than failing. */
+const CLAIM_RETRY_MS = 1200;
+
+/** Long enough that a joiner who has walked away stops holding the table,
+ *  short enough that nobody notices the wait. */
+const CLAIM_ATTEMPTS = 12;
+
+const summarise = (store: GameStore): readonly SeatSummary[] =>
+  (store.state?.players ?? []).map((player) => ({
+    id: player.id,
+    name: player.name,
+    colour: player.colour,
+    claimed: player.claimed
+  }));
+
+export type TableHost = {
+  /** The one code for this table, once the worker has issued it. `null`
+   *  until then. */
   readonly code: string | null;
-  readonly connected: boolean;
-  /** `true` once the room the code pointed to is gone — expired, most
-   *  likely — with nobody having answered it. */
-  readonly expired: boolean;
-  /** Set if the worker could not be reached at all — offline, not deployed,
-   *  blocked network. Distinct from `expired`: this table was never
-   *  reachable, rather than reachable and then abandoned. A caller sees this
-   *  as the signal to fall back to `inviteToTable`'s manual code instead. */
+  /** How many people have connected through it so far. */
+  readonly joined: number;
+  /** The worker could not be reached at all — offline, not deployed, blocked
+   *  network. The caller's signal to fall back to the manual code. */
   readonly error: boolean;
-  /** Stops polling for an answer. Call it if the invite sheet closes before
-   *  the joiner has connected, so nothing keeps calling out after nobody is
-   *  watching for the reply. */
+  /** Stops offering places. Call it when the sheet closes: the table then
+   *  stops being touched and the worker lets it go. */
   stop(): void;
 };
 
-/** The short-code twin of `inviteToTable`: same offer, same `Transport`,
- *  same seat — the only difference is who carries the SDP. */
-export function inviteToTableByCode(
-  store: GameStore,
-  targetPlayerId: PlayerId,
-  signalling: Signalling
-): TableInviteByCode {
-  const offerer = offerConnection();
+/**
+ * Opens a table and keeps it open, connecting each joiner in turn.
+ *
+ * The loop is the whole design: offer, wait, accept, connect, offer again.
+ * Because a fresh offer only goes out once the previous joiner is connected,
+ * there is never more than one handshake in flight — which is also what
+ * stops two joiners landing in the same seat, without any locking.
+ */
+export function hostTable(store: GameStore, signalling: Signalling): TableHost {
   let code = $state<string | null>(null);
-  let connected = $state(false);
-  let expired = $state(false);
+  let joined = $state(0);
   let error = $state(false);
   let stopped = false;
 
-  const targetName =
-    store.state?.players.find((player) => player.id === targetPlayerId)?.name ?? 'a player';
+  const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  async function pollForAnswer(roomCode: string) {
-    while (!stopped && !connected) {
-      await new Promise((resolve) => setTimeout(resolve, ANSWER_POLL_MS));
-      if (stopped || connected) return;
-      let result;
-      try {
-        result = await signalling.getAnswer(roomCode);
-      } catch {
-        error = true;
-        return;
+  /** One place at the table: an offer, whoever takes it, and the connection
+   *  that results. Resolves once that joiner is connected, or `false` if the
+   *  table is gone. */
+  async function offerAPlace(publish: (sdp: string) => Promise<boolean>): Promise<boolean> {
+    const offerer = offerConnection();
+    const sdp = await offerer.offer;
+    if (stopped) return false;
+    if (!(await publish(sdp))) return false;
+
+    // Wired before anyone answers: the catch-up effect has to be watching
+    // `store.events` from the start, or a change made while waiting never
+    // reaches whoever eventually connects.
+    connectTransport(store, offerer.transport);
+
+    while (!stopped) {
+      await pause(ANSWER_POLL_MS);
+      if (stopped) return false;
+
+      // The seat list rides along, so a joiner looking at the table sees who
+      // has actually sat down rather than who had when the offer went out.
+      const result = await signalling.poll(code!, summarise(store));
+      if (!result.found) return false;
+      if (result.answer === null) continue;
+
+      await offerer.accept(result.answer.sdp);
+      joined++;
+      return true;
+    }
+    return false;
+  }
+
+  async function run() {
+    try {
+      const opened = await offerAPlace(async (sdp) => {
+        const { code: issued } = await signalling.openTable(summarise(store), sdp);
+        code = issued;
+        return true;
+      });
+      if (!opened) return;
+
+      // Same code, next place. The seat list goes out again each time, so a
+      // joiner sees whoever just sat down.
+      while (!stopped) {
+        const more = await offerAPlace((sdp) =>
+          signalling.publishOffer(code!, summarise(store), sdp)
+        );
+        if (!more) return;
       }
-      if (!result.found) {
-        expired = true;
-        return;
-      }
-      if (result.answer !== null) {
-        await offerer.accept(result.answer.sdp);
-        return;
-      }
+    } catch {
+      error = true;
     }
   }
 
-  void offerer.offer.then(async (sdp) => {
-    let roomCode: string;
-    try {
-      ({ code: roomCode } = await signalling.createRoom({
-        sdp,
-        invitePlayerId: targetPlayerId,
-        invitePlayerName: targetName
-      }));
-    } catch {
-      error = true;
-      return;
-    }
-    if (stopped) return;
-    code = roomCode;
-    void pollForAnswer(roomCode);
-  });
-
-  offerer.transport.onStateChange((next) => {
-    connected = next === 'connected';
-  });
-
-  connectTransport(store, offerer.transport);
+  void run();
 
   return {
     get code() {
       return code;
     },
-    get connected() {
-      return connected;
-    },
-    get expired() {
-      return expired;
+    get joined() {
+      return joined;
     },
     get error() {
       return error;
@@ -330,33 +360,66 @@ export function inviteToTableByCode(
   };
 }
 
+/** A join screen's first honest response to a typed or scanned table code.
+ *  `null` covers both "no such code" and "that table is gone"; the port does
+ *  not distinguish them and neither does a joiner need it to. */
+export async function lookUpTable(
+  code: string,
+  signalling: Signalling
+): Promise<TableSummary | null> {
+  return signalling.lookUp(code);
+}
+
 export type TableJoinByCode = {
   readonly connected: boolean;
   readonly store: GameStore | null;
+  /** Nobody could be got hold of: the table went away, or every attempt to
+   *  take a place ran into somebody else's handshake. */
+  readonly failed: boolean;
 };
 
-/** The short-code twin of `joinTable`. Takes the offer already fetched by
- *  `signalling.getOffer` — a join screen shows "join as Anna?" from that
- *  same offer before ever calling this, the same shape as the manual-code
- *  path's `whoIsThisFor` then `joinTable`. */
-export function joinTableByCode(
+/**
+ * Takes a place at a table and sits in the seat the joiner picked.
+ *
+ * Claiming is a compare-and-swap at the worker, so arriving at the same
+ * moment as somebody else means waiting a beat rather than colliding.
+ */
+export function joinTableAsSeat(
   code: string,
-  offer: OfferPayload,
+  seatId: PlayerId,
   signalling: Signalling
 ): TableJoinByCode {
-  const invitePlayerId = playerId(offer.invitePlayerId);
-  const answerer = answerConnection(offer.sdp);
   let connected = $state(false);
+  let failed = $state(false);
   let store = $state<GameStore | null>(null);
 
-  void answerer.answer.then((sdp) => {
-    void signalling.submitAnswer(code, { sdp });
-  });
+  async function claim(): Promise<ClaimedOffer | null> {
+    for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt++) {
+      const offer = await signalling.claimOffer(code);
+      if (offer !== null) return offer;
+      await new Promise((resolve) => setTimeout(resolve, CLAIM_RETRY_MS));
+    }
+    return null;
+  }
 
-  void answerer.transport.then((transport) => {
+  async function run() {
+    const offer = await claim();
+    if (offer === null) {
+      failed = true;
+      return;
+    }
+
+    const answerer = answerConnection(offer.sdp);
+    const sdp = await answerer.answer;
+    if (!(await signalling.submitAnswer(code, { ticket: offer.ticket, sdp, seatId }))) {
+      failed = true;
+      return;
+    }
+
+    const transport = await answerer.transport;
     // See joinTable's matching comment: deliberately in-memory, not the
     // shared IndexedDB log solo play uses.
-    const newStore = createGameStore({ authorId: invitePlayerId, log: createMemoryEventLog() });
+    const newStore = createGameStore({ authorId: seatId, log: createMemoryEventLog() });
     let seeded = false;
 
     const stopSeeding = transport.onReceive((events) => {
@@ -367,13 +430,15 @@ export function joinTableByCode(
         // Claimed before the store is exposed, so nothing ever sees this
         // seat as unclaimed on the joiner's own screen — and the claim event
         // itself goes out over `connectTransport` like any other.
-        await newStore.claimSeat(invitePlayerId);
+        await newStore.claimSeat(seatId);
         connectTransport(newStore, transport);
         store = newStore;
         connected = true;
       });
     });
-  });
+  }
+
+  void run().catch(() => (failed = true));
 
   return {
     get connected() {
@@ -381,19 +446,9 @@ export function joinTableByCode(
     },
     get store() {
       return store;
+    },
+    get failed() {
+      return failed;
     }
   };
-}
-
-/** A join screen's first honest response to a typed or scanned short code —
- *  the code-path twin of `whoIsThisFor`. `null` covers both "no such code"
- *  and "that room expired"; the port does not distinguish them and neither
- *  does a joiner need it to. */
-export async function whoIsThisForCode(
-  code: string,
-  signalling: Signalling
-): Promise<{ invitation: Invitation; offer: OfferPayload } | null> {
-  const offer = await signalling.getOffer(code);
-  if (offer === null) return null;
-  return { invitation: toInvitation(offer), offer };
 }

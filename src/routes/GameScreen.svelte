@@ -12,18 +12,29 @@
   import CounterSheet from '$ui/components/CounterSheet.svelte';
   import RenameSheet from '$ui/components/RenameSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
-  import NewGameSheet from '$ui/components/NewGameSheet.svelte';
+  import MenuSheet from '$ui/components/MenuSheet.svelte';
   import OpponentBar from '$ui/components/OpponentBar.svelte';
   import ConnectionChip from '$ui/components/ConnectionChip.svelte';
   import TableSheet from './TableSheet.svelte';
 
-  let { store }: { store: GameStore } = $props();
+  let {
+    store,
+    onnewgame,
+    onjoin,
+    onsettings
+  }: {
+    store: GameStore;
+    /** All navigations out of this screen — see ADR 0005. The screen does
+     *  not route itself, so a joined table can render it too. */
+    onnewgame?: (() => void) | undefined;
+    onjoin?: (() => void) | undefined;
+    onsettings?: (() => void) | undefined;
+  } = $props();
 
   const spin = createSpinController();
 
-  type Confirmation = 'rematch' | 'new-game';
-
-  let confirming = $state<Confirmation | null>(null);
+  let confirming = $state(false);
+  let menuOpen = $state(false);
   let counters = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let commander = $state<{ player: PlayerState; rotated: boolean } | null>(null);
   let renaming = $state<{ player: PlayerState; rotated: boolean } | null>(null);
@@ -35,10 +46,6 @@
   /** The winner, while their panel is blinking. */
   let celebrating = $state<PlayerId | null>(null);
   let blinkTimer: ReturnType<typeof setTimeout> | undefined;
-
-  $effect(() => {
-    void store.hydrate();
-  });
 
   /*
    * A change counting down on a panel is on screen but not yet in the log, so
@@ -91,6 +98,9 @@
    * headcount, that moves a seat out of the grid.
    */
   const showOpponentBar = $derived(remoteList.length > 0);
+
+  /** Answers "is everyone in yet?" without opening anything. */
+  const joined = $derived((store.state?.players ?? []).filter((player) => player.claimed).length);
   const boardPlayers = $derived(showOpponentBar ? localList : (store.state?.players ?? []));
 
   async function roll() {
@@ -119,25 +129,33 @@
     }
   }
 
-  async function confirm() {
-    const action = confirming;
-    confirming = null;
+  async function confirmRematch() {
+    confirming = false;
     rolled = null;
     spin.stop();
     clearTimeout(blinkTimer);
     celebrating = null;
-    // Both of these throw the current game away, so a change still counting
-    // down on a panel has to land in its history first or it never happened.
+    // A rematch starts the totals over, so a change still counting down on a
+    // panel has to land in its history first or it never happened.
     flushPending();
-    if (action === 'rematch') await store.rematch();
-    if (action === 'new-game') await store.abandon();
+    await store.rematch();
+  }
+
+  /*
+   * Leaving this screen destroys the panels, and a panel's `destroy` stops
+   * its timer without committing (`deltaController`) — so a pending change
+   * would simply vanish. Every way out of here flushes first, the same
+   * reason `pagehide` does.
+   */
+  function leaveFor(go: (() => void) | undefined) {
+    menuOpen = false;
+    flushPending();
+    go?.();
   }
 </script>
 
-{#if !store.ready}
+{#if store.state === null}
   <p class="sr-only">Loading</p>
-{:else if store.state === null}
-  <NewGameSheet onstart={(formatId, seats) => store.begin(formatId, seats)} />
 {:else}
   <main class="game">
     <h1 class="sr-only">
@@ -194,15 +212,22 @@
           >First</button
         >
       {/if}
-      <button class="tool" onclick={() => (confirming = 'rematch')}>Rematch</button>
-      <button class="tool" onclick={() => (confirming = 'new-game')}>New game</button>
+      <!-- The table is a first-class destination now rather than a link
+           below the toolbar nobody found. The count is the whole answer to
+           "is everyone in yet?", which previously needed the sheet opened
+           and the host's own memory of who they had already invited. -->
+      <button
+        class="tool"
+        onclick={() => (connecting = true)}
+        aria-label={joined === 0 ? 'Table' : `Table, ${joined} joined`}
+      >
+        Table{#if joined > 0}<span class="tool__count">{joined}</span>{/if}
+      </button>
+      <!-- Rematch and New game live behind this. Both are reached at the
+           seams between games, not mid-play the way Undo is, and giving all
+           of them equal billing is what pushed the table out of the row. -->
+      <button class="tool" onclick={() => (menuOpen = true)}>Menu</button>
     </nav>
-
-    <!-- Deliberately not in the toolbar above: a fifth pill there wraps to a
-         second row on a phone (asserted by an existing test), and this is a
-         once-per-game setup action, not something reached for mid-play the
-         way Undo or Rematch are — it does not need equal billing. -->
-    <button class="connect" onclick={() => (connecting = true)}>Connect a table</button>
 
     <p class="announce" role="status" data-rolled={rolled !== null}>
       {rolled === null ? '' : `${rolled} goes first`}
@@ -246,22 +271,31 @@
     <TableSheet {store} onclose={() => (connecting = false)} />
   {/if}
 
-  {#if confirming !== null}
+  {#if menuOpen}
+    <MenuSheet
+      onrematch={() => {
+        menuOpen = false;
+        confirming = true;
+      }}
+      onnewgame={() => leaveFor(onnewgame)}
+      onjoin={() => leaveFor(onjoin)}
+      onsettings={() => leaveFor(onsettings)}
+      onclose={() => (menuOpen = false)}
+    />
+  {/if}
+
+  <!-- New game lost its confirmation with ADR 0005: it navigates, and the
+       game is still in the log the whole time setup is open. A rematch keeps
+       one, because starting the totals over is the thing that cannot be
+       walked back from. -->
+  {#if confirming}
     <div class="scrim">
       <div class="confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <h2 id="confirm-title" class="confirm__title">
-          {confirming === 'rematch' ? 'Start a rematch?' : 'End this game?'}
-        </h2>
-        <p class="confirm__body">
-          {confirming === 'rematch'
-            ? 'Same players, same format, fresh totals.'
-            : 'The current life totals will be cleared.'}
-        </p>
+        <h2 id="confirm-title" class="confirm__title">Start a rematch?</h2>
+        <p class="confirm__body">Same players, same format, fresh totals.</p>
         <div class="confirm__actions">
-          <button class="tool" onclick={() => (confirming = null)}>Keep playing</button>
-          <button class="tool tool--danger" onclick={confirm}>
-            {confirming === 'rematch' ? 'Rematch' : 'End game'}
-          </button>
+          <button class="tool" onclick={() => (confirming = false)}>Keep playing</button>
+          <button class="tool tool--danger" onclick={confirmRematch}>Rematch</button>
         </div>
       </div>
     </div>
@@ -337,15 +371,15 @@
     cursor: default;
   }
 
-  .connect {
-    justify-self: center;
-    padding: var(--space-1) var(--space-3);
-    margin-top: var(--space-1);
-    color: var(--text-muted);
-    font-size: 0.68rem;
-    letter-spacing: 0.03em;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+  .tool__count {
+    display: inline-block;
+    min-width: 1.25em;
+    margin-left: 0.4em;
+    padding: 0 0.3em;
+    border-radius: var(--radius-pill);
+    background: var(--surface-raised);
+    color: var(--text-gold);
+    font-family: var(--font-numeric);
   }
 
   .announce {

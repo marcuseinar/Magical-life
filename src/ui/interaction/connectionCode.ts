@@ -6,16 +6,27 @@
  * is easy to add later without touching anything that calls this.
  */
 
-import type { AnswerPayload, OfferPayload } from '$application/ports/signalling';
+/**
+ * These are the no-server path's own payloads, not the signalling port's.
+ * ADR 0004's path 1 has no server in it at all, so it has no table code, no
+ * ticket and no seat list — a QR is one offer shown to one scanner, which is
+ * inherent to holding a phone up to somebody. Sharing a type with the port
+ * only made it look as though the two paths carried the same thing.
+ */
+export type ManualOffer = {
+  readonly sdp: string;
+  readonly invitePlayerId: string;
+  readonly invitePlayerName: string;
+};
 
-export type { AnswerPayload, OfferPayload };
+export type ManualAnswer = { readonly sdp: string };
 
-export function encodeCode(payload: OfferPayload | AnswerPayload): string {
+export function encodeCode(payload: ManualOffer | ManualAnswer): string {
   return btoa(JSON.stringify(payload));
 }
 
 export type DecodedCode =
-  { readonly ok: true; readonly value: OfferPayload | AnswerPayload } | { readonly ok: false };
+  { readonly ok: true; readonly value: ManualOffer | ManualAnswer } | { readonly ok: false };
 
 /** Never throws: a mistyped or truncated paste is an everyday event here,
  *  not a bug, and the caller decides how to tell the player about it. */
@@ -28,7 +39,7 @@ export function decodeCode(code: string): DecodedCode {
       'sdp' in value &&
       typeof (value as { sdp: unknown }).sdp === 'string'
     ) {
-      return { ok: true, value: value as OfferPayload | AnswerPayload };
+      return { ok: true, value: value as ManualOffer | ManualAnswer };
     }
     return { ok: false };
   } catch {
@@ -36,5 +47,5 @@ export function decodeCode(code: string): DecodedCode {
   }
 }
 
-export const isOfferPayload = (value: OfferPayload | AnswerPayload): value is OfferPayload =>
+export const isOfferPayload = (value: ManualOffer | ManualAnswer): value is ManualOffer =>
   'invitePlayerId' in value;
