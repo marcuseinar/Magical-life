@@ -176,7 +176,7 @@
   <main class="join">
     <header class="masthead">
       <h1 class="title">Join a table</h1>
-      <p class="tagline">Type the short code the host gave you, or open the link they sent.</p>
+      <p class="tagline">Scan the host's code, type the short one, or paste what they sent.</p>
     </header>
 
     {#if stage.kind === 'entry'}
