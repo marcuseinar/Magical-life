@@ -39,6 +39,19 @@ export async function rematch(page: Page) {
  */
 export const openTable = (page: Page) => page.getByRole('button', { name: /^Table/ }).click();
 
+/**
+ * The joiner's no-server path. Every way in sits on one screen now, so the
+ * paste field is revealed rather than a mode reached through the others —
+ * and the host's own "use a code you paste instead" in the table sheet is a
+ * different button with a similar name, which is why this names its own in
+ * full.
+ */
+export async function joinByPastedCode(page: Page, offerCode: string) {
+  await page.getByRole('button', { name: 'Paste a code instead' }).click();
+  await page.getByLabel('Their code').fill(offerCode);
+  await page.getByRole('button', { name: 'Use this code' }).click();
+}
+
 /** Opens the setup screen over the running game, without starting anything. */
 export async function openNewGame(page: Page) {
   await openMenu(page);

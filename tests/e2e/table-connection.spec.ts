@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { COMMITTED, expectLife, openTable, rematch, settled, startGame } from './support';
+import {
+  COMMITTED,
+  expectLife,
+  joinByPastedCode,
+  openMenu,
+  openTable,
+  rematch,
+  settled,
+  startGame
+} from './support';
 
 /*
  * The real thing, not the spike: two independent browser contexts, standing
@@ -29,9 +38,7 @@ test('a joined table converges to the same game, in both directions', async ({ b
   const offerCode = await hostCode.inputValue();
 
   await joiner.goto('/join');
-  await joiner.getByRole('button', { name: /paste instead/i }).click();
-  await joiner.getByLabel('Their code').fill(offerCode);
-  await joiner.getByRole('button', { name: 'Continue' }).click();
+  await joinByPastedCode(joiner, offerCode);
   await expect(joiner.getByText('Join as')).toContainText('Player 2');
   await joiner.getByRole('button', { name: 'Join' }).click();
 
@@ -105,9 +112,7 @@ test('a claimed seat leaves the grid, and a rematch does not hand it back', asyn
   const offerCode = await hostCode.inputValue();
 
   await joiner.goto('/join');
-  await joiner.getByRole('button', { name: /paste instead/i }).click();
-  await joiner.getByLabel('Their code').fill(offerCode);
-  await joiner.getByRole('button', { name: 'Continue' }).click();
+  await joinByPastedCode(joiner, offerCode);
   await joiner.getByRole('button', { name: 'Join' }).click();
 
   const replyCode = joiner.locator('textarea.code[readonly]');
@@ -157,4 +162,37 @@ test('a claimed seat leaves the grid, and a rematch does not hand it back', asyn
 
   await hostContext.close();
   await joinContext.close();
+});
+
+/*
+ * Joining used to be reachable only from setup's "Join a table instead" —
+ * so only from a device with no game of its own. A player already counting
+ * their life had no route to it at all.
+ */
+test('reaches joining from the menu, without giving up the game already running', async ({
+  page
+}) => {
+  await startGame(page, /commander/i, 4);
+  await openMenu(page);
+  await page.getByRole('button', { name: 'Join a table' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Join a table' })).toBeVisible();
+
+  await page.getByRole('button', { name: /back to your own game/i }).click();
+  await expect(page.getByLabel('Player 1: 40 life')).toBeVisible();
+});
+
+test('shows every way into a table at once, rather than one behind another', async ({ page }) => {
+  await page.goto('/join');
+
+  await expect(page.getByRole('button', { name: 'Scan a QR code' })).toBeVisible();
+  await expect(page.getByLabel('Short code')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Paste a code instead' })).toBeVisible();
+
+  // Revealing the last resort must not bury the other two, which is exactly
+  // what the old "instead" chain did to scanning.
+  await page.getByRole('button', { name: 'Paste a code instead' }).click();
+  await expect(page.getByLabel('Their code')).toBeVisible();
+  await expect(page.getByLabel('Short code')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Scan a QR code' })).toBeVisible();
 });

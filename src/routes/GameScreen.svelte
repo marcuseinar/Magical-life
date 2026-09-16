@@ -20,13 +20,15 @@
   let {
     store,
     onnewgame,
+    onjoin,
     onsettings
   }: {
     store: GameStore;
-    /** Both are navigations out of this screen — see ADR 0005. The screen
-     *  does not route itself, so a joined table can render it too. */
-    onnewgame?: () => void;
-    onsettings?: () => void;
+    /** All navigations out of this screen — see ADR 0005. The screen does
+     *  not route itself, so a joined table can render it too. */
+    onnewgame?: (() => void) | undefined;
+    onjoin?: (() => void) | undefined;
+    onsettings?: (() => void) | undefined;
   } = $props();
 
   const spin = createSpinController();
@@ -276,6 +278,7 @@
         confirming = true;
       }}
       onnewgame={() => leaveFor(onnewgame)}
+      onjoin={() => leaveFor(onjoin)}
       onsettings={() => leaveFor(onsettings)}
       onclose={() => (menuOpen = false)}
     />

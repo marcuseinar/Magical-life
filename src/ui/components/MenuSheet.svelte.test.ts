@@ -6,6 +6,7 @@ const mount = () => {
   const props = {
     onrematch: vi.fn(),
     onnewgame: vi.fn(),
+    onjoin: vi.fn(),
     onsettings: vi.fn(),
     onclose: vi.fn()
   };
@@ -19,6 +20,17 @@ describe('menu sheet', () => {
     expect(screen.getByRole('button', { name: 'Rematch' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New game' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  /*
+   * Joining used to be reachable only from setup's "Join a table instead",
+   * which means only from a device with no game — so a player already
+   * counting their own life had no way to it at all.
+   */
+  it("offers joining someone else's table, not just hosting one", async () => {
+    const { onjoin } = mount();
+    await fireEvent.click(screen.getByRole('button', { name: 'Join a table' }));
+    expect(onjoin).toHaveBeenCalledOnce();
   });
 
   it('is a dialog, so a screen reader knows the game behind it is not the subject', () => {

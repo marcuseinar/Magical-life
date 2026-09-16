@@ -10,11 +10,13 @@
   let {
     onrematch,
     onnewgame,
+    onjoin,
     onsettings,
     onclose
   }: {
     onrematch: () => void;
     onnewgame: () => void;
+    onjoin: () => void;
     onsettings: () => void;
     onclose: () => void;
   } = $props();
@@ -51,6 +53,16 @@
           New game
         </button>
         <p class="hint" id="hint-new-game">Change the format, the size, or the life</p>
+      </li>
+      <li class="item">
+        <!-- The other side of the table from the Table pill, which invites
+             people to this device's game. This one goes and sits at
+             somebody else's, and leaves this device's own game untouched —
+             a joined table keeps its own store. -->
+        <button class="row" type="button" onclick={onjoin} aria-describedby="hint-join">
+          Join a table
+        </button>
+        <p class="hint" id="hint-join">Take a seat on someone else's game</p>
       </li>
       <li class="item">
         <button class="row" type="button" onclick={onsettings} aria-describedby="hint-settings">

@@ -382,23 +382,48 @@ of joining. Worth stating now, because the alternative framing — "type the cod
 to join" — is the one that makes every later discovery mechanism a rewrite
 rather than an addition.
 
-So `/join` shows what it can see, and says where each one came from:
+**Built**, as a list of _ways in_ rather than of tables — the tables themselves
+need discovery, which is phase 4 and M4. `/join` is one screen showing all
+three at once:
 
 ```
-  TABLES
+  JOIN A TABLE
 
-  ○ Anna's table   ·  code XKCD
-  ○ Scanned        ·  from a QR
+  [      Scan a QR code      ]
 
-  Or enter a code    [ _ _ _ _ ]
+  ──────────  or  ──────────
+
+  Short code
+  [  X K C D  ]
+  [  Continue  ]
+
+  Paste a code instead
+  Back to your own game
 ```
 
-Today that list has at most one entry and it always came from a code or a QR,
-so the list is nearly invisible — which is the point. It costs nothing now and
-it is the difference between adding a discovery source later and rebuilding the
-screen around it.
+What this replaced is the point. The old screen opened on the short code, hid
+the paste field behind "Have a code to paste instead?", and hid _scanning_
+behind that — two levels down from the entry screen. Scanning is the best path
+there is at a physical table, and ADR 0004 makes it path 1; it was the hardest
+thing on the screen to reach. Paste stays a disclosure because it genuinely is
+the last resort, but it no longer stands between anyone and the camera.
 
-Three sources are plausible later, none of them in scope here:
+Promoting the camera exposed a real gap. The host shows two different QR codes
+depending on which path is live — a join _link_ on the short-code path, the
+offer blob itself on the no-server one — and the scanner only understood the
+second. So the most likely QR at a real table decoded to "that did not look
+like an invite code". `readJoinTarget` (`src/ui/interaction/joinTarget.ts`)
+classifies what was scanned; it only classifies, so a wrong guess costs a
+clear "that code wasn't found" rather than a wrong screen.
+
+Joining also reaches the menu, alongside Rematch and New game. It was
+previously reachable only from setup's "Join a table instead" — which means
+only from a device with no game of its own, so a player already counting their
+life had no route to it at all. Joining does not disturb that game either: a
+joined table keeps its own in-memory store, and Back to your own game returns
+to it.
+
+Three discovery sources are plausible later, none of them in scope here:
 
 - **Bluetooth LE**, once there is a native shell (M4). Not before: Web
   Bluetooth is central-role only — a browser can scan for peripherals but

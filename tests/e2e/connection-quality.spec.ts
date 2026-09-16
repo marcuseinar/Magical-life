@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openTable, startGame } from './support';
+import { joinByPastedCode, openTable, startGame } from './support';
 
 /*
  * The connection-quality chip, against a real `RTCDataChannel`: nothing
@@ -36,9 +36,7 @@ test('shows direct once a real table connection is up, and nothing before that',
   const offerCode = await hostCode.inputValue();
 
   await joiner.goto('/join');
-  await joiner.getByRole('button', { name: /paste instead/i }).click();
-  await joiner.getByLabel('Their code').fill(offerCode);
-  await joiner.getByRole('button', { name: 'Continue' }).click();
+  await joinByPastedCode(joiner, offerCode);
   await joiner.getByRole('button', { name: 'Join' }).click();
 
   const replyCode = joiner.locator('textarea.code[readonly]');

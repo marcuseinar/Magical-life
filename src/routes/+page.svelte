@@ -31,6 +31,7 @@
   <GameScreen
     {store}
     onnewgame={() => goto(resolve('/setup'))}
+    onjoin={() => goto(resolve('/join'))}
     onsettings={() => goto(resolve('/settings'))}
   />
 {/if}
