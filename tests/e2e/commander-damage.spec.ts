@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { COMMITTED, expectLife, readLife, startGame, zone } from './support';
+import { COMMITTED, expectLife, readLife, rematch, startGame, zone } from './support';
 
 const crown = (page: Page, name: string) =>
   page.getByRole('button', { name: `Commander damage to ${name}` });
@@ -474,8 +474,7 @@ test('is cleared by a rematch', async ({ page }) => {
   }
   await page.getByRole('button', { name: /close commander damage/i }).click();
 
-  await page.getByRole('button', { name: 'Rematch' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+  await rematch(page);
 
   await expect(crown(page, 'Player 1')).not.toHaveText(/\d/);
 });

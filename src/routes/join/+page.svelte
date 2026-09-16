@@ -1,5 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import {
     joinTable,
     joinTableByCode,
@@ -261,6 +263,12 @@
         {/if}
       </div>
     {/if}
+
+    <!-- Until ADR 0005 this screen was a cliff: nothing on it led anywhere
+         but forward, and the browser's own Back was the only way out. -->
+    <button class="fallback" type="button" onclick={() => goto(resolve('/'))}>
+      Back to your own game
+    </button>
   </main>
 {/if}
 

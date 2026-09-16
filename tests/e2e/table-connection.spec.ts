@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { COMMITTED, expectLife, settled, startGame } from './support';
+import { COMMITTED, expectLife, rematch, settled, startGame } from './support';
 
 /*
  * The real thing, not the spike: two independent browser contexts, standing
@@ -140,8 +140,7 @@ test('a claimed seat leaves the grid, and a rematch does not hand it back', asyn
    */
   await host.getByRole('button', { name: 'Player 1, lose one life' }).click();
   await settled(host);
-  await host.getByRole('button', { name: 'Rematch' }).click();
-  await host.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+  await rematch(host);
 
   await expectLife(host, 'Player 1').toBe(40);
   await expect(

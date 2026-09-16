@@ -17,9 +17,26 @@ export const settled = (page: Page) =>
 
 export async function startGame(page: Page, format: RegExp, players: number) {
   await page.goto('/');
+  // With no game yet, `/` sends the player to `/setup` (ADR 0005).
   await page.getByRole('button', { name: format }).click();
   await page.getByRole('button', { name: String(players), exact: true }).click();
   await page.getByRole('button', { name: /begin at/i }).click();
+}
+
+/** Rematch and New game moved off the toolbar and behind Menu (ADR 0005). */
+export const openMenu = (page: Page) => page.getByRole('button', { name: 'Menu' }).click();
+
+export async function rematch(page: Page) {
+  await openMenu(page);
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rematch' }).click();
+}
+
+/** Opens the setup screen over the running game, without starting anything. */
+export async function openNewGame(page: Page) {
+  await openMenu(page);
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByRole('button', { name: /begin at/i })).toBeVisible();
 }
 
 export const lifeOf = (page: Page, name: string) =>

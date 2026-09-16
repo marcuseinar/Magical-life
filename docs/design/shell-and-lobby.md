@@ -558,15 +558,27 @@ action gets a name that says what it destroys.
 Split by reviewable idea, per the working agreement — not by file and not by
 screen.
 
-**Phase 1 — The shell and the lifecycle.** The store moves to the layout behind
-`$lib/context`; screens become routes; `abandon` stops clearing the log; New
-game becomes navigation; the toolbar becomes `Undo · First · Table · Menu`;
+**Phase 1 — The shell and the lifecycle. Built.** The store moves to the layout
+behind `$lib/context`; screens become routes; `abandon` becomes `clearHistory`;
+New game becomes navigation; the toolbar becomes `Undo · First · Table · Menu`;
 `/join` and `/setup` gain a way back. Clear history lands in Settings as the
 only caller of `log.clear()`.
 
 _Ships:_ the first complaint is fixed on its own, with no lobby yet.
-_Touches:_ routes, `gameStore`, one e2e test's toolbar assertion, and the
-confirm dialog (which mostly disappears).
+
+One thing turned out to be load-bearing that this plan had not called for.
+`startGame` mints a fresh id per seat, and `reduce` carries claims forward
+_by seat id_ — so a new game over a running one would have renamed everyone
+back to Player N and dropped every joined device, which is not what J4 asks
+for at all. `SeatRequest` therefore gained an optional `id`: supplied when a
+seat is being carried through, minted when it is genuinely new. One code
+path, no flag, and it is what makes "we said 30, not 40" cost the life
+totals and nothing else.
+
+The menu's rows also put their hint outside the button. Inside, the hint
+joined the button's accessible name — "Rematch Same players, fresh totals" —
+and the name of an action should be the action; `aria-describedby` is how the
+hint still reaches a screen reader.
 
 **Phase 2 — Settings instead of modes.** `'custom'` joins `FormatId`;
 `startGame` takes a `GameSetup`; `FORMATS` becomes presets; `maxPlayers` becomes

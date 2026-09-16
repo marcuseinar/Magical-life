@@ -2,33 +2,72 @@
   import { resolve } from '$app/paths';
   import { FORMATS, FORMAT_ORDER, MANA_COLOURS } from '$domain/rules';
   import type { FormatId, ManaColour } from '$domain/rules';
+  import type { PlayerSeat } from '$domain/state';
   import ManaPip from './ManaPip.svelte';
 
   let {
-    onstart
+    onstart,
+    onback,
+    existing = [],
+    format: openOn
   }: {
-    onstart: (formatId: FormatId, seats: { name: string; colour: ManaColour }[]) => void;
+    onstart: (formatId: FormatId, seats: SeatRequest[]) => void;
+    /** Absent when there is no game to go back to — a first run, or after
+     *  the history has been cleared. */
+    onback?: (() => void) | undefined;
+    /** The seats of the game this screen was opened over, if any. */
+    existing?: readonly PlayerSeat[] | undefined;
+    format?: FormatId | undefined;
   } = $props();
 
-  let formatId = $state<FormatId>('commander');
+  type SeatRequest = { id?: PlayerSeat['id']; name: string; colour: ManaColour };
+
+  /*
+   * Both of these are "what the player has touched", not "what is showing" —
+   * `null` meaning untouched, so the answer can keep following the props.
+   * Seeding `$state` from a prop instead would capture it once, and this
+   * screen is opened over a game whose shape it has to reflect.
+   */
+  let chosenFormat = $state<FormatId | null>(null);
+  let chosenCount = $state<number | null>(null);
+
+  const formatId = $derived(chosenFormat ?? openOn ?? 'commander');
   const format = $derived(FORMATS[formatId]);
 
-  let count = $state(FORMATS.commander.defaultPlayers);
+  /* An existing table's size is the default when there is one; otherwise the
+     format's own, which is most of why anyone taps a format at all. */
+  const count = $derived(
+    Math.min(
+      chosenCount ?? (existing.length > 0 ? existing.length : format.defaultPlayers),
+      format.maxPlayers
+    )
+  );
 
   /* Colours are assigned in order so a pod is never two blues. All seven are in
      play, not just the five true colours: six people cycling five of them made
      Player 6 another white, and the badges that attribute commander damage
      identify people by colour — two the same makes the question unanswerable. */
   const seats = $derived(
-    Array.from({ length: count }, (_, index) => ({
-      name: `Player ${index + 1}`,
-      colour: MANA_COLOURS[index % MANA_COLOURS.length] as ManaColour
-    }))
+    Array.from({ length: count }, (_, index): SeatRequest => {
+      /* A seat that already exists arrives with its identity, which is what
+         carries its name, its colour and — through `reduce` folding claims
+         forward by id — whoever is playing it on their own phone. Only the
+         seats beyond the current table are genuinely new. */
+      const kept = existing[index];
+      if (kept !== undefined) return { id: kept.id, name: kept.name, colour: kept.colour };
+      return {
+        name: `Player ${index + 1}`,
+        colour: MANA_COLOURS[index % MANA_COLOURS.length] as ManaColour
+      };
+    })
   );
 
   function chooseFormat(next: FormatId) {
-    formatId = next;
-    count = Math.min(FORMATS[next].defaultPlayers, FORMATS[next].maxPlayers);
+    chosenFormat = next;
+    /* With a table already seated, changing the format must not silently
+       reseat it — those are real people on real phones. Without one, letting
+       the count fall back to the new format's default is the point. */
+    if (existing.length === 0) chosenCount = null;
   }
 </script>
 
@@ -54,13 +93,15 @@
     <legend class="legend">Players</legend>
     <div class="options options--tight">
       {#each Array.from({ length: format.maxPlayers }, (_, i) => i + 1) as n (n)}
-        <button class="pill" aria-pressed={count === n} onclick={() => (count = n)}>{n}</button>
+        <button class="pill" aria-pressed={count === n} onclick={() => (chosenCount = n)}
+          >{n}</button
+        >
       {/each}
     </div>
   </fieldset>
 
   <div class="preview" aria-hidden="true">
-    {#each seats as player (player.name)}
+    {#each seats as player, index (index)}
       <span data-colour={player.colour}><ManaPip colour={player.colour} size={26} /></span>
     {/each}
   </div>
@@ -68,6 +109,12 @@
   <button class="start" onclick={() => onstart(formatId, seats)}>
     Begin at {format.startingLife}
   </button>
+
+  {#if onback}
+    <!-- The whole point of ADR 0005: the game this was opened over is still
+         running, so leaving without starting anything is a real option. -->
+    <button class="join-link" type="button" onclick={onback}>Back to the game</button>
+  {/if}
 
   <a class="join-link" href={resolve('/join')}>Join a table instead</a>
 </main>

@@ -4,8 +4,28 @@
   import '@fontsource/cinzel/latin-900.css';
   import '$ui/tokens/base.css';
   import { createBrowserWakeLock } from '$adapters/platform/wakeLock';
+  import { createGameStore } from '$lib/gameStore.svelte';
+  import { provideGameStore } from '$lib/context';
 
   let { children } = $props();
+
+  /*
+   * The one game, owned above every screen rather than by whichever screen
+   * happens to be showing (ADR 0005). This is what makes setup and settings
+   * reachable without the game having to stop existing first — a route
+   * change unmounts a page, and the game must survive being looked away
+   * from.
+   *
+   * Reached through context rather than props because SvelteKit routes
+   * cannot be prop-drilled through the router. `/join` is the one exception:
+   * it builds its own store for the table it joins.
+   */
+  const store = createGameStore();
+  provideGameStore(store);
+
+  $effect(() => {
+    void store.hydrate();
+  });
 
   /*
    * A life counter that lets the screen lock mid-game is failing at its one

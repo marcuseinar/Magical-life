@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { startGame } from './support';
+import { openMenu, openNewGame, startGame } from './support';
 
 /* Dark is the only theme; a pretty theme that fails contrast cannot ship. */
 test('the opening screen is clean', async ({ page }) => {
@@ -23,4 +23,30 @@ test('life can be changed without ever touching the screen', async ({ page }) =>
   await page.keyboard.press('Enter');
 
   await expect(page.getByLabel('Player 1: 18 life')).toBeVisible({ timeout: 5000 });
+});
+
+/* The three surfaces ADR 0005 added. Each one carries a dialog, a danger
+   colour, or both, which is where contrast and naming usually go wrong. */
+test('the menu is clean', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await openMenu(page);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations).toEqual([]);
+});
+
+test('setup opened over a running game is clean', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await openNewGame(page);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations).toEqual([]);
+});
+
+test('settings is clean, and so is the confirmation guarding it', async ({ page }) => {
+  await startGame(page, /commander/i, 4);
+  await openMenu(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  await page.getByRole('button', { name: 'Clear history' }).click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

@@ -102,3 +102,64 @@ describe('game store — link state', () => {
     expect(store.linkState).toBe('lost');
   });
 });
+
+describe('game store — the game lifecycle', () => {
+  const store = () => createGameStore({ log: createMemoryEventLog() });
+
+  const commander = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      name: `Player ${index + 1}`,
+      colour: 'white' as const
+    }));
+
+  it('leaves the previous game in the log when a new one begins', async () => {
+    const game = store();
+    await game.hydrate();
+    await game.begin('commander', commander(2));
+    await game.changeLife(game.state!.players[0]!.id, -10);
+    const before = game.events.length;
+
+    await game.begin('standard', commander(2));
+
+    expect(game.state?.config.startingLife).toBe(20);
+    // The whole point: the old game is still there to be read back.
+    expect(game.events.length).toBeGreaterThan(before);
+    expect(game.events.filter((event) => event.kind === 'game/started')).toHaveLength(2);
+  });
+
+  /*
+   * The one call that destroys history, and the only one. It exists because
+   * an append-only log grows forever and a phone gets handed to other
+   * people — not because starting a different game needs it.
+   */
+  it('clears the history only when asked to, explicitly', async () => {
+    const game = store();
+    await game.hydrate();
+    await game.begin('commander', commander(2));
+    expect(game.events.length).toBeGreaterThan(0);
+
+    await game.clearHistory();
+
+    expect(game.events).toHaveLength(0);
+    expect(game.state).toBeNull();
+  });
+
+  it('carries a seat through a reconfigure, claims and all', async () => {
+    const game = store();
+    await game.hydrate();
+    await game.begin('commander', commander(2));
+    const seats = game.state!.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      colour: player.colour
+    }));
+    await game.claimSeat(seats[1]!.id);
+
+    // "We said 30, not 40" — same people, different game.
+    await game.begin('twoHeadedGiant', seats);
+
+    expect(game.state?.players.map((player) => player.id)).toEqual(seats.map((seat) => seat.id));
+    expect(game.state?.players[1]?.claimed).toBe(true);
+    expect(game.state?.players[0]?.life).toBe(30);
+  });
+});
