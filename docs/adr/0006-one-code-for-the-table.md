@@ -108,9 +108,22 @@ carried the same thing.
 - Four people scanning at once take turns rather than connecting in parallel.
   At a real table this is invisible — a handshake is a second or two — and it
   buys away an entire class of race.
-- Cost: six endpoints where there were four, and a host loop with a lifecycle
-  (it must be stopped when the sheet closes, or a table it has walked away
-  from stays open until its window runs out).
+- Cost: six endpoints where there were four, and a host loop with a lifecycle.
+
+  That lifecycle is the **game's, not the sheet's**. An earlier version of this
+  ADR said the loop must be stopped when the sheet closes, which turned out to
+  be exactly wrong: a table stopped on close is reopened under a _new_ code the
+  next time anybody looks at who has joined, so the code already read out at
+  the table is replaced — while still sitting at the worker, claimable and
+  answerable, for the rest of its window with nobody listening on it. Reported
+  from a real phone as "it generates a new code every time I open the table".
+
+  So the table is opened lazily — a solo game never touches the network — and
+  then held until the game is cleared. The heartbeat that holds it open runs
+  every 1.5s while its sheet is open and every 15s while it is not, which is
+  well inside the ten-minute window; the only person who feels the difference
+  is somebody arriving while the host is playing rather than sharing, and they
+  wait out one gap.
 
 ## Revisit if
 

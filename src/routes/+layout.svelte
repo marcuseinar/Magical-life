@@ -5,7 +5,9 @@
   import '$ui/tokens/base.css';
   import { createBrowserWakeLock } from '$adapters/platform/wakeLock';
   import { createGameStore } from '$lib/gameStore.svelte';
-  import { provideGameStore } from '$lib/context';
+  import { createTableSession } from '$lib/tableSession.svelte';
+  import { defaultSignalling } from '$lib/signalling';
+  import { provideGameStore, provideTableSession } from '$lib/context';
 
   let { children } = $props();
 
@@ -22,6 +24,15 @@
    */
   const store = createGameStore();
   provideGameStore(store);
+
+  /*
+   * And the table it is hosting, for the same reason. It opens nothing until
+   * something asks it to, so a solo game never touches the network — but
+   * once open it is the game's table, not the sheet's: a code that changed
+   * every time somebody glanced at who had joined is a code nobody can be
+   * given in advance, which is the whole point of having one (ADR 0006).
+   */
+  provideTableSession(createTableSession(store, defaultSignalling()));
 
   $effect(() => {
     void store.hydrate();
@@ -103,6 +114,17 @@
 <style>
   .app {
     display: grid;
+
+    /*
+     * Explicit, because the implicit column a bare `display: grid` creates is
+     * `auto` — sized to the max-content of whatever screen is showing. The
+     * board's max-content exceeds a phone, so the game filled the width and
+     * looked fine; setup's does not, so it laid itself out at the width of
+     * its own widest line (the title, ~275px on a 390px phone) and every
+     * screen under it inherited that. Two-column layouts inside then dropped
+     * to one and the screen grew too tall to fit.
+     */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 1fr;
     height: 100dvh;
     overflow: hidden;

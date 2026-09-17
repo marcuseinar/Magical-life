@@ -44,9 +44,23 @@ Playwright · Capacitor · Cloudflare Workers for the later backend.
    auth code path, and must never load auth code into the bundle.
 9. **Respect the performance budget** in `docs/architecture.md`. "Fast to start"
    is a requirement, not a preference.
-10. **Nothing scrolls and nothing zooms.** The app is a fixed surface. Anything
-    that can exceed the screen opts back in locally with `touch-action: pan-y`
-    and its own `overflow`; never by relaxing the rule globally.
+10. **Nothing scrolls and nothing zooms.** The app is a fixed surface, with no
+    local opt-outs: a screen that needs to scroll is a screen that does not
+    fit, and on a phone the part below the fold is usually the control someone
+    came to press. Make it fit — give up decoration, scale a QR or a heading
+    with the viewport, put two secondary buttons on one row — rather than
+    letting it scroll. Two consequences worth knowing: nothing may be styled
+    `overflow-y: auto` or `touch-action: pan-y`, and **no focusable field may
+    be smaller than 16px**, because iOS Safari zooms the page in on focus
+    below that and pinch is blocked, so the zoom is a one-way door.
+    `tests/e2e/viewport.spec.ts` holds both lines.
+11. **Nothing jumps, either.** A screen is the size it will be from the first
+    frame, before it has anything to put in it. Whatever is still on its way —
+    a code, a QR, a link — holds its own box open, with dots in it and the
+    button that needs it saying what it is waiting for, rather than appearing
+    when it arrives and pushing what is under it out from beneath a thumb
+    already on the way down. Say the wait in words as well: the element that
+    will hold the content is the live region that announces both states.
 
 ## Commands
 

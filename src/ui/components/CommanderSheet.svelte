@@ -116,12 +116,10 @@
     width: min(24rem, 100%);
     max-height: 100%;
     padding: var(--space-4);
-    overflow-y: auto;
     border: 1px solid var(--frame-rule-strong);
     border-radius: var(--radius-lg);
     background: linear-gradient(175deg, var(--player-ink), var(--surface-panel) 85%);
     box-shadow: var(--shadow-float);
-    touch-action: pan-y;
   }
 
   .sheet[data-rotated='true'] {

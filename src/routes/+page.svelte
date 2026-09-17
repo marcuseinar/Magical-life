@@ -1,10 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { useGameStore } from '$lib/context';
+  import { useGameStore, useTableSession } from '$lib/context';
   import GameScreen from './GameScreen.svelte';
 
   const store = useGameStore();
+  const session = useTableSession();
 
   /*
    * Setup is a screen of its own now, not what this route falls back to when
@@ -30,6 +31,7 @@
 {:else}
   <GameScreen
     {store}
+    {session}
     onnewgame={() => goto(resolve('/setup'))}
     onjoin={() => goto(resolve('/join'))}
     onsettings={() => goto(resolve('/settings'))}

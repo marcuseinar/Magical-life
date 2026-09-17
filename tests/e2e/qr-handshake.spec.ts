@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import qrcode from 'qrcode-generator';
-import { inviteBySeat, openTable, startGame } from './support';
+import { inviteBySeat, openTable, shownCode, startGame } from './support';
 
 /*
  * ADR 0004's path 1 — no server, offer and answer carried in a QR code —
@@ -125,9 +125,7 @@ test.describe('QR scanning', () => {
     await startGame(page, /commander/i, 2);
     await openTable(page);
     await inviteBySeat(page, 'Player 2');
-    await expect(page.locator('.sheet textarea.code[readonly]')).not.toHaveValue('', {
-      timeout: 10_000
-    });
+    await shownCode(page);
 
     await page.getByRole('button', { name: 'Scan their reply instead' }).click();
 

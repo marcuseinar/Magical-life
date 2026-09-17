@@ -12,9 +12,14 @@
   import type { SeatSummary, TableSummary } from '$application/ports/signalling';
   import { playerId } from '$domain/ids';
   import { defaultSignalling } from '$lib/signalling';
+  import { createTableSession } from '$lib/tableSession.svelte';
+  import type { TableSession } from '$lib/tableSession.svelte';
+  import type { GameStore } from '$lib/gameStore.svelte';
   import { loadQrScanSheet } from '$lib/scanner';
   import { readJoinTarget } from '$ui/interaction/joinTarget';
   import QrCode from '$ui/components/QrCode.svelte';
+  import QrPending from '$ui/components/QrPending.svelte';
+  import LoadingDots from '$ui/components/LoadingDots.svelte';
   import GameScreen from '../GameScreen.svelte';
 
   const signalling = defaultSignalling();
@@ -194,6 +199,22 @@
   });
 
   const playingStore = $derived(joinedCode?.store ?? joinedManual?.store ?? null);
+
+  /*
+   * A joiner can pass an invite on, so the screen they land on needs a table
+   * of its own — theirs, over the store they joined with, not the host's.
+   * Made on first render rather than in an effect so the game is not a frame
+   * late, and keyed by the store so joining a second table after starting
+   * over does not hand the old one's table to the new game.
+   */
+  let hosted: { store: GameStore; session: TableSession } | null = null;
+  function tableFor(store: GameStore): TableSession {
+    if (hosted?.store !== store) {
+      hosted?.session.stop();
+      hosted = { store, session: createTableSession(store, defaultSignalling()) };
+    }
+    return hosted.session;
+  }
 </script>
 
 <svelte:head>
@@ -201,7 +222,7 @@
 </svelte:head>
 
 {#if stage.kind === 'playing' && playingStore}
-  <GameScreen store={playingStore} />
+  <GameScreen store={playingStore} session={tableFor(playingStore)} />
 {:else}
   <main class="join">
     <header class="masthead">
@@ -249,7 +270,7 @@
             <textarea
               bind:value={manualDraft}
               class="code"
-              rows="4"
+              rows="2"
               autocomplete="off"
               spellcheck="false"
               placeholder="Paste it here"></textarea>
@@ -321,22 +342,38 @@
         <p class="body">
           Send this back to {stage.invitation.playerName} — whoever invited you.
         </p>
-        {#if joinedManual.reply === null}
-          <p class="body" role="status">Preparing a reply…</p>
-        {:else}
-          <!-- Lets the host scan this back rather than type it, the same
-               way their own offer reached this device (ADR 0004's path 1). -->
-          <div class="qr-row">
+        <!-- Lets the host scan this back rather than type it, the same
+             way their own offer reached this device (ADR 0004's path 1).
+             Held at full size while the reply is still being gathered: this
+             screen used to be one line of text until it had a reply, and
+             then became all of this at once. -->
+        <div class="qr-row" class:qr-row--waiting={joinedManual.reply === null}>
+          {#if joinedManual.reply === null}
+            <QrPending />
+          {:else}
             <QrCode value={joinedManual.reply} />
-          </div>
-          <div class="code-row">
-            <textarea class="code" readonly value={joinedManual.reply} rows="4"></textarea>
-            <button class="action" type="button" onclick={copyReply}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <p class="body" role="status">Waiting for them to connect…</p>
-        {/if}
+          {/if}
+        </div>
+        <div class="code-row">
+          <!-- Shown, not typed into: a paragraph is long-press
+               selectable and gives iOS nothing to zoom into. -->
+          <p class="code" class:code--waiting={joinedManual.reply === null}>
+            {#if joinedManual.reply === null}<LoadingDots />{:else}{joinedManual.reply}{/if}
+          </p>
+          <button
+            class="action"
+            type="button"
+            disabled={joinedManual.reply === null}
+            onclick={copyReply}
+          >
+            {#if joinedManual.reply === null}Preparing…{:else}{copied ? 'Copied' : 'Copy'}{/if}
+          </button>
+        </div>
+        <!-- One line, two states: the wait for a reply and the wait for them
+             to take it are the same wait as far as this screen is concerned. -->
+        <p class="body" role="status">
+          {joinedManual.reply === null ? 'Preparing a reply…' : 'Waiting for them to connect…'}
+        </p>
       </div>
     {/if}
 
@@ -363,11 +400,9 @@
   .join {
     display: grid;
     align-content: start;
-    gap: var(--space-4);
+    gap: clamp(var(--space-2), 2vh, var(--space-4));
     height: 100%;
-    padding: var(--space-5) var(--space-4);
-    overflow-y: auto;
-    touch-action: pan-y;
+    padding: clamp(var(--space-3), 3vh, var(--space-5)) var(--space-4);
   }
 
   .masthead {
@@ -380,7 +415,7 @@
     margin: 0;
     color: var(--text-gold);
     font-family: var(--font-display);
-    font-size: 1.6rem;
+    font-size: clamp(1.25rem, 3.5vh, 1.6rem);
     letter-spacing: var(--tracking-display);
   }
 
@@ -422,18 +457,21 @@
     text-transform: uppercase;
   }
 
+  /* Never below 1rem: iOS zooms the page in on a smaller field taking
+     focus, and pinch is blocked, so that zoom cannot be undone. */
   .code,
   .code-row .code {
     width: 100%;
+    max-height: 4.5rem;
     padding: var(--space-2);
     border: 1px solid var(--frame-rule);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
     color: var(--text-primary);
     font-family: monospace;
-    font-size: 0.7rem;
-    line-height: 1.4;
-    overflow-wrap: break-word;
+    font-size: 1rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
     resize: none;
 
     /* stylelint-disable-next-line property-no-vendor-prefix -- iOS Safari still needs it */
@@ -447,6 +485,31 @@
     padding: var(--space-2);
     border-radius: var(--radius-md);
     background: white;
+  }
+
+  /* The white is the QR's own contrast requirement, so it arrives with the
+     QR; the square it will occupy is held from the start either way. */
+  .qr-row--waiting {
+    /* An inset ring rather than a border: it matches the box the code sits
+       in, without taking a pixel of layout the QR will want back. */
+    background: var(--surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--frame-rule);
+    color: var(--text-faint);
+  }
+
+  /* Fixed rather than capped, so the box is the same size while the reply is
+     being gathered as it is once the reply fills it — and a blob this long
+     does not spill over what sits under it. Copy takes all of it regardless. */
+  .code-row .code {
+    height: 4.5rem;
+    overflow: hidden;
+  }
+
+  /* Centred in the box it is holding open, rather than in a corner of it. */
+  .code--waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .code-row {

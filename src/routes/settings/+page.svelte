@@ -66,10 +66,6 @@
     height: 100%;
     margin-inline: auto;
     padding: var(--space-5) var(--space-4);
-    overflow-y: auto;
-
-    /* Opts back in to vertical scrolling, which the app disables globally. */
-    touch-action: pan-y;
   }
 
   .masthead {

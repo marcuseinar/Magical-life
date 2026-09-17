@@ -15,11 +15,13 @@ export const settled = (page: Page) =>
     timeout: COMMITTED
   });
 
-export async function startGame(page: Page, format: RegExp, players: number) {
+export async function startGame(page: Page, preset: RegExp, players: number) {
   await page.goto('/');
-  // With no game yet, `/` sends the player to `/setup` (ADR 0005).
-  await page.getByRole('button', { name: format }).click();
-  await page.getByRole('button', { name: String(players), exact: true }).click();
+  // With no game yet, `/` sends the player to `/setup` (ADR 0005). The
+  // preset fills the controls in; the player count is one of them now,
+  // rather than a row of buttons the preset silently capped.
+  await page.getByRole('button', { name: preset }).click();
+  await page.getByRole('spinbutton', { name: 'Players' }).fill(String(players));
   await page.getByRole('button', { name: /begin at/i }).click();
 }
 
@@ -40,19 +42,36 @@ export async function rematch(page: Page) {
 export const openTable = (page: Page) => page.getByRole('button', { name: /^Table/ }).click();
 
 /**
+ * A code the app is showing rather than taking. These are paragraphs, not
+ * fields: a readonly textarea at 0.7rem made iOS zoom the page in on focus,
+ * and with pinch blocked there was no way back out.
+ *
+ * The box now holds its place from the first frame with dots in it, so it
+ * being present — or even non-empty, since it announces the wait — no longer
+ * means there is a code in it. Copy is the honest signal: it is disabled
+ * until there is something to take.
+ */
+export async function shownCode(page: Page, selector = '.sheet p.code') {
+  await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeEnabled({
+    timeout: 15_000
+  });
+  return (await page.locator(selector).textContent())?.trim() ?? '';
+}
+
+/**
  * The host's no-server path. The table's own code is one for everybody now,
  * so the per-seat handshake — inherently one offer per scanner — asks whose
  * seat it is for first.
  */
 export async function inviteBySeat(page: Page, seat: string) {
-  await page.getByRole('button', { name: /paste instead/i }).click();
+  await page.getByRole('button', { name: /paste a code instead/i }).click();
   await page.getByRole('button', { name: `Invite ${seat}` }).click();
 }
 
 /**
  * The joiner's no-server path. Every way in sits on one screen now, so the
  * paste field is revealed rather than a mode reached through the others —
- * and the host's own "use a code you paste instead" in the table sheet is a
+ * and the host's own "Trouble connecting? Paste a code instead." is a
  * different button with a similar name, which is why this names its own in
  * full.
  */

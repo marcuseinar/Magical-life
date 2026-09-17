@@ -219,14 +219,18 @@ shortcut into the settings, not a mode the settings live inside.
 
 ### What changes in the domain
 
-Less than it looks:
+Less than it looks, and less than this sketch expected:
 
 ```ts
 // src/domain/rules.ts
-export type FormatId = 'commander' | 'standard' | 'twoHeadedGiant' | 'brawl' | 'custom';
+export type PresetId = 'commander' | 'standard' | 'twoHeadedGiant' | 'brawl';
+export type FormatId = PresetId | 'custom';
+export const MAX_PLAYERS = 6;
 ```
 
-That is the whole domain change. `GameConfig` already carries `startingLife`
+Splitting `PresetId` out of `FormatId` is what makes `'custom'` unable to
+appear where a preset is meant — the setup screen's quick-start row can only
+offer things that exist. `GameConfig` already carries `startingLife`
 and `tracksCommanderDamage`; `format` stays in it as the preset label, which
 also keeps every already-saved game readable — the reason the `twoHeadedGiant`
 id was kept when its name changed.
@@ -605,13 +609,24 @@ joined the button's accessible name — "Rematch Same players, fresh totals" —
 and the name of an action should be the action; `aria-describedby` is how the
 hint still reaches a screen reader.
 
-**Phase 2 — Settings instead of modes.** `'custom'` joins `FormatId`;
-`startGame` takes a `GameSetup`; `FORMATS` becomes presets; `maxPlayers` becomes
-one app-wide cap; the setup screen gets the three controls.
+**Phase 2 — Settings instead of modes. Built.** `'custom'` joins `FormatId`;
+`FORMATS` becomes `PRESETS`; `maxPlayers` becomes one app-wide `MAX_PLAYERS`;
+the setup screen gets the three controls.
 
-_Ships:_ independently useful, and it is the smaller half of the domain work.
-_Watch:_ already-saved games must still fold. A test that loads a
-pre-change log and gets the same state is the one that matters.
+`startGame` did not need a `GameSetup` type after all — it takes a
+`GameConfig` directly. The config is already exactly what a game runs on, so
+inventing a parallel shape would have been ceremony; the use case now mints
+seat ids and records an event, and the application layer no longer imports the
+preset table at all. Presets became purely a UI concern, which is what they
+always were.
+
+The risk this plan flagged did not materialise, and the reason is worth
+keeping: `GameConfig` never changed shape. Starting life and commander damage
+were always fields of their own and `format` only widened to admit one more
+value, so a game recorded before the change folds to exactly what it folded to
+before. `reducer.test.ts` now asserts that against a stored event written out
+as bytes rather than built by current code, which is the only version of that
+test worth having.
 
 **Phase 3 — The lobby screen, over today's signalling.** Per-seat connection
 state in the store; the lobby route; `releaseSeat` and Leave table. Still one
@@ -660,3 +675,67 @@ rearrangement of existing ones.
 - **Should the setup screen name players?** The roadmap defers it; this screen
   is where it belongs; it costs vertical space on a surface that must not
   scroll.
+
+## Fitting a phone
+
+Reported from a real iPhone, twice, and worth recording because neither
+failure was visible on an emulated device that happened to be a little wider
+or a little taller.
+
+**A screen was laid out at the width of its own title.** `.sheet` set
+`max-width` with `margin-inline: auto`, and an auto inline margin defeats a
+grid item's stretch — the item falls back to its content width and the margin
+centres it there. "Magical Life" at `clamp(2rem, 9vw, 3.25rem)` measures about
+275px on a 390px phone, just under the 280px the preset grid needs for two
+columns, so the presets stacked one to a row and the screen grew tall enough
+to push its primary action off the bottom. `.app` had the same shape one level
+up: a bare `display: grid` with only `grid-template-rows` has an implicit
+`auto` column, sized to whatever screen is showing. That is why only some
+screens were affected — the board's max-content exceeds a phone, so the game
+filled the width and looked correct.
+
+**Tapping a field zoomed the page in with no way back.** iOS Safari zooms
+whenever a focusable field under 16px takes focus. The app blocks pinch —
+deliberately, and `user-scalable=no` is not an option because it fails the
+accessibility gate — so the zoom could not be undone. The offenders were four
+`textarea.code` at 0.7rem. A readonly blob is a paragraph now, long-press
+selectable and unfocusable; the fields somebody types into are 1rem.
+
+**And the scroll opt-ins went.** Rule 10 allowed a screen to opt back into
+scrolling locally, and seven did. That turned "does not fit" into "scrolls",
+which on a phone means the button you came to press is below the fold. Every
+screen now fits at 320×568 and up, which took: a rhythm that scales with
+viewport height rather than being fixed, a QR bounded by the height available
+rather than only by taste, seats two to a row instead of six full-width ones,
+and — under 620px tall — the tagline and the colour preview giving way, with
+the two ways out sharing a row.
+
+`tests/e2e/viewport.spec.ts` is the guard for all of it. Nothing in the suite
+had ever looked at a screen other than the game: both older viewport tests run
+after `startGame`.
+
+**And then a screen that fits still moved.** Opening a table is a round trip,
+and the sheet spent it as a single line of text — then grew a code, a QR and a
+copy button underneath whatever the player was already reaching for. Same on
+the two hand-carried screens, which wait on ICE gathering. So a box holds its
+own size from the first frame now, with dots in it and the copy button saying
+what it is still waiting for, rather than appearing once it has something to
+show. It cost nothing to fix and it is the difference between a screen that is
+loading and a screen that is broken: a box with a frame and dots reads as a
+promise, where a gap reads as a mistake.
+
+Three details make it exact rather than approximate. The placeholder QR is a
+square of the same `--qr-size` the real one takes, so the row is the same
+height either way, and its ring is an inset shadow rather than a border
+because a border would take a pixel of layout the QR wants back. The short
+code's box carries `min-height: 1lh`, since three dots are shorter than a line
+of display type. And the shown-code paragraph is a fixed height rather than a
+capped one — which also caught a real bug: `max-height` alone let a 1kB blob
+paint straight over the copy button, the reply field and both actions under
+it, because a paragraph does not clip what will not fit the way the textarea
+it replaced did.
+
+The live region is the same element in both states, so a screen reader hears
+"Opening a table…" and then the code itself, rather than silence followed by a
+button appearing. The dots are `aria-hidden`: they say "wait" by looking like
+waiting, which is nothing at all if you are not looking.
