@@ -48,8 +48,24 @@ function waitForIceGatheringComplete(connection: RTCPeerConnection): Promise<voi
   });
 }
 
-function transportFromChannel(connection: RTCPeerConnection, channel: RTCDataChannel): Transport {
+/**
+ * A `Transport` over a connection whose data channel may not exist yet.
+ * The offerer has one from the first line (it creates the channel); the
+ * answerer only *receives* one, once `ondatachannel` fires — but ICE can
+ * also fail outright before that ever happens, with nothing to report
+ * failure through if the `Transport` itself did not exist until the
+ * channel did. Building it from the connection instead, and wiring a
+ * channel into it later via `attach`, is what lets the answerer's
+ * connection failure be observed at all (ADR 0004, path 3's trigger),
+ * rather than a joiner hanging forever with no signal on a network that
+ * defeats direct WebRTC.
+ */
+function transportFromConnection(connection: RTCPeerConnection): {
+  transport: Transport;
+  attach(channel: RTCDataChannel): void;
+} {
   let state: Transport['state'] = 'connecting';
+  let channel: RTCDataChannel | null = null;
   const handlers = new Set<(events: readonly GameEvent[]) => void>();
   const stateHandlers = new Set<(state: Transport['state']) => void>();
 
@@ -57,46 +73,58 @@ function transportFromChannel(connection: RTCPeerConnection, channel: RTCDataCha
     state = next;
     for (const handler of stateHandlers) handler(next);
   };
-
-  channel.addEventListener('open', () => setState('connected'));
   const onClose = () => setState('closed');
-  channel.addEventListener('close', onClose);
-  channel.addEventListener('error', onClose);
 
-  channel.addEventListener('message', (event: MessageEvent<string>) => {
-    // Malformed or foreign traffic on this channel is not this layer's
-    // problem to diagnose; drop it rather than let one bad message take the
-    // whole connection down mid-game.
-    let events: unknown;
-    try {
-      events = JSON.parse(event.data);
-    } catch {
-      return;
-    }
-    if (!Array.isArray(events)) return;
-    for (const handler of handlers) handler(events as GameEvent[]);
+  // ICE can fail outright — client-isolated WiFi, a hostile NAT — with the
+  // data channel never opening (or, on the answering side, never arriving
+  // at all) and nothing else ever firing. `connectionState` is the one
+  // signal that eventually fires for that case regardless, which is what
+  // lets a caller fall back to the relay instead of hanging.
+  connection.addEventListener('connectionstatechange', () => {
+    if (connection.connectionState === 'failed') onClose();
   });
 
   return {
-    get state() {
-      return state;
+    transport: {
+      get state() {
+        return state;
+      },
+      send(events) {
+        if (channel === null || channel.readyState !== 'open') return;
+        channel.send(JSON.stringify(events));
+      },
+      onReceive(handler) {
+        handlers.add(handler);
+        return () => handlers.delete(handler);
+      },
+      onStateChange(handler) {
+        stateHandlers.add(handler);
+        return () => stateHandlers.delete(handler);
+      },
+      close() {
+        channel?.close();
+        connection.close();
+        setState('closed');
+      }
     },
-    send(events) {
-      if (channel.readyState !== 'open') return;
-      channel.send(JSON.stringify(events));
-    },
-    onReceive(handler) {
-      handlers.add(handler);
-      return () => handlers.delete(handler);
-    },
-    onStateChange(handler) {
-      stateHandlers.add(handler);
-      return () => stateHandlers.delete(handler);
-    },
-    close() {
-      channel.close();
-      connection.close();
-      setState('closed');
+    attach(dataChannel) {
+      channel = dataChannel;
+      channel.addEventListener('open', () => setState('connected'));
+      channel.addEventListener('close', onClose);
+      channel.addEventListener('error', onClose);
+      channel.addEventListener('message', (event: MessageEvent<string>) => {
+        // Malformed or foreign traffic on this channel is not this layer's
+        // problem to diagnose; drop it rather than let one bad message take
+        // the whole connection down mid-game.
+        let events: unknown;
+        try {
+          events = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (!Array.isArray(events)) return;
+        for (const handler of handlers) handler(events as GameEvent[]);
+      });
     }
   };
 }
@@ -114,7 +142,8 @@ export type WebRtcOfferer = {
 export function offerConnection(): WebRtcOfferer {
   const connection = new RTCPeerConnection(RTC_CONFIG);
   const channel = connection.createDataChannel('game-events', { ordered: true });
-  const transport = transportFromChannel(connection, channel);
+  const { transport, attach } = transportFromConnection(connection);
+  attach(channel);
 
   const offer = (async () => {
     const description = await connection.createOffer();
@@ -139,26 +168,24 @@ export type WebRtcAnswerer = {
    *  arrived. */
   answer: Promise<string>;
   /**
-   * Resolves once the offerer's channel has actually arrived. Unlike the
-   * offerer, who creates the channel and so has a `Transport` from the first
-   * line, the answerer only *receives* one — there is nothing to return
-   * synchronously without faking a connected state that is not real yet.
+   * `connecting` until the offerer's channel actually arrives, exactly like
+   * the offerer's own `transport` — both are built from the connection
+   * itself now (`transportFromConnection`), not from a channel that might
+   * never come, which is what lets ICE failing outright be observed here
+   * too rather than only on the offering side.
    */
-  transport: Promise<Transport>;
+  transport: Transport;
 };
 
 /** The player who pastes someone else's code. */
 export function answerConnection(offer: string): WebRtcAnswerer {
   const connection = new RTCPeerConnection(RTC_CONFIG);
+  const { transport, attach } = transportFromConnection(connection);
 
   // The offerer created the channel; this side receives it rather than
   // creating its own, or the two would talk past each other on separate
   // channels that never meet.
-  const transport = new Promise<Transport>((resolve) => {
-    connection.addEventListener('datachannel', (event) => {
-      resolve(transportFromChannel(connection, event.channel));
-    });
-  });
+  connection.addEventListener('datachannel', (event) => attach(event.channel));
 
   const answer = (async () => {
     await connection.setRemoteDescription({ type: 'offer', sdp: offer });

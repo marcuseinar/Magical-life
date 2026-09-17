@@ -131,4 +131,21 @@ describe('createHttpSignallingClient', () => {
     fetchMock.mockResolvedValueOnce(new Response('not found', { status: 404 }));
     expect(await client().publishOffer('ZZZZ', seats, 'offer-2')).toBe(false);
   });
+
+  it('derives wss from https, the same way the worker is actually deployed', () => {
+    expect(client().relayUrl('ABCD', 't1')).toBe(
+      'wss://signalling.example/tables/ABCD/relay?ticket=t1'
+    );
+  });
+
+  it('derives ws from http, for local dev against wrangler', () => {
+    const insecure = createHttpSignallingClient('http://localhost:8787');
+    expect(insecure.relayUrl('ABCD', 't1')).toBe('ws://localhost:8787/tables/ABCD/relay?ticket=t1');
+  });
+
+  it('escapes a ticket that needs it, rather than passing it through raw', () => {
+    expect(client().relayUrl('ABCD', 't/1 x')).toBe(
+      'wss://signalling.example/tables/ABCD/relay?ticket=t%2F1%20x'
+    );
+  });
 });

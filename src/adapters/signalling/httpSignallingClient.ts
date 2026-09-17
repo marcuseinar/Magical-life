@@ -62,6 +62,11 @@ export function createHttpSignallingClient(baseUrl: string): Signalling {
       if (res.status === 404) return false;
       if (!res.ok) throw new Error(`Reopening the table failed (${res.status}).`);
       return true;
+    },
+
+    relayUrl(code: string, ticket: string) {
+      const wsUrl = `${table(code)}/relay?ticket=${encodeURIComponent(ticket)}`;
+      return wsUrl.replace(/^http/, 'ws');
     }
   };
 }

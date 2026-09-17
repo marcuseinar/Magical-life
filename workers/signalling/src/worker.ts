@@ -128,6 +128,21 @@ export default {
           if (!published) return new Response('not found', { status: 404, headers });
           return new Response(null, { status: 204, headers });
         }
+
+        // The relay fallback (ADR 0004, path 3) — a WebSocket upgrade, not
+        // a JSON request, so it takes no CORS headers of its own; the
+        // Upgrade header is what a browser sends instead. Passed to the
+        // room's own `fetch` untouched, forwarded rather than answered by
+        // the same RPC-style handlers above, since a WebSocket upgrade is
+        // not something a Durable Object's RPC method can return.
+        if (sub === 'relay' && request.method === 'GET') {
+          const origin = request.headers.get('Origin') ?? '';
+          const allowed = env.ALLOWED_ORIGINS.split(',').map((entry) => entry.trim());
+          if (!allowed.includes(origin)) {
+            return new Response('origin not allowed', { status: 403, headers });
+          }
+          return room(env, code).fetch(request);
+        }
       }
     } catch {
       return new Response('bad request', { status: 400, headers });

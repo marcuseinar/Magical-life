@@ -110,7 +110,25 @@ unit level against a fake `Transport` (`gameStore.svelte.test.ts`), since a
 real peer's ICE failure has no bounded timeout to wait on in an e2e test the
 way the connecting phase does.
 
-Not started: the relay fallback.
+**Built**: the relay fallback (ADR 0004's path 3) — a plain WebSocket
+through the same Durable Object, paired by the ticket a specific offer/
+answer already used, carrying game events themselves rather than standing up
+TURN. Reachable only from the short-code path (`hostTable`,
+`joinTableAsSeat` in `src/lib/tableConnection.svelte.ts`), since only that
+path has a server and a ticket to pair a relay against; the QR and manual
+paths have no answer for this failure by design, unchanged. Engaged when
+`webRtcTransport.ts`'s `connectionState` reports `'failed'` — the one signal
+that fires even when a data channel never opens at all, which used to leave
+a joiner hanging forever with nothing on screen and no error. Proven at two
+levels rather than through a real, load-sensitive ICE failure: the relay
+wire itself — real ticket-pairing and forwarding through the actual Durable
+Object — is proven against the real Workers runtime
+(`workers/signalling/test/relay.test.ts`); the decision to open one, with
+the right address, at the right moment, is proven against a connection
+stubbed to fail immediately (`src/lib/tableConnection.svelte.test.ts`). The
+connection-quality chip does not yet distinguish a relayed link from a
+direct one — still `'direct'`, since a working link is a working link — a
+deliberately deferred follow-up, same as the chip's own "lost" gap once was.
 
 ## M4 — Native shells
 

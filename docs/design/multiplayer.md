@@ -172,8 +172,55 @@ the strict sense, but it is a few kilobytes per game and it only engages when th
 preferred path is impossible.
 
 Because `Transport` is a port (see `docs/architecture.md`), this is one more
-adapter — not built yet. If a data channel can't be opened at all today, the
-join simply doesn't complete; there is no fallback beyond retrying.
+adapter — `src/adapters/transport/relayTransport.ts`, structurally identical
+to `webRtcTransport.ts`'s own channel wrapper: same three states, same
+JSON-array wire format.
+
+**Built**, reachable only from the short-code path — the QR and manual
+paths have no server at all to fall back to, by design, and stay exactly as
+they were. Two pieces make it work:
+
+- **The worker learns to relay, not just signal**
+  (`workers/signalling/src/room.ts`). A plain WebSocket upgrade, paired to
+  whichever _other_ socket arrives sharing the same ticket — the very one
+  its own offer/answer already used, so both sides already know it without
+  the worker inventing a new identifier. Independent of the offer/answer
+  table entirely: the handshake it stands in for has already happened by
+  the time either side opens one of these, so a relay pair can outlive the
+  10-minute room TTL above it without touching it. The room forwards
+  whatever either side sends, unread, and closes the other the moment
+  either one does — a pair is one link, not two independent ones. Proven
+  against the real Workers runtime, not a fake
+  (`workers/signalling/test/relay.test.ts`): real ticket-pairing, real
+  forwarding, real origin checking, no browser involved, because none of
+  it needs one.
+- **The client learns when to give up on direct** (`webRtcTransport.ts`).
+  Until now, nothing ever observed `RTCPeerConnection.connectionState`; a
+  data channel that never opened just sat in `'connecting'` forever, and,
+  on the _answering_ side specifically, there was not even a `Transport`
+  object yet to watch — `WebRtcAnswerer.transport` used to stay a pending
+  `Promise` until `ondatachannel` fired, which a connection that fails
+  outright never does. Both gaps are the same fix: the `Transport` is now
+  built from the connection itself (`transportFromConnection`), with the
+  channel wired in later once — or if — one arrives, so `connectionState`
+  reaching `'failed'` is observable immediately on either side, not only
+  once a channel exists to close. `tableConnection.svelte.ts`'s
+  `hostTable` and `joinTableAsSeat` watch exactly that
+  (`whenNeverConnected`), and open a relay keyed by the ticket their own
+  offer/answer used the moment it fires.
+
+Deliberately **not** proven by forcing a real ICE failure end to end — the
+same reasoning the connection-quality chip's "lost" state already settled
+on below: a real peer failing to connect has no bounded timeout, so a test
+waiting for it organically would be slow and load-sensitive for no more
+confidence than two fast, deterministic ones already give: the relay wire
+itself (above), and the decision to open one, at the right address, at the
+right moment, proven against a connection stubbed to fail immediately
+(`src/lib/tableConnection.svelte.test.ts`).
+
+Still open: the connection-quality chip does not yet distinguish a relayed
+link from a direct one — see below, deliberately deferred rather than
+bundled in here.
 
 **The connection-quality chip is built**, ahead of the relay adapter it was
 originally scoped alongside — it doesn't need one to be useful, since a
@@ -198,9 +245,17 @@ real connection is up" wiring is proven end to end
 is not — a real peer's ICE failure has no bounded timeout to wait on the way
 the app's own _connecting_ phase does (this same document, path 1), so an
 e2e test for it would be trading a fast, deterministic unit test for a slow,
-load-sensitive one proving the same logic twice. A relayed state will need
-its own value once path 3 lands; nothing about the aggregation rule above
-changes to add one.
+load-sensitive one proving the same logic twice.
+
+Now that path 3 exists, a tracked transport can be relayed rather than
+direct — and the chip does not say so; a relayed connection still shows
+"Direct connection". Deliberately left as-is here rather than folded into
+the relay work above: it is a separate reviewable idea (a third
+`linkState` value, threaded through every `connectTransport` call site,
+plus the chip's own rendering and tests), it is not a regression (a
+working link showing as "working" is not wrong, just imprecise), and
+bundling it would have made the relay fallback's own PR larger without
+making it more correct. Worth doing before path 3 is called fully finished.
 
 ## What is actually built today: manual-code join, pasted or scanned
 
