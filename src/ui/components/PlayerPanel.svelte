@@ -6,9 +6,11 @@
   import { scrubPoints } from '$ui/interaction/pendingDelta';
   import { registerPendingFlush } from '$ui/interaction/pendingFlush';
   import { createDeltaController } from '$ui/interaction/deltaController.svelte';
+  import { createImpactBursts } from '$ui/interaction/impactBursts.svelte';
   import CounterTray from './CounterTray.svelte';
   import DeltaBadge from './DeltaBadge.svelte';
   import Filigree from './Filigree.svelte';
+  import ImpactBurst from './ImpactBurst.svelte';
   import LifeTotal from './LifeTotal.svelte';
   import ManaPip from './ManaPip.svelte';
 
@@ -24,6 +26,7 @@
     readOnly = false,
     seats = [],
     tracksCommanderDamage = false,
+    impactEffects = true,
     onLifeChange,
     onOpenCounters,
     onOpenCommander,
@@ -47,6 +50,9 @@
      *  attribution row; the seating order is what gives each chip its colour. */
     seats?: readonly PlayerState[];
     tracksCommanderDamage?: boolean;
+    /** The Settings toggle: a burst of glyphs — blood falling for a loss,
+     *  energy rising for a gain — on every tap and every slide release. */
+    impactEffects?: boolean;
     /** `from` names the commander blamed for this loss, when one was picked. */
     onLifeChange: (delta: number, from: PlayerId | null) => void;
     onOpenCommander?: () => void;
@@ -81,6 +87,11 @@
     onLifeChange(delta, attributedTo);
     attributedTo = null;
   });
+
+  const bursts = createImpactBursts();
+  const spawnImpact = (delta: number) => {
+    if (impactEffects) bursts.spawn(delta);
+  };
 
   // Cancelling the pending change drops the attribution with it.
   $effect(() => {
@@ -145,6 +156,7 @@
     let fired = 0;
     const tick = () => {
       controller.nudge(sign);
+      spawnImpact(sign);
       fired += 1;
       repeat = setTimeout(tick, fired >= REPEAT_ACCELERATES_AFTER ? REPEAT_FAST_MS : REPEAT_MS);
     };
@@ -157,6 +169,7 @@
 
     // Respond on touch-down, not on release: a life counter that waits feels broken.
     controller.nudge(sign);
+    spawnImpact(sign);
     origin = event.clientY;
     originX = event.clientX;
 
@@ -204,13 +217,22 @@
   function lift() {
     stopRepeating();
     // A deliberate gesture deserves an immediate result; taps wait out the window.
-    if (scrubbing) controller.release();
+    if (scrubbing) {
+      // The slide's own contribution, not the whole pending value — a second
+      // drag inside the continue window gets a burst sized to itself, not to
+      // everything stacked up before it.
+      spawnImpact(controller.pending - scrubBase);
+      controller.release();
+    }
     scrubbing = false;
   }
 
   function keyboardNudge(event: MouseEvent, sign: number) {
     // `detail === 0` means the click came from a key, not a pointer we already handled.
-    if (event.detail === 0) controller.nudge(sign);
+    if (event.detail === 0) {
+      controller.nudge(sign);
+      spawnImpact(sign);
+    }
   }
 
   // Anything about to read or reset the committed history — undo, rematch,
@@ -221,6 +243,7 @@
   $effect(() => () => {
     stopRepeating();
     controller.destroy();
+    bursts.destroy();
   });
 </script>
 
@@ -345,6 +368,15 @@
           interim={controller.pending !== 0}
         />
       </div>
+    </div>
+
+    <!-- Combat-damage-style feedback for the Settings toggle of the same
+         name: a burst per tap or slide release, stacked rather than
+         replaced, clipped to the card by `.panel`'s own overflow. -->
+    <div class="impact-layer">
+      {#each bursts.items as burst (burst.id)}
+        <ImpactBurst direction={burst.direction} glyphs={burst.glyphs} scale={burst.scale} />
+      {/each}
     </div>
   </div>
 
@@ -776,6 +808,14 @@
 
   .badge-slot {
     pointer-events: auto;
+  }
+
+  .impact-layer {
+    position: absolute;
+    inset: 0;
+
+    /* Decoration only, and must never steal the tap it is celebrating. */
+    pointer-events: none;
   }
 
   @keyframes drop-in {

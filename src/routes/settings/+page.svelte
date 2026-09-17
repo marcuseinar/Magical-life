@@ -1,9 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { useGameStore } from '$lib/context';
+  import { useGameStore, usePreferences } from '$lib/context';
 
   const store = useGameStore();
+  const preferences = usePreferences();
 
   let confirming = $state(false);
 
@@ -22,6 +23,28 @@
   <header class="masthead">
     <h1 class="title">Settings</h1>
   </header>
+
+  <section class="group">
+    <h2 class="legend">Feedback</h2>
+    <div class="setting">
+      <span class="setting__text">
+        <span class="setting__name" id="impact-effects-label">Damage &amp; life effects</span>
+        <span class="setting__hint">
+          A spray of blood falling for damage, energy rising for life gained.
+        </span>
+      </span>
+      <button
+        class="toggle"
+        type="button"
+        role="switch"
+        aria-checked={preferences.impactEffects}
+        aria-labelledby="impact-effects-label"
+        onclick={() => preferences.setImpactEffects(!preferences.impactEffects)}
+      >
+        {preferences.impactEffects ? 'On' : 'Off'}
+      </button>
+    </div>
+  </section>
 
   <section class="group">
     <h2 class="legend">History</h2>
@@ -99,6 +122,49 @@
     color: var(--text-muted);
     font-size: 0.85rem;
     line-height: 1.5;
+  }
+
+  .setting {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .setting__text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .setting__name {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+  }
+
+  .setting__hint {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  .toggle {
+    flex: none;
+    min-width: 4rem;
+    min-height: 2.75rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-pill);
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .toggle[aria-checked='true'] {
+    border-color: var(--frame-rule-strong);
+    color: var(--text-gold);
   }
 
   /* Deliberately not full width. Stacked above the way out, in the same

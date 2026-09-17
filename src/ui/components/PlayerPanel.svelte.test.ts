@@ -17,15 +17,22 @@ const player = (over: Partial<PlayerState> = {}): PlayerState => ({
   ...over
 });
 
-const mount = (over: Partial<PlayerState> = {}) => {
+const mount = (over: Partial<PlayerState> = {}, extraProps: Record<string, unknown> = {}) => {
   const onLifeChange = vi.fn();
   const onOpenCounters = vi.fn();
   const onRename = vi.fn();
   const onElimination = vi.fn();
-  render(PlayerPanel, {
-    props: { player: player(over), onLifeChange, onOpenCounters, onRename, onElimination }
+  const { container } = render(PlayerPanel, {
+    props: {
+      player: player(over),
+      onLifeChange,
+      onOpenCounters,
+      onRename,
+      onElimination,
+      ...extraProps
+    }
   });
-  return { onLifeChange, onOpenCounters, onRename, onElimination };
+  return { onLifeChange, onOpenCounters, onRename, onElimination, container };
 };
 
 const decrease = () => screen.getByRole('button', { name: /lose one life/i });
@@ -686,6 +693,90 @@ describe('player panel', () => {
       mount();
       expect(decrease()).not.toBeDisabled();
       expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
+    });
+  });
+
+  /*
+   * The Settings toggle of the same name: a burst of glyphs on every tap and
+   * every slide release — blood falling for a loss, energy rising for a
+   * gain — stacking rather than replacing whatever is still playing.
+   */
+  describe('impact effects', () => {
+    const bursts = (container: HTMLElement) => container.querySelectorAll('.burst');
+    const marksIn = (burst: Element) => burst.querySelectorAll('.mark').length;
+    const scaleOf = (burst: Element) =>
+      Number((burst as HTMLElement).style.getPropertyValue('--burst-scale'));
+
+    it('sprays blood falling for a loss', async () => {
+      const { container } = mount();
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+
+      const found = bursts(container);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toHaveAttribute('data-direction', 'loss');
+      // Decoration on top of a number the accessibility tree already carries.
+      expect(found[0]).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('sends energy rising for a gain', async () => {
+      const { container } = mount();
+      await touch(increase(), 'pointerDown');
+      await touch(increase(), 'pointerUp');
+
+      const found = bursts(container);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toHaveAttribute('data-direction', 'gain');
+    });
+
+    it('adds a burst on top of the others for every tap, rather than replacing them', async () => {
+      const { container } = mount();
+      for (let tap = 0; tap < 3; tap++) {
+        await touch(decrease(), 'pointerDown');
+        await touch(decrease(), 'pointerUp');
+      }
+
+      // All three still on screen — nothing has been cleared out yet.
+      expect(bursts(container)).toHaveLength(3);
+    });
+
+    it('gives a long slide a bigger burst than a short tap', async () => {
+      const { container } = mount();
+      const zone = decrease();
+
+      await touch(zone, 'pointerDown', 300);
+      await touch(zone, 'pointerMove', 140); // 160px upward, well past a tap
+      await touch(zone, 'pointerUp', 140);
+
+      const found = [...bursts(container)];
+      // The press itself still gets its own small burst; the slide adds a
+      // second, larger one on release rather than replacing the first.
+      expect(found).toHaveLength(2);
+      const biggest = found.reduce((max, burst) => Math.max(max, marksIn(burst)), 0);
+      const smallest = found.reduce((min, burst) => Math.min(min, marksIn(burst)), Infinity);
+      expect(biggest).toBeGreaterThan(smallest);
+      expect(Math.max(...found.map(scaleOf))).toBeGreaterThan(Math.min(...found.map(scaleOf)));
+    });
+
+    it('clears each burst once its animation has had time to finish', async () => {
+      const { container } = mount();
+      await touch(decrease(), 'pointerDown');
+      await touch(decrease(), 'pointerUp');
+      expect(bursts(container)).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(bursts(container)).toHaveLength(0);
+    });
+
+    it('is silent when the setting is off', async () => {
+      const { container } = mount({}, { impactEffects: false });
+      const zone = decrease();
+
+      await touch(zone, 'pointerDown', 300);
+      await touch(zone, 'pointerMove', 140);
+      await touch(zone, 'pointerUp', 140);
+
+      expect(bursts(container)).toHaveLength(0);
     });
   });
 });

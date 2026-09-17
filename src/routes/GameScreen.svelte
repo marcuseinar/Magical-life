@@ -5,6 +5,7 @@
   import { localSeats, remoteSeats } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import type { GameStore } from '$lib/gameStore.svelte';
+  import { usePreferences } from '$lib/context';
   import type { TableSession } from '$lib/tableSession.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
   import { createSpinController } from '$ui/interaction/spinController.svelte';
@@ -37,6 +38,7 @@
   } = $props();
 
   const spin = createSpinController();
+  const preferences = usePreferences();
 
   let confirming = $state(false);
   let menuOpen = $state(false);
@@ -189,6 +191,7 @@
           {localSeatIds}
           onLifeChange={(player, delta, from) => store.changeLife(player.id, delta, from)}
           tracksCommanderDamage={store.state.config.tracksCommanderDamage}
+          impactEffects={preferences.impactEffects}
           onOpenCounters={(player, rotated) => (counters = { player, rotated })}
           onOpenCommander={(player, rotated) => (commander = { player, rotated })}
           onRename={(player, rotated) => (renaming = { player, rotated })}
