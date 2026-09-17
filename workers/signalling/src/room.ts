@@ -22,6 +22,13 @@ const STORAGE_KEY = 'room';
  * therefore correct only because a Durable Object serialises its own calls.
  */
 export class SignallingRoom extends DurableObject<Env> {
+  /** A relay socket that has arrived before its pair has — waiting under
+   *  the ticket both sides already share from the offer/answer they just
+   *  attempted. In-memory only: it needs to last no longer than the pairing
+   *  itself does, and an instance with no open socket is free to be evicted
+   *  between requests like any other idle Durable Object. */
+  private readonly relayWaiting = new Map<string, WebSocket>();
+
   private async live(): Promise<TableRecord | undefined> {
     const record = await this.ctx.storage.get<TableRecord>(STORAGE_KEY);
     if (isLive(record, Date.now())) return record;
@@ -102,4 +109,61 @@ export class SignallingRoom extends DurableObject<Env> {
     // polling keeps pushing the window out, and each `keep` re-arms this.
     if ((await this.live()) === undefined) await this.ctx.storage.deleteAll();
   }
+
+  /**
+   * The relay fallback (ADR 0004, path 3): a plain WebSocket upgrade, paired
+   * to whichever other socket arrives under the same ticket. Independent of
+   * the offer/answer table above — the handshake it stands in for has
+   * already happened by the time either side opens one of these, so there
+   * is nothing left here to validate against `live()`.
+   *
+   * Whichever side connects first waits; the second arrival completes the
+   * pair and both sides are wired to forward whatever the other sends,
+   * unread — this room is a wire, not a participant, exactly the property
+   * that keeps it out of the trust surface ADR 0002/0003 already drew.
+   */
+  fetch(request: Request): Response {
+    const ticket = new URL(request.url).searchParams.get('ticket');
+    if (request.headers.get('Upgrade') !== 'websocket' || ticket === null) {
+      return new Response('expected a websocket request with a ticket', { status: 400 });
+    }
+
+    const pair = new WebSocketPair();
+    const server = pair[1];
+    server.accept();
+    this.pairRelay(ticket, server);
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  private pairRelay(ticket: string, socket: WebSocket): void {
+    const waiting = this.relayWaiting.get(ticket);
+    if (waiting === undefined) {
+      this.relayWaiting.set(ticket, socket);
+      socket.addEventListener('close', () => {
+        if (this.relayWaiting.get(ticket) === socket) this.relayWaiting.delete(ticket);
+      });
+      return;
+    }
+    this.relayWaiting.delete(ticket);
+    forwardBetween(socket, waiting);
+  }
+}
+
+/** Wires two sockets to forward whatever either sends to the other, and to
+ *  take the other down the moment either one goes — a relay pair is one
+ *  link, not two independent ones, so neither side is left holding a
+ *  connection that looks alive when its only peer is gone. */
+function forwardBetween(a: WebSocket, b: WebSocket): void {
+  const pipe = (from: WebSocket, to: WebSocket) => {
+    from.addEventListener('message', (event: MessageEvent) => {
+      if (to.readyState === WebSocket.OPEN) to.send(event.data);
+    });
+    const stop = () => {
+      if (to.readyState === WebSocket.OPEN) to.close();
+    };
+    from.addEventListener('close', stop);
+    from.addEventListener('error', stop);
+  };
+  pipe(a, b);
+  pipe(b, a);
 }

@@ -71,4 +71,12 @@ export type Signalling = {
   /** The host putting the next offer out under the same code, with a seat
    *  list showing whoever just sat down. */
   publishOffer(code: string, seats: readonly SeatSummary[], sdp: string): Promise<boolean>;
+  /**
+   * The relay fallback's address (ADR 0004, path 3) — same Durable Object,
+   * paired to one specific offer/answer exchange by its ticket. Pure
+   * derivation, no network call, so it does not break this port's own rule:
+   * carrying an address is not carrying an event, and nothing here reads or
+   * relays one.
+   */
+  relayUrl(code: string, ticket: string): string;
 };

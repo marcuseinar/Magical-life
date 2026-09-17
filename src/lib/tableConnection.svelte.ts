@@ -8,11 +8,35 @@ import type {
 import type { PlayerId } from '$domain/ids';
 import { playerId } from '$domain/ids';
 import { answerConnection, offerConnection } from '$adapters/transport/webRtcTransport';
+import { createRelayTransport } from '$adapters/transport/relayTransport';
 import { decodeCode, encodeCode, isOfferPayload } from '$ui/interaction/connectionCode';
 import type { ManualOffer } from '$ui/interaction/connectionCode';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
 import { createGameStore } from './gameStore.svelte';
 import type { GameStore } from './gameStore.svelte';
+
+/**
+ * Watches a transport that might fail outright — ICE never completing at
+ * all, which the QR and manual paths have no answer for and today just
+ * hangs forever. If it closes having never connected, calls `onFailure`
+ * once so the caller can open the relay fallback instead (ADR 0004, path
+ * 3), reachable only here because only the short-code path below has a
+ * ticket — the same one its own offer/answer already used — to pair one.
+ * A transport that connects and only later drops is `GameStore.linkState`'s
+ * concern, not this one's.
+ */
+function whenNeverConnected(transport: Transport, onFailure: () => void): void {
+  if (transport.state === 'connected') return;
+  if (transport.state === 'closed') {
+    onFailure();
+    return;
+  }
+  const stop = transport.onStateChange((next) => {
+    if (next === 'connecting') return;
+    stop();
+    if (next === 'closed') onFailure();
+  });
+}
 
 /**
  * Keeps one `GameStore` and one `Transport` in sync, in both directions, for
@@ -165,34 +189,32 @@ export function joinTable(offerCode: string): TableJoin {
     reply = encodeCode({ sdp });
   });
 
-  void answerer.transport.then((transport) => {
-    /*
-     * Deliberately not IndexedDB: `createIndexedDbEventLog` always opens the
-     * one fixed database this device's own solo game already uses, so a
-     * joined table's events would land in the same physical log — silently
-     * merging two unrelated games. A per-table database is the real fix and
-     * is not hard, but it buys back a reload surviving a connection that
-     * cannot itself survive one yet: nothing here reconnects after a reload,
-     * so rejoining is required regardless, and rejoining supplies a fresh
-     * full copy of state through the same mechanism as the first join. In
-     * memory, for now, is the honest choice until reconnection exists.
-     */
-    const newStore = createGameStore({ authorId: invitePlayerId, log: createMemoryEventLog() });
-    let seeded = false;
+  /*
+   * Deliberately not IndexedDB: `createIndexedDbEventLog` always opens the
+   * one fixed database this device's own solo game already uses, so a
+   * joined table's events would land in the same physical log — silently
+   * merging two unrelated games. A per-table database is the real fix and
+   * is not hard, but it buys back a reload surviving a connection that
+   * cannot itself survive one yet: nothing here reconnects after a reload,
+   * so rejoining is required regardless, and rejoining supplies a fresh
+   * full copy of state through the same mechanism as the first join. In
+   * memory, for now, is the honest choice until reconnection exists.
+   */
+  const newStore = createGameStore({ authorId: invitePlayerId, log: createMemoryEventLog() });
+  let seeded = false;
 
-    const stopSeeding = transport.onReceive((events) => {
-      if (seeded) return;
-      seeded = true;
-      stopSeeding();
-      void newStore.merge(events).then(async () => {
-        // Claimed before the store is exposed, so nothing ever sees this
-        // seat as unclaimed on the joiner's own screen — and the claim event
-        // itself goes out over `connectTransport` like any other.
-        await newStore.claimSeat(invitePlayerId);
-        connectTransport(newStore, transport);
-        store = newStore;
-        connected = true;
-      });
+  const stopSeeding = answerer.transport.onReceive((events) => {
+    if (seeded) return;
+    seeded = true;
+    stopSeeding();
+    void newStore.merge(events).then(async () => {
+      // Claimed before the store is exposed, so nothing ever sees this
+      // seat as unclaimed on the joiner's own screen — and the claim event
+      // itself goes out over `connectTransport` like any other.
+      await newStore.claimSeat(invitePlayerId);
+      connectTransport(newStore, answerer.transport);
+      store = newStore;
+      connected = true;
     });
   });
 
@@ -344,6 +366,10 @@ export function hostTable(store: GameStore, signalling: Signalling): TableHost {
       if (result.answer === null) continue;
 
       await offerer.accept(result.answer.sdp);
+      const { ticket } = result.answer;
+      whenNeverConnected(offerer.transport, () => {
+        connectTransport(store, createRelayTransport(signalling.relayUrl(code!, ticket)));
+      });
       joined++;
       return true;
     }
@@ -455,25 +481,36 @@ export function joinTableAsSeat(
       return;
     }
 
-    const transport = await answerer.transport;
+    const transport = answerer.transport;
     // See joinTable's matching comment: deliberately in-memory, not the
     // shared IndexedDB log solo play uses.
     const newStore = createGameStore({ authorId: seatId, log: createMemoryEventLog() });
     let seeded = false;
 
-    const stopSeeding = transport.onReceive((events) => {
-      if (seeded) return;
-      seeded = true;
-      stopSeeding();
-      void newStore.merge(events).then(async () => {
-        // Claimed before the store is exposed, so nothing ever sees this
-        // seat as unclaimed on the joiner's own screen — and the claim event
-        // itself goes out over `connectTransport` like any other.
-        await newStore.claimSeat(seatId);
-        connectTransport(newStore, transport);
-        store = newStore;
-        connected = true;
+    // Shared between the direct attempt and the relay fallback below, so
+    // whichever one actually delivers first wins and the other's listener —
+    // still attached, since a transport that never connects never fires it —
+    // is simply inert rather than something that needs cancelling.
+    const seed = (candidate: Transport) => {
+      const stop = candidate.onReceive((events) => {
+        if (seeded) return;
+        seeded = true;
+        stop();
+        void newStore.merge(events).then(async () => {
+          // Claimed before the store is exposed, so nothing ever sees this
+          // seat as unclaimed on the joiner's own screen — and the claim
+          // event itself goes out over `connectTransport` like any other.
+          await newStore.claimSeat(seatId);
+          connectTransport(newStore, candidate);
+          store = newStore;
+          connected = true;
+        });
       });
+    };
+
+    seed(transport);
+    whenNeverConnected(transport, () => {
+      seed(createRelayTransport(signalling.relayUrl(code, offer.ticket)));
     });
   }
 
