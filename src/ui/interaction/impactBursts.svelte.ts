@@ -9,16 +9,23 @@ import type { ImpactSpec } from './impactBurst';
  * reading `prefers-reduced-motion` — is confined to here. Mirrors
  * `deltaController` and `spinController`.
  */
-export type ImpactBurst = ImpactSpec & { readonly id: number };
+
+/** Where on screen a burst starts — the tapped panel's own position, in
+ *  viewport pixels, so the cloud can travel the rest of the screen from
+ *  there regardless of which panel it came from. */
+export type ImpactOrigin = { readonly x: number; readonly y: number };
+
+export type ImpactBurst = ImpactSpec & { readonly id: number; readonly origin: ImpactOrigin };
 
 export type ImpactBursts = {
   /** Every burst still animating, oldest first. Each tap or slide release
    *  adds one on top of whatever is already here — nothing replaces
    *  anything already playing. */
   readonly items: readonly ImpactBurst[];
-  /** `delta` is the size and direction of the change this burst is for. A
-   *  zero delta, or reduced motion, spawns nothing. */
-  spawn(delta: number): void;
+  /** `delta` is the size and direction of the change this burst is for;
+   *  `origin` is where it starts. A zero delta, or reduced motion, spawns
+   *  nothing. */
+  spawn(delta: number, origin: ImpactOrigin): void;
   destroy(): void;
 };
 
@@ -38,12 +45,12 @@ export function createImpactBursts(): ImpactBursts {
     get items() {
       return items;
     },
-    spawn(delta) {
+    spawn(delta, origin) {
       if (delta === 0 || prefersReducedMotion()) return;
 
       nextId += 1;
       const id = nextId;
-      items = [...items, { ...impactSpec(delta), id }];
+      items = [...items, { ...impactSpec(delta), id, origin }];
 
       const timer = setTimeout(() => {
         timers = timers.filter((pending) => pending !== timer);

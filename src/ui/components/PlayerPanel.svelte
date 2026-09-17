@@ -88,9 +88,15 @@
     attributedTo = null;
   });
 
+  /** The panel's own element, so a burst can start from wherever this panel
+   *  actually sits on screen and travel the rest of the screen from there. */
+  let panelEl: HTMLElement | null = null;
+
   const bursts = createImpactBursts();
   const spawnImpact = (delta: number) => {
-    if (impactEffects) bursts.spawn(delta);
+    if (!impactEffects || !panelEl) return;
+    const rect = panelEl.getBoundingClientRect();
+    bursts.spawn(delta, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
   };
 
   // Cancelling the pending change drops the attribution with it.
@@ -248,6 +254,7 @@
 </script>
 
 <article
+  bind:this={panelEl}
   class="panel"
   data-colour={player.colour}
   data-threat={threat}
@@ -369,15 +376,6 @@
         />
       </div>
     </div>
-
-    <!-- Combat-damage-style feedback for the Settings toggle of the same
-         name: a burst per tap or slide release, stacked rather than
-         replaced, clipped to the card by `.panel`'s own overflow. -->
-    <div class="impact-layer">
-      {#each bursts.items as burst (burst.id)}
-        <ImpactBurst direction={burst.direction} glyphs={burst.glyphs} scale={burst.scale} />
-      {/each}
-    </div>
   </div>
 
   <footer class="plate">
@@ -437,6 +435,21 @@
     </div>
   </footer>
 </article>
+
+<!-- Combat-damage-style feedback for the Settings toggle of the same name:
+     a cloud per tap or slide release, starting from this panel and crossing
+     the rest of the screen — so it has to sit outside `.panel`'s own
+     overflow, which exists to clip the card's own content, not this. -->
+<div class="impact-layer" aria-hidden="true">
+  {#each bursts.items as burst (burst.id)}
+    <ImpactBurst
+      direction={burst.direction}
+      glyphs={burst.glyphs}
+      scale={burst.scale}
+      origin={burst.origin}
+    />
+  {/each}
+</div>
 
 <style>
   .panel {
@@ -810,8 +823,14 @@
     pointer-events: auto;
   }
 
+  /* Fixed to the viewport, not the card: a cloud crossing "the whole screen"
+   * cannot be a child of the one card whose overflow clips everything else
+   * here. Each panel gets its own — harmless when empty, since an
+   * `ImpactBurst` positions and sizes itself and there is nothing else in
+   * here to paint or take up space. */
   .impact-layer {
-    position: absolute;
+    position: fixed;
+    z-index: 20;
     inset: 0;
 
     /* Decoration only, and must never steal the tap it is celebrating. */
