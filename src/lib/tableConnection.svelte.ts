@@ -236,11 +236,22 @@ export function whoIsThisFor(offerCode: string): Invitation | null {
  * above, because the exchange is the only thing that differs.
  */
 
-/** How often the host looks for somebody having answered. A person is
- *  reading a code aloud or scanning at the other end; there is no reason to
- *  poll faster than that. Asking is also what tells the worker the host is
- *  still here, which is what holds the table open across a whole game. */
-const ANSWER_POLL_MS = 1500;
+/** How often the host looks for somebody having answered while its sheet is
+ *  open. A person is reading a code aloud or scanning at the other end;
+ *  there is no reason to poll faster than that. Asking is also what tells
+ *  the worker the host is still here, which is what holds the table open
+ *  across a whole game. */
+const WATCHED_POLL_MS = 1500;
+
+/** And how often once nobody is looking at it — which, now that a table
+ *  lasts as long as the game, is most of the evening. The worker holds a
+ *  table for ten minutes past its last heartbeat, so this is not close to
+ *  losing it, and the cost of the gap falls only on somebody arriving while
+ *  the host is playing: they wait it out once, rather than the host asking
+ *  a server forty times a minute all game. */
+const IDLE_POLL_MS = 15_000;
+
+const IDLE_SLICES = IDLE_POLL_MS / WATCHED_POLL_MS;
 
 /** How long a joiner waits out somebody else's handshake before looking
  *  again. Only one offer is outstanding at a time, so arriving together
@@ -263,6 +274,12 @@ export type TableHost = {
   /** The one code for this table, once the worker has issued it. `null`
    *  until then. */
   readonly code: string | null;
+  /**
+   * Says somebody is looking at this table — the sheet is open, and an
+   * answer should be picked up as soon as it lands rather than whenever the
+   * heartbeat next comes round. Call the returned function when they stop.
+   */
+  watch(): () => void;
   /** How many people have connected through it so far. */
   readonly joined: number;
   /** The worker could not be reached at all — offline, not deployed, blocked
@@ -286,8 +303,21 @@ export function hostTable(store: GameStore, signalling: Signalling): TableHost {
   let joined = $state(0);
   let error = $state(false);
   let stopped = false;
+  let watchers = 0;
 
   const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /*
+   * Waited out a slice at a time rather than in one sleep, so that opening
+   * the sheet during a long gap is felt at the next slice instead of at the
+   * end of the gap it was already in.
+   */
+  async function waitForNextPoll() {
+    for (let slice = 0; slice < IDLE_SLICES; slice++) {
+      await pause(WATCHED_POLL_MS);
+      if (stopped || watchers > 0) return;
+    }
+  }
 
   /** One place at the table: an offer, whoever takes it, and the connection
    *  that results. Resolves once that joiner is connected, or `false` if the
@@ -304,7 +334,7 @@ export function hostTable(store: GameStore, signalling: Signalling): TableHost {
     connectTransport(store, offerer.transport);
 
     while (!stopped) {
-      await pause(ANSWER_POLL_MS);
+      await waitForNextPoll();
       if (stopped) return false;
 
       // The seat list rides along, so a joiner looking at the table sees who
@@ -353,6 +383,15 @@ export function hostTable(store: GameStore, signalling: Signalling): TableHost {
     },
     get error() {
       return error;
+    },
+    watch() {
+      watchers++;
+      let watching = true;
+      return () => {
+        if (!watching) return;
+        watching = false;
+        watchers--;
+      };
     },
     stop() {
       stopped = true;

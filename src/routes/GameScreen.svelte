@@ -5,6 +5,7 @@
   import { localSeats, remoteSeats } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
   import type { GameStore } from '$lib/gameStore.svelte';
+  import type { TableSession } from '$lib/tableSession.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
   import { createSpinController } from '$ui/interaction/spinController.svelte';
   import { flushPending } from '$ui/interaction/pendingFlush';
@@ -19,11 +20,15 @@
 
   let {
     store,
+    session,
     onnewgame,
     onjoin,
     onsettings
   }: {
     store: GameStore;
+    /** The table this device hosts for the game on screen. Outlives the
+     *  sheet, which is what keeps the code the same one all evening. */
+    session: TableSession;
     /** All navigations out of this screen — see ADR 0005. The screen does
      *  not route itself, so a joined table can render it too. */
     onnewgame?: (() => void) | undefined;
@@ -268,7 +273,7 @@
   {/if}
 
   {#if connecting}
-    <TableSheet {store} onclose={() => (connecting = false)} />
+    <TableSheet {store} {session} onclose={() => (connecting = false)} />
   {/if}
 
   {#if menuOpen}

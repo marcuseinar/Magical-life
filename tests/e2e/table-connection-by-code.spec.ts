@@ -163,3 +163,41 @@ test('does not grow under the player when the code arrives', async ({ page }) =>
   expect(Math.round(opened.height)).toBe(Math.round(opening.height));
   expect(Math.round(opened.y)).toBe(Math.round(opening.y));
 });
+
+/*
+ * The code is the table's, for as long as the game lasts — not the sheet's.
+ * It used to be issued when the sheet opened and given up when it closed, so
+ * checking who had joined replaced the code you had already read out, and
+ * left the old one claimable at the worker with nobody listening on it.
+ */
+test('keeps one code for the table however often the sheet is opened', async ({ page }) => {
+  await startGame(page, /commander/i, 3);
+  const first = await tableCode(page);
+
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  expect(await tableCode(page)).toBe(first);
+});
+
+/* And it is still a table when nobody is looking at it: the host's heartbeat
+ * slows down while the sheet is closed, it does not stop. */
+test('seats somebody who arrives after the host has put the sheet away', async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const joinContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const joiner = await joinContext.newPage();
+
+  await startGame(host, /commander/i, 2);
+  const code = await tableCode(host);
+  await host.getByRole('button', { name: 'Done' }).click();
+  await expect(host.getByRole('dialog')).toHaveCount(0);
+
+  await joinAs(joiner, code, 'Player 2');
+
+  await expect(joiner.getByLabel('Player 1: 40 life')).toBeVisible({ timeout: 40_000 });
+  await expect(host.getByRole('button', { name: /Table, 1 joined/ })).toBeVisible();
+
+  await hostContext.close();
+  await joinContext.close();
+});

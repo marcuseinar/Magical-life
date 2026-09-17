@@ -1,12 +1,20 @@
 import { presetConfig } from '$domain/rules';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import TableSheet from './TableSheet.svelte';
 import { createGameStore } from '$lib/gameStore.svelte';
+import { createTableSession } from '$lib/tableSession.svelte';
+import type { TableSession } from '$lib/tableSession.svelte';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
+import {
+  fakeSignalling,
+  stubGatheredPeerConnection,
+  stubGatheringPeerConnection
+} from '../../tests/fakes/table';
 
 const seatPlayers = async () => {
   const store = createGameStore({ log: createMemoryEventLog() });
+  await store.hydrate();
   await store.begin(presetConfig('commander'), [
     { name: 'Anna', colour: 'green' },
     { name: 'Björn', colour: 'blue' },
@@ -15,26 +23,25 @@ const seatPlayers = async () => {
   return store;
 };
 
-/*
- * jsdom has no WebRTC, and the hand-carried path builds a peer connection the
- * moment a seat is picked. This stands in for one still gathering candidates
- * — which is the state under test, and the only one these tests reach.
- */
-class StillGathering {
-  createDataChannel() {
-    return { addEventListener() {}, readyState: 'connecting', close() {} };
-  }
-  createOffer() {
-    return new Promise(() => {});
-  }
-  addEventListener() {}
-  removeEventListener() {}
-  close() {}
-}
-vi.stubGlobal('RTCPeerConnection', StillGathering);
+/* The table is the game's now, not the sheet's, so a test hands the sheet
+ * one the same way the layout does. */
+const sessions: TableSession[] = [];
+const sessionFor = (
+  store: Awaited<ReturnType<typeof seatPlayers>>,
+  signalling = fakeSignalling()
+) => {
+  const session = createTableSession(store, signalling.signalling);
+  sessions.push(session);
+  return session;
+};
 
-const mount = (store: Awaited<ReturnType<typeof seatPlayers>>) =>
-  render(TableSheet, { props: { store, onclose: () => {} } });
+const mount = (store: Awaited<ReturnType<typeof seatPlayers>>, session = sessionFor(store)) =>
+  render(TableSheet, { props: { store, session, onclose: () => {} } });
+
+beforeEach(stubGatheringPeerConnection);
+afterEach(() => {
+  for (const session of sessions.splice(0)) session.stop();
+});
 
 describe('table sheet', () => {
   /*
@@ -101,5 +108,27 @@ describe('table sheet', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Preparing a code…');
     expect(screen.getByRole('button', { name: /preparing the code/i })).toBeDisabled();
+  });
+
+  /*
+   * The bug this replaced: the sheet started a table of its own when it
+   * opened and stopped it when it closed, so every look at who had joined
+   * issued a new code — and whoever had been given the old one was pointing
+   * at a table with nobody listening on it.
+   */
+  it('shows the code it was already given rather than opening another table', async () => {
+    stubGatheredPeerConnection();
+    const store = await seatPlayers();
+    const signalling = fakeSignalling();
+    const session = sessionFor(store, signalling);
+
+    const sheet = mount(store, session);
+    expect(await screen.findByText('CODE1')).toBeInTheDocument();
+    sheet.unmount();
+
+    mount(store, session);
+
+    expect(await screen.findByText('CODE1')).toBeInTheDocument();
+    expect(signalling.tablesOpened()).toBe(1);
   });
 });

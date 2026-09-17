@@ -1,18 +1,20 @@
 <script lang="ts">
   import type { GameStore } from '$lib/gameStore.svelte';
-  import { hostTable, inviteToTable } from '$lib/tableConnection.svelte';
+  import { inviteToTable } from '$lib/tableConnection.svelte';
   import type { TableHost, TableInvite } from '$lib/tableConnection.svelte';
+  import type { TableSession } from '$lib/tableSession.svelte';
   import type { PlayerId } from '$domain/ids';
-  import { defaultSignalling } from '$lib/signalling';
   import { loadQrScanSheet } from '$lib/scanner';
   import { resolve } from '$app/paths';
   import QrCode from '$ui/components/QrCode.svelte';
   import LoadingDots from '$ui/components/LoadingDots.svelte';
   import QrPending from '$ui/components/QrPending.svelte';
 
-  let { store, onclose }: { store: GameStore; onclose: () => void } = $props();
-
-  const signalling = defaultSignalling();
+  let {
+    store,
+    session,
+    onclose
+  }: { store: GameStore; session: TableSession; onclose: () => void } = $props();
 
   /*
    * One code for the table, not one per person (ADR 0006). The manual path
@@ -33,17 +35,19 @@
   let loadedScanner = $state<Awaited<ReturnType<typeof loadQrScanSheet>> | null>(null);
 
   /*
-   * Started in an effect rather than at setup: reading a prop in a top-level
-   * expression captures it once, and this way the table also stops offering
-   * places when the sheet goes away — including when it is closed by
-   * something other than the Done button.
+   * The sheet shows the table; it does not own it. Owning it was the bug:
+   * the table used to be started here and stopped when the sheet closed, so
+   * every look at who had joined issued a new code and left the last one
+   * claimable with nobody listening on it. What the sheet does own is the
+   * watching — while it is open an answer is picked up within a beat, and
+   * when it closes the table drops to a heartbeat.
    */
   let table = $state<TableHost | null>(null);
 
   $effect(() => {
-    const host = hostTable(store, signalling);
+    const host = session.open();
     table = host;
-    return () => host.stop();
+    return host.watch();
   });
 
   const seats = $derived(store.state?.players ?? []);

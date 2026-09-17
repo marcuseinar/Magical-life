@@ -12,6 +12,9 @@
   import type { SeatSummary, TableSummary } from '$application/ports/signalling';
   import { playerId } from '$domain/ids';
   import { defaultSignalling } from '$lib/signalling';
+  import { createTableSession } from '$lib/tableSession.svelte';
+  import type { TableSession } from '$lib/tableSession.svelte';
+  import type { GameStore } from '$lib/gameStore.svelte';
   import { loadQrScanSheet } from '$lib/scanner';
   import { readJoinTarget } from '$ui/interaction/joinTarget';
   import QrCode from '$ui/components/QrCode.svelte';
@@ -196,6 +199,22 @@
   });
 
   const playingStore = $derived(joinedCode?.store ?? joinedManual?.store ?? null);
+
+  /*
+   * A joiner can pass an invite on, so the screen they land on needs a table
+   * of its own — theirs, over the store they joined with, not the host's.
+   * Made on first render rather than in an effect so the game is not a frame
+   * late, and keyed by the store so joining a second table after starting
+   * over does not hand the old one's table to the new game.
+   */
+  let hosted: { store: GameStore; session: TableSession } | null = null;
+  function tableFor(store: GameStore): TableSession {
+    if (hosted?.store !== store) {
+      hosted?.session.stop();
+      hosted = { store, session: createTableSession(store, defaultSignalling()) };
+    }
+    return hosted.session;
+  }
 </script>
 
 <svelte:head>
@@ -203,7 +222,7 @@
 </svelte:head>
 
 {#if stage.kind === 'playing' && playingStore}
-  <GameScreen store={playingStore} />
+  <GameScreen store={playingStore} session={tableFor(playingStore)} />
 {:else}
   <main class="join">
     <header class="masthead">
