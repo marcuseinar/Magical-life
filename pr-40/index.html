@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07060a" />
+    <meta name="description" content="A Magic: The Gathering life counter for the table." />
+    <link rel="icon" href="/Magical-life/pr-40/favicon.svg" />
+    <link rel="manifest" href="/Magical-life/pr-40/manifest.webmanifest" />
+    <link href="/Magical-life/pr-40/_app/immutable/entry/start.CtsVy1J_.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/Cmnt4Hxf.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/C0S6Hh8P.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/entry/app.BBG7j2x7.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/HclGiUj8.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/nodes/0.BP7i8npp.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/Ci7S3gHP.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/YZ_jAIB8.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/-W90EiMY.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/C3EWZt0s.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/nodes/2.DbW14egO.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/CItHFMhE.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/BuL1knVz.js" rel="modulepreload">
+		<link href="/Magical-life/pr-40/_app/immutable/chunks/C36xZH86.js" rel="modulepreload">
+		
+		<link href="/Magical-life/pr-40/_app/immutable/assets/0.jA51Rmtm.css" rel="stylesheet">
+		<link href="/Magical-life/pr-40/_app/immutable/assets/ManaPip.CVwgDveG.css" rel="stylesheet">
+		<link href="/Magical-life/pr-40/_app/immutable/assets/GameScreen.DcUJBfvS.css" rel="stylesheet">
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">
+			<script>
+				{
+					__sveltekit_t3jcuo = {
+						base: "/Magical-life/pr-40",
+						assets: "/Magical-life/pr-40"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/Magical-life/pr-40/_app/immutable/entry/start.CtsVy1J_.js"),
+						import("/Magical-life/pr-40/_app/immutable/entry/app.BBG7j2x7.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+
+					if ('serviceWorker' in navigator) {
+						const script_url = '/Magical-life/pr-40/service-worker.js';
+						const policy = globalThis?.window?.trustedTypes?.createPolicy(
+							'sveltekit-trusted-url',
+							{ createScriptURL(url) { return url; } }
+						);
+						const sanitised = policy?.createScriptURL(script_url) ?? script_url;
+						addEventListener('load', function () {
+							navigator.serviceWorker.register(sanitised);
+						});
+					}
+				}
+			</script>
+		</div>
+  </body>
+</html>
