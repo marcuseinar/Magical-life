@@ -1,0 +1,1 @@
+import{J as e,Z as t}from"./C0S6Hh8P.js";var n=Symbol(`magical-life:game`),r=Symbol(`magical-life:table`),i=Symbol(`magical-life:preferences`),a=e=>t(n,e),o=()=>e(n),s=e=>t(r,e),c=()=>e(r),l=e=>t(i,e),u=()=>e(i);export{u as a,o as i,l as n,c as o,s as r,a as t};
