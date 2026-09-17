@@ -40,7 +40,12 @@ export const applyLifeDelta =
 ```
 
 Ports are interfaces declared here and implemented in `adapters/`:
-`Clock`, `IdSource`, `Rng`, `EventLog`, `Transport`, `Storage`, `Haptics`.
+`Clock`, `IdSource`, `Rng`, `EventLog`, `Transport`, `Storage`, `Haptics`,
+`Preferences`.
+
+`Preferences` is Settings toggles — persisted choices about how the app
+behaves, as opposed to `EventLog`, which is facts about a game. Backed by
+`localStorage`, not the event log: a toggle is not something that happened.
 
 `Rng` exists for the same reason as `Clock`: choosing who goes first is random,
 but `domain/` must stay pure, so the _choice_ is made in a use case and reaches

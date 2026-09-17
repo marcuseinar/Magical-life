@@ -11,6 +11,7 @@
     celebrating = null,
     localSeatIds = null,
     tracksCommanderDamage = false,
+    impactEffects = true,
     onLifeChange,
     onOpenCounters,
     onOpenCommander,
@@ -36,6 +37,8 @@
      *  the only one solo and shared-device play ever see. */
     localSeatIds?: ReadonlySet<PlayerId> | null;
     tracksCommanderDamage?: boolean;
+    /** The Settings toggle: a burst of glyphs on every tap and slide release. */
+    impactEffects?: boolean;
     onLifeChange: (player: PlayerState, delta: number, from: PlayerId | null) => void;
     onOpenCounters: (player: PlayerState, rotated: boolean) => void;
     onOpenCommander: (player: PlayerState, rotated: boolean) => void;
@@ -73,6 +76,7 @@
         dimmed={spotlight !== null && index !== spotlight}
         readOnly={localSeatIds !== null && !localSeatIds.has(player.id)}
         {tracksCommanderDamage}
+        {impactEffects}
         {seats}
         onLifeChange={(delta, from) => onLifeChange(player, delta, from)}
         onOpenCounters={() => onOpenCounters(player, isRotated(index))}

@@ -5,9 +5,10 @@
   import '$ui/tokens/base.css';
   import { createBrowserWakeLock } from '$adapters/platform/wakeLock';
   import { createGameStore } from '$lib/gameStore.svelte';
+  import { createPreferencesStore } from '$lib/preferencesStore.svelte';
   import { createTableSession } from '$lib/tableSession.svelte';
   import { defaultSignalling } from '$lib/signalling';
-  import { provideGameStore, provideTableSession } from '$lib/context';
+  import { provideGameStore, providePreferences, provideTableSession } from '$lib/context';
 
   let { children } = $props();
 
@@ -33,6 +34,9 @@
    * given in advance, which is the whole point of having one (ADR 0006).
    */
   provideTableSession(createTableSession(store, defaultSignalling()));
+
+  /* Settings toggles, reached the same way and for the same reason. */
+  providePreferences(createPreferencesStore());
 
   $effect(() => {
     void store.hydrate();
