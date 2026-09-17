@@ -108,6 +108,29 @@ its own cached shell, every preview would silently render production. The worker
 therefore serves the shell **only for its own app root** and passes anything
 deeper through to the network. `tests/base-path/` asserts this.
 
+Assets need the same rule and did not have it: every same-origin GET was cached
+and then served from that cache for good, so opening a preview left its files in
+the cache the real app reads from, where they stayed until the next version
+dropped the cache. `belongsToApp` (`src/lib/appScope.ts`) is the rule — what was
+precached, plus anything under this deployment's own `_app/` — and everything
+else goes to the network untouched. It also stops a cross-origin request whose
+path happens to match a precached one being answered with our own file, since
+the cache was being matched on pathname alone.
+
+### Why a fresh deploy can take a few minutes to show
+
+Two caches sit in front of a deploy and neither is the app's:
+
+- **Pages sends `cache-control: max-age=600` on HTML.** Within ten minutes of a
+  previous visit a browser reuses the old page, which names the old
+  content-hashed assets, so the whole old app is served however new the files
+  beside it are. A hard reload is the way past it.
+- **A service worker update takes effect on the _next_ load.** The browser
+  checks `service-worker.js` on navigation; the new one installs, claims, and
+  the page you are looking at keeps the code it started with. This is normal
+  and is not worth engineering around — but it is why "I pushed and it did not
+  change" usually needs one more reload rather than clearing site data.
+
 ## Custom domain
 
 Add a `CNAME` file containing the domain to `static/`, point the DNS at GitHub,

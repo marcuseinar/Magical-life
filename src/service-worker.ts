@@ -2,6 +2,7 @@
 /// <reference lib="webworker" />
 
 import { base, build, files, prerendered, version } from '$service-worker';
+import { belongsToApp } from '$lib/appScope';
 
 /*
  * Offline is a requirement, not a nicety: game shops have bad signal, and a life
@@ -28,6 +29,15 @@ const SHELL = [`${base}/`, `${base}/index.html`];
  */
 const isAppRoot = (url: URL) =>
   url.pathname === `${base}/` || url.pathname === `${base}/index.html`;
+
+/**
+ * And the same question for everything that is not a navigation, which used
+ * not to be asked at all: any same-origin GET was cached and then served
+ * from that cache for good. So opening a preview left its assets in the
+ * cache the real app reads from, and a cross-origin request whose path
+ * happened to match a precached one could be answered with our own file.
+ */
+const isOurs = (url: URL) => belongsToApp(url.pathname, base, [...PRECACHED, ...SHELL]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -88,12 +98,12 @@ self.addEventListener('fetch', (event) => {
       }
 
       // Immutable build assets can never change under a given version.
-      const precached = await cache.match(url.pathname);
+      const precached = isOurs(url) ? await cache.match(url.pathname) : undefined;
       if (precached) return precached;
 
       try {
         const response = await fetch(event.request);
-        if (response.ok && url.origin === self.location.origin) {
+        if (response.ok && url.origin === self.location.origin && isOurs(url)) {
           cache.put(event.request, response.clone());
         }
         return response;
