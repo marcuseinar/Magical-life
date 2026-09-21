@@ -163,4 +163,23 @@ describe('game store — the game lifecycle', () => {
     expect(game.state?.players[1]?.claimed).toBe(true);
     expect(game.state?.players[0]?.life).toBe(30);
   });
+
+  /*
+   * What dropping a table needs: every seat somebody has joined from another
+   * device goes back to free in one call, so a rebuilt table's seat list
+   * starts honest rather than showing people connected to a table that no
+   * longer exists.
+   */
+  it('frees every claimed seat at once, and leaves the unclaimed ones alone', async () => {
+    const game = store();
+    await game.hydrate();
+    await game.begin(presetConfig('commander'), commander(3));
+    const [anna, bjorn] = game.state!.players;
+    await game.claimSeat(anna!.id);
+    await game.claimSeat(bjorn!.id);
+
+    await game.releaseAllSeats();
+
+    expect(game.state?.players.every((player) => !player.claimed)).toBe(true);
+  });
 });

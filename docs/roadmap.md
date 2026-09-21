@@ -130,6 +130,21 @@ connection-quality chip does not yet distinguish a relayed link from a
 direct one — still `'direct'`, since a working link is a working link — a
 deliberately deferred follow-up, same as the chip's own "lost" gap once was.
 
+**Built**: a way to end a table on purpose. Until now the only way to make a
+table issue a fresh code was to clear the device's entire history — a table
+otherwise lived exactly as long as the game did (deliberately, so a rematch
+can be invited on the code already given out), with no way to drop it early
+and no way to un-join a seat once claimed. The host's table sheet now has a
+"Drop this table" action (`TableSheet.svelte`): it frees every currently
+claimed seat (`releaseSeat`, a use case alongside `claimSeat`, both wired
+through a new `TableSession.drop()`) and opens a brand-new table under a
+fresh code, ready for new joiners. Asks for confirmation first only when a
+seat is actually claimed — dropping an empty table costs nobody anything, the
+same reasoning "New game" needs none (ADR 0005). Kicking one specific seat
+without dropping the whole table is still unbuilt — the seat list only ever
+grows a "free"/"joined" flag, not a per-seat action — and is the natural next
+step if it turns out to matter more than dropping the whole table does.
+
 ## M4 — Native shells
 
 - Capacitor wrapping the same static build

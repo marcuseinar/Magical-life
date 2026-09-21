@@ -24,6 +24,10 @@ export type TableSession = {
   readonly host: TableHost | null;
   /** Opens the table, or hands back the one already open. */
   open(): TableHost;
+  /** Ends this table without ending the game, so the next `open()` starts a
+   *  genuinely new one — a fresh code, nobody claimed. Watching for the game
+   *  itself to end still applies afterwards; only this one table is given up. */
+  drop(): void;
   /** Gives up the table and stops watching the game for the end of it. */
   stop(): void;
 };
@@ -66,6 +70,9 @@ export function createTableSession(store: GameStore, signalling: Signalling): Ta
         host = hostTable(store, signalling);
       }
       return host;
+    },
+    drop() {
+      letGo();
     },
     stop() {
       stopWatchingTheGame();

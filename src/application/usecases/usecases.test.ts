@@ -17,6 +17,7 @@ import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
 import { recordCommanderDamage } from './recordCommanderDamage';
 import { claimSeat } from './claimSeat';
+import { releaseSeat } from './releaseSeat';
 import { commanderDamageFrom, localSeats } from '$domain/selectors';
 import type { Rng } from '../ports/rng';
 
@@ -589,6 +590,27 @@ describe('use cases', () => {
 
     it('rejects an unknown player', async () => {
       const result = await claimSeat({ session })(playerId('nobody'));
+      expect(result).toEqual({ ok: false, error: 'unknown-player' });
+    });
+  });
+
+  describe('releaseSeat', () => {
+    it('marks a claimed seat free again', async () => {
+      await claimSeat({ session })(seats[0]!);
+      const result = await releaseSeat({ session })(seats[0]!);
+      expect(result.ok).toBe(true);
+      expect(session.state?.players[0]?.claimed).toBe(false);
+    });
+
+    it('is a no-op rather than an error when the seat is already free', async () => {
+      const before = session.events.length;
+      const result = await releaseSeat({ session })(seats[0]!);
+      expect(result.ok).toBe(true);
+      expect(session.events.length).toBe(before);
+    });
+
+    it('rejects an unknown player', async () => {
+      const result = await releaseSeat({ session })(playerId('nobody'));
       expect(result).toEqual({ ok: false, error: 'unknown-player' });
     });
   });
