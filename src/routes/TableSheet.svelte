@@ -4,6 +4,8 @@
   import type { TableHost, TableInvite } from '$lib/tableConnection.svelte';
   import type { TableSession } from '$lib/tableSession.svelte';
   import type { PlayerId } from '$domain/ids';
+  import { MANA_COLOURS, MAX_PLAYERS } from '$domain/rules';
+  import type { ManaColour } from '$domain/rules';
   import { loadQrScanSheet } from '$lib/scanner';
   import { resolve } from '$app/paths';
   import QrCode from '$ui/components/QrCode.svelte';
@@ -33,6 +35,7 @@
   let copied = $state(false);
   let scanning = $state(false);
   let loadedScanner = $state<Awaited<ReturnType<typeof loadQrScanSheet>> | null>(null);
+  let addingSeat = $state(false);
 
   /*
    * The sheet shows the table; it does not own it. Owning it was the bug:
@@ -75,6 +78,22 @@
     replyDraft = '';
     replyError = false;
     copied = false;
+  }
+
+  /* A fifth player showing up mid-game (J3, shell-and-lobby). The new seat
+     joins the same table this sheet is already showing, so whichever join
+     path is live — the QR, the link, or a hand-carried code — simply offers
+     it like any other free seat. */
+  async function addSeat() {
+    addingSeat = true;
+    try {
+      await store.addSeat(
+        `Player ${seats.length + 1}`,
+        MANA_COLOURS[seats.length % MANA_COLOURS.length] as ManaColour
+      );
+    } finally {
+      addingSeat = false;
+    }
   }
 
   async function copyText(text: string) {
@@ -191,6 +210,16 @@
         {/each}
       </ul>
 
+      <!-- Growing the table is rare — most games never need it — so it sits
+           below the seats it affects rather than beside Done, and disappears
+           entirely once there is nowhere left to grow: six is the app-wide
+           cap the panel layouts support. -->
+      {#if seats.length < MAX_PLAYERS}
+        <button class="action" type="button" onclick={addSeat} disabled={addingSeat}>
+          {addingSeat ? 'Adding a seat…' : 'Add a seat'}
+        </button>
+      {/if}
+
       <div class="actions">
         <button class="action action--go" type="button" onclick={close}>Done</button>
       </div>
@@ -210,6 +239,11 @@
           </li>
         {/each}
       </ul>
+      {#if seats.length < MAX_PLAYERS}
+        <button class="action" type="button" onclick={addSeat} disabled={addingSeat}>
+          {addingSeat ? 'Adding a seat…' : 'Add a seat'}
+        </button>
+      {/if}
       <div class="actions">
         <button class="action" type="button" onclick={() => (mode = { kind: 'table' })}>
           Back

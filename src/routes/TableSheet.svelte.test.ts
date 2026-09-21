@@ -1,4 +1,4 @@
-import { presetConfig } from '$domain/rules';
+import { MAX_PLAYERS, presetConfig } from '$domain/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import TableSheet from './TableSheet.svelte';
@@ -130,5 +130,32 @@ describe('table sheet', () => {
 
     expect(await screen.findByText('CODE1')).toBeInTheDocument();
     expect(signalling.tablesOpened()).toBe(1);
+  });
+
+  /*
+   * J3 in the shell-and-lobby design: a fifth player shows up mid-game. The
+   * table already advertises whichever seats are free, so growing the table
+   * is the one new thing this needs — the same QR then offers the new seat
+   * like any other.
+   */
+  it('lets the host add a seat to a running game', async () => {
+    const store = await seatPlayers();
+
+    mount(store);
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a seat' }));
+
+    expect(await screen.findByText('Player 4')).toBeInTheDocument();
+    expect(screen.getAllByText('free')).toHaveLength(4);
+  });
+
+  it('stops offering to add a seat once the table is full', async () => {
+    const store = await seatPlayers();
+    for (let i = store.state!.players.length; i < MAX_PLAYERS; i++) {
+      await store.addSeat(`Player ${i + 1}`, 'red');
+    }
+
+    mount(store);
+
+    expect(screen.queryByRole('button', { name: 'Add a seat' })).not.toBeInTheDocument();
   });
 });

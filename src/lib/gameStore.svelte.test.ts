@@ -163,4 +163,17 @@ describe('game store — the game lifecycle', () => {
     expect(game.state?.players[1]?.claimed).toBe(true);
     expect(game.state?.players[0]?.life).toBe(30);
   });
+
+  it('seats a new player at a game already running, unclaimed', async () => {
+    const game = store();
+    await game.hydrate();
+    await game.begin(presetConfig('commander'), commander(2));
+
+    const result = await game.addSeat('Dan', 'red');
+
+    expect(result.ok).toBe(true);
+    expect(game.state?.players).toHaveLength(3);
+    const dan = game.state?.players.at(-1);
+    expect(dan).toMatchObject({ name: 'Dan', colour: 'red', claimed: false, life: 40 });
+  });
 });

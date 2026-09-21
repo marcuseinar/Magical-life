@@ -658,17 +658,28 @@ was always one person behind. The heartbeat carrying the seat list is the fix,
 and the joiner's picker re-reads while it is open so seats fill in as people
 sit down.
 
-**Phase 5, optional — `seat/added`.** Adding a seat to a running game (J3). A
-new domain event, and the only new one in the whole plan. Deliberately last,
-because it is the only piece that is genuinely a new capability rather than a
-rearrangement of existing ones.
+**Phase 5, optional — `seat/added`. Built.** Adding a seat to a running game
+(J3). A new domain event, and the only new one in the whole plan — deliberately
+last, because it was the only piece that was genuinely a new capability rather
+than a rearrangement of existing ones.
+
+`reduce` seats the new player at the game's own starting life, unclaimed,
+capped at `MAX_PLAYERS` and idempotent against a merged duplicate the same way
+`seat/claimed` already is (`src/domain/reducer.ts`). `addSeat`
+(`src/application/usecases/addSeat.ts`) mints the id, the way `startGame`
+already mints ids for seats with none. Nothing about the signalling path
+needed to change: `hostTable`'s loop already re-reads `store.state.players`
+before every offer and every poll (`summarise`, in
+`src/lib/tableConnection.svelte.ts`), so a new unclaimed seat is simply in the
+next seat list a joiner sees — the same QR, code, and link Anna is already
+holding up.
+
+**Add a seat** lives in `TableSheet.svelte`, below the seat list, in both the
+one-code path and the hand-carried fallback; it disappears once the table
+reaches `MAX_PLAYERS`, the same cap setup already enforces.
 
 ## Open questions
 
-- **Is `seat/added` wanted?** J3 is the only journey needing it, and you said
-  late invites are not a must. Without it, a host who wants a fifth player
-  starts a new game with five seats — which after phase 1 costs nothing but the
-  current life totals, and keeps everyone connected.
 - **Does Settings hold anything besides Clear history?** If not, it can be a
   section of the menu sheet rather than a screen. Round clock (M8 model 1) and
   theme are the plausible future occupants.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fold, orderEvents, reduce } from './reducer';
-import { LETHAL_POISON } from './rules';
+import { LETHAL_POISON, MAX_PLAYERS } from './rules';
 import { eventId, playerId } from './ids';
 import type { GameEvent } from './events';
 import {
@@ -234,6 +234,51 @@ describe('claiming a seat', () => {
       ...makeLog('anna', [started(standardConfig, [anna, seat(CARA, 'Cara')])], 100)
     ];
     expect(fold(events)?.players.every((p) => !p.claimed)).toBe(true);
+  });
+});
+
+describe('adding a seat', () => {
+  it('seats a new player at the game starting life, unclaimed', () => {
+    const events = newGame([{ kind: 'seat/added', seat: seat(CARA, 'Cara') }]);
+    const state = fold(events);
+
+    expect(state?.players.map((p) => p.name)).toEqual(['Anna', 'Björn', 'Cara']);
+    const cara = state?.players.find((p) => p.id === CARA);
+    expect(cara?.life).toBe(40);
+    expect(cara?.claimed).toBe(false);
+    // And nobody already seated moves.
+    expect(state?.players.find((p) => p.id === ANNA)?.life).toBe(40);
+  });
+
+  it('does nothing before a game has started', () => {
+    const orphan = makeLog('anna', [{ kind: 'seat/added', seat: seat(CARA, 'Cara') }]);
+    expect(fold(orphan)).toBeNull();
+  });
+
+  it('is idempotent, because a merged log may carry the same addition twice', () => {
+    const events = newGame([
+      { kind: 'seat/added', seat: seat(CARA, 'Cara') },
+      { kind: 'seat/added', seat: seat(CARA, 'Cara') }
+    ]);
+    expect(fold(events)?.players.map((p) => p.id)).toEqual([ANNA, BJORN, CARA]);
+  });
+
+  it('refuses to seat the table past the app-wide cap', () => {
+    const full = playerId('extra');
+    const events = newGame(
+      Array.from({ length: MAX_PLAYERS - 2 }, (_, index) => ({
+        kind: 'seat/added' as const,
+        seat: seat(playerId(`p${index}`), `Player ${index + 3}`)
+      }))
+    );
+    expect(fold(events)?.players).toHaveLength(MAX_PLAYERS);
+
+    const overfull = fold([
+      ...events,
+      ...makeLog('anna', [{ kind: 'seat/added', seat: seat(full, 'One too many') }], 100)
+    ]);
+    expect(overfull?.players).toHaveLength(MAX_PLAYERS);
+    expect(overfull?.players.some((p) => p.id === full)).toBe(false);
   });
 });
 
