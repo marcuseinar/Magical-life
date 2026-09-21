@@ -40,6 +40,13 @@ export type EventBody =
    */
   | { readonly kind: 'seat/claimed'; readonly target: PlayerId }
   | { readonly kind: 'seat/released'; readonly target: PlayerId }
+  /**
+   * The host seating a new player at a game already running — turn nine,
+   * say. Distinct from `game/started`'s player list: that one replaces the
+   * table, this one only ever grows it, and a device already mid-game keeps
+   * everything it has instead of folding a fresh state from nothing.
+   */
+  | { readonly kind: 'seat/added'; readonly seat: PlayerSeat }
   | { readonly kind: 'player/eliminated'; readonly target: PlayerId }
   | { readonly kind: 'player/restored'; readonly target: PlayerId }
   | { readonly kind: 'event/retracted'; readonly retracts: EventId }

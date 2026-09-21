@@ -1,6 +1,6 @@
 import type { GameEvent } from './events';
 import type { EventId, PlayerId } from './ids';
-import { COUNTER_KINDS, FLAG_KINDS } from './rules';
+import { COUNTER_KINDS, FLAG_KINDS, MAX_PLAYERS } from './rules';
 import type { CounterKind, FlagKind } from './rules';
 import type { GameState, PlayerSeat, PlayerState } from './state';
 
@@ -116,6 +116,17 @@ export function reduce(state: GameState | null, event: GameEvent): GameState | n
 
     case 'seat/released':
       return mapPlayer(state, event.target, (player) => ({ ...player, claimed: false }));
+
+    case 'seat/added': {
+      // Idempotent against a merged duplicate, and capped the same way setup
+      // already caps a new game — six is what the panel layouts support.
+      if (state.players.some((player) => player.id === event.seat.id)) return state;
+      if (state.players.length >= MAX_PLAYERS) return state;
+      return {
+        ...state,
+        players: [...state.players, seatPlayer(event.seat, state.config.startingLife, false)]
+      };
+    }
 
     case 'player/eliminated':
       return mapPlayer(state, event.target, (player) => ({ ...player, eliminated: true }));

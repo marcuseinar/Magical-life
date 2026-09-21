@@ -4,6 +4,7 @@ import type { GameSession } from '$application/gameSession';
 import type { EventLog } from '$application/ports/eventLog';
 import type { IdSource } from '$application/ports/idSource';
 import type { Rng } from '$application/ports/rng';
+import { addSeat } from '$application/usecases/addSeat';
 import { applyLifeDelta } from '$application/usecases/applyLifeDelta';
 import { changeCounter } from '$application/usecases/changeCounter';
 import { chooseFirstPlayer } from '$application/usecases/chooseFirstPlayer';
@@ -25,7 +26,7 @@ import type { Transport } from '$application/ports/transport';
 import type { GameEvent } from '$domain/events';
 import { playerId } from '$domain/ids';
 import type { PlayerId } from '$domain/ids';
-import type { CounterKind } from '$domain/rules';
+import type { CounterKind, ManaColour } from '$domain/rules';
 import type { GameConfig, GameState } from '$domain/state';
 
 /**
@@ -156,6 +157,14 @@ export function createGameStore(
     /** Records that this device is now playing `target`'s seat. */
     async claimSeat(target: PlayerId) {
       const result = await claimSeat({ session })(target);
+      sync();
+      return result;
+    },
+
+    /** Seats a new, unclaimed player at a game already running — the host
+     *  adding a fifth player on turn nine. */
+    async addSeat(name: string, colour: ManaColour) {
+      const result = await addSeat({ session, ids })({ name, colour });
       sync();
       return result;
     },

@@ -12,11 +12,12 @@ import { moveFlag } from './moveFlag';
 import { setElimination } from './setElimination';
 import { undoLast } from './undoLast';
 import { renamePlayer, tidyName } from './renamePlayer';
-import { MAX_PLAYER_NAME, presetConfig } from '$domain/rules';
+import { MAX_PLAYER_NAME, MAX_PLAYERS, presetConfig } from '$domain/rules';
 import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
 import { recordCommanderDamage } from './recordCommanderDamage';
 import { claimSeat } from './claimSeat';
+import { addSeat } from './addSeat';
 import { releaseSeat } from './releaseSeat';
 import { commanderDamageFrom, localSeats } from '$domain/selectors';
 import type { Rng } from '../ports/rng';
@@ -629,6 +630,50 @@ describe('use cases', () => {
     it('rejects an unknown player', async () => {
       const result = await claimSeat({ session })(playerId('nobody'));
       expect(result).toEqual({ ok: false, error: 'unknown-player' });
+    });
+  });
+
+  describe('addSeat', () => {
+    it('seats a new, unclaimed player and returns their id', async () => {
+      const result = await addSeat({ session, ids: countingIdSource('new') })({
+        name: 'Dan',
+        colour: 'red'
+      });
+
+      expect(result.ok).toBe(true);
+      const added = session.state?.players.at(-1);
+      expect(added).toMatchObject({ name: 'Dan', colour: 'red', life: 40, claimed: false });
+      expect(result.ok && result.value).toBe(added?.id);
+    });
+
+    it('leaves the existing seats untouched', async () => {
+      await addSeat({ session, ids: countingIdSource('new') })({ name: 'Dan', colour: 'red' });
+      expect(session.state?.players.slice(0, 2).map((p) => p.id)).toEqual(seats);
+    });
+
+    it('rejects seating a table past the app-wide cap', async () => {
+      const ids = countingIdSource('new');
+      for (let i = seats.length; i < MAX_PLAYERS; i++) {
+        await addSeat({ session, ids })({ name: `Player ${i + 1}`, colour: 'red' });
+      }
+      expect(session.state?.players).toHaveLength(MAX_PLAYERS);
+
+      const result = await addSeat({ session, ids })({ name: 'One too many', colour: 'red' });
+      expect(result).toEqual({ ok: false, error: 'table-full' });
+      expect(session.state?.players).toHaveLength(MAX_PLAYERS);
+    });
+
+    it('rejects adding a seat before a game exists', async () => {
+      const freshSession = createGameSession({
+        clock: fakeClock(),
+        log: createMemoryEventLog(),
+        authorId: HOST
+      });
+      const result = await addSeat({ session: freshSession, ids: countingIdSource() })({
+        name: 'Dan',
+        colour: 'red'
+      });
+      expect(result).toEqual({ ok: false, error: 'no-game' });
     });
   });
 

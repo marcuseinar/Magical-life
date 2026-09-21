@@ -130,6 +130,13 @@ connection-quality chip does not yet distinguish a relayed link from a
 direct one — still `'direct'`, since a working link is a working link — a
 deliberately deferred follow-up, same as the chip's own "lost" gap once was.
 
+**Built**: adding a seat to a running game — a fifth player showing up on
+turn nine, seated without anyone rejoining. `seat/added`
+(`src/domain/events.ts`, `src/domain/reducer.ts`) and the `addSeat` use case
+(`src/application/usecases/addSeat.ts`), an **Add a seat** control in
+`TableSheet.svelte`. See `docs/design/shell-and-lobby.md`'s phase 5 for how
+it reuses the existing signalling loop with no change to the worker.
+
 **Built**: a way to end a table on purpose. Until now the only way to make a
 table issue a fresh code was to clear the device's entire history — a table
 otherwise lived exactly as long as the game did (deliberately, so a rematch
