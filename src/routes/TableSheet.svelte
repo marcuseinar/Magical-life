@@ -33,6 +33,7 @@
   let copied = $state(false);
   let scanning = $state(false);
   let loadedScanner = $state<Awaited<ReturnType<typeof loadQrScanSheet>> | null>(null);
+  let dropConfirming = $state(false);
 
   /*
    * The sheet shows the table; it does not own it. Owning it was the bug:
@@ -43,14 +44,50 @@
    * when it closes the table drops to a heartbeat.
    */
   let table = $state<TableHost | null>(null);
+  let stopWatching: (() => void) | null = null;
 
-  $effect(() => {
+  /** Shared by the mount effect and `dropTable`: both need the same "watch
+   *  whatever table is current" behaviour, the second time starting over on
+   *  a table the first never knew about. */
+  function openTable() {
+    stopWatching?.();
     const host = session.open();
     table = host;
-    return host.watch();
+    stopWatching = host.watch();
+  }
+
+  $effect(() => {
+    openTable();
+    return () => stopWatching?.();
   });
 
   const seats = $derived(store.state?.players ?? []);
+
+  /**
+   * Ending a table on purpose, rather than waiting for the game to. Only
+   * asks first when a seat is actually claimed — an empty table costs
+   * nobody anything to drop, the way "New game" needs no confirmation either
+   * (ADR 0005). Keyed on the seats themselves rather than `table.joined`:
+   * the latter only counts handshakes this particular `TableHost` has
+   * completed, but a claim can equally have come in through the QR or
+   * manual paths, and dropping releases those seats too.
+   */
+  function requestDrop() {
+    if (seats.some((player) => player.claimed)) {
+      dropConfirming = true;
+    } else {
+      void dropTable();
+    }
+  }
+
+  async function dropTable() {
+    dropConfirming = false;
+    // Freed before the table is rebuilt, so the fresh one's first seat list
+    // — the one it opens with — already shows everybody as free.
+    await store.releaseAllSeats();
+    session.drop();
+    openTable();
+  }
   /** Narrowing `mode` does not survive into an event handler's closure, and
    *  the manual branch needs it in several. */
   const manual = $derived(mode.kind === 'manual' ? mode.invite : null);
@@ -197,6 +234,9 @@
       <button class="fallback" type="button" onclick={() => (mode = { kind: 'pick-a-seat' })}>
         Trouble connecting? Paste a code instead.
       </button>
+      <button class="fallback" type="button" disabled={table === null} onclick={requestDrop}>
+        Drop this table and start a new one
+      </button>
     {:else if mode.kind === 'pick-a-seat'}
       <!-- The no-server path needs to know whose seat it is offering, because
            the code itself carries that rather than a table to pick from. -->
@@ -295,6 +335,25 @@
     onscan={scanReply}
     onclose={() => (scanning = false)}
   />
+{/if}
+
+{#if dropConfirming}
+  <div class="scrim">
+    <div class="confirm" role="dialog" aria-modal="true" aria-labelledby="drop-title">
+      <h2 id="drop-title" class="confirm__title">Drop this table?</h2>
+      <p class="confirm__body">
+        Disconnects everyone already joined and ends this code; a new one opens right away.
+      </p>
+      <div class="confirm__actions">
+        <button class="action" type="button" onclick={() => (dropConfirming = false)}>
+          Keep this table
+        </button>
+        <button class="action action--danger" type="button" onclick={dropTable}>
+          Drop table
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -562,5 +621,42 @@
 
   .seat[data-claimed='true'] .seat__state {
     color: var(--text-gold);
+  }
+
+  .confirm {
+    display: grid;
+    gap: var(--space-3);
+    width: min(24rem, 100%);
+    padding: var(--space-5);
+    border: 1px solid var(--frame-rule);
+    border-radius: var(--radius-lg);
+    background: var(--surface-panel);
+    box-shadow: var(--shadow-float);
+    text-align: center;
+  }
+
+  .confirm__title {
+    margin: 0;
+    color: var(--text-gold);
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    letter-spacing: var(--tracking-display);
+  }
+
+  .confirm__body {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .confirm__actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: center;
+  }
+
+  .action--danger {
+    border-color: var(--danger);
+    color: var(--danger);
   }
 </style>

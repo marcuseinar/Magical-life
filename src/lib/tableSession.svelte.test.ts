@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { presetConfig } from '$domain/rules';
 import { createGameStore } from './gameStore.svelte';
-import { createTableSession } from './tableSession.svelte';
+import { createTableSession, beginNewGame } from './tableSession.svelte';
 import type { TableSession } from './tableSession.svelte';
 import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
 import { fakeSignalling, stubGatheredPeerConnection } from '../../tests/fakes/table';
@@ -73,6 +73,85 @@ describe('table session', () => {
 
     expect(retried).not.toBe(failed);
     await vi.waitFor(() => expect(retried.code).toBe('CODE1'));
+  });
+
+  /*
+   * The host's own way to end a table early — dropping it and starting a
+   * fresh one, rather than waiting for the game itself to end. `open()`
+   * afterwards must build a genuinely new table, not hand back the stopped
+   * one: the worker has already been told (via its own stopped run loop) that
+   * nobody is polling it anymore, so the code it issued is on its way out.
+   */
+  it('drops the table on request, ready to open a fresh one', async () => {
+    stubGatheredPeerConnection();
+    const store = await startedGame();
+    const signalling = fakeSignalling();
+    const session = sessionFor(store, signalling);
+
+    const first = session.open();
+    await vi.waitFor(() => expect(first.code).toBe('CODE1'));
+
+    session.drop();
+    expect(session.host).toBe(null);
+
+    const second = session.open();
+    expect(second).not.toBe(first);
+    await vi.waitFor(() => expect(second.code).toBe('CODE2'));
+    expect(signalling.tablesOpened()).toBe(2);
+  });
+
+  /*
+   * "New game" carrying the same table forward is right for a reconfigure of
+   * the same group (`docs/design/multiplayer.md`), but wrong the moment a
+   * claimed seat does not exist in the new roster — that seat's device is
+   * still connected, with no idea it has just lost its place.
+   */
+  it('drops the table when the new game would leave a claimed seat out of the roster', async () => {
+    stubGatheredPeerConnection();
+    const store = await startedGame();
+    await store.begin(presetConfig('commander'), [
+      { name: 'Anna', colour: 'green' },
+      { name: 'Björn', colour: 'blue' }
+    ]);
+    const bjorn = store.state!.players[1]!;
+    await store.claimSeat(bjorn.id);
+
+    const signalling = fakeSignalling();
+    const session = sessionFor(store, signalling);
+    session.open();
+    await vi.waitFor(() => expect(session.host?.code).toBe('CODE1'));
+
+    await beginNewGame(store, session, presetConfig('commander'), [
+      { name: 'Solo', colour: 'red' }
+    ]);
+
+    expect(session.host).toBe(null);
+    const reopened = session.open();
+    await vi.waitFor(() => expect(reopened.code).toBe('CODE2'));
+  });
+
+  it('keeps the table when every claimed seat carries into the new game', async () => {
+    stubGatheredPeerConnection();
+    const store = await startedGame();
+    await store.begin(presetConfig('commander'), [
+      { name: 'Anna', colour: 'green' },
+      { name: 'Björn', colour: 'blue' }
+    ]);
+    const [anna, bjorn] = store.state!.players;
+    await store.claimSeat(bjorn!.id);
+
+    const signalling = fakeSignalling();
+    const session = sessionFor(store, signalling);
+    session.open();
+    await vi.waitFor(() => expect(session.host?.code).toBe('CODE1'));
+
+    await beginNewGame(store, session, presetConfig('twoHeadedGiant'), [
+      { id: anna!.id, name: 'Anna', colour: 'green' },
+      { id: bjorn!.id, name: 'Björn', colour: 'blue' }
+    ]);
+
+    expect(session.host?.code).toBe('CODE1');
+    expect(signalling.tablesOpened()).toBe(1);
   });
 
   it('lets the table go when the game does', async () => {

@@ -5,7 +5,7 @@ import { createMemoryEventLog } from '$adapters/storage/memoryEventLog';
 import { playerId } from '$domain/ids';
 import type { PlayerId } from '$domain/ids';
 import { fakeClock, countingIdSource } from '../../../tests/support/fakes';
-import { startGame } from './startGame';
+import { startGame, dropsClaimedSeat } from './startGame';
 import { applyLifeDelta } from './applyLifeDelta';
 import { changeCounter } from './changeCounter';
 import { moveFlag } from './moveFlag';
@@ -17,6 +17,7 @@ import { chooseFirstPlayer } from './chooseFirstPlayer';
 import { rematch } from './rematch';
 import { recordCommanderDamage } from './recordCommanderDamage';
 import { claimSeat } from './claimSeat';
+import { releaseSeat } from './releaseSeat';
 import { commanderDamageFrom, localSeats } from '$domain/selectors';
 import type { Rng } from '../ports/rng';
 
@@ -108,6 +109,44 @@ describe('use cases', () => {
       expect(ids[0]).toBe(seats[0]);
       expect(ids[1]).not.toBe(seats[1]);
       expect(new Set(ids).size).toBe(2);
+    });
+  });
+
+  describe('dropsClaimedSeat', () => {
+    it('is false before any game has started', () => {
+      expect(dropsClaimedSeat(null, [{ name: 'Solo', colour: 'red' }])).toBe(false);
+    });
+
+    it('is false when nobody has claimed a seat yet', () => {
+      expect(dropsClaimedSeat(session.state, [{ name: 'Solo', colour: 'red' }])).toBe(false);
+    });
+
+    it('is false when every claimed seat carries into the new roster', async () => {
+      await claimSeat({ session })(seats[1]!);
+
+      expect(
+        dropsClaimedSeat(session.state, [
+          { id: seats[0]!, name: 'Anna', colour: 'green' },
+          { id: seats[1]!, name: 'Björn', colour: 'blue' }
+        ])
+      ).toBe(false);
+    });
+
+    /* Shrinking to fewer seats than a claimed one's index is exactly the
+       case "New game" used to get wrong: the seat that vanishes is somebody
+       else's device, still connected, with no idea it just lost its seat. */
+    it('is true when a claimed seat would not exist in the new roster', async () => {
+      await claimSeat({ session })(seats[1]!);
+
+      expect(dropsClaimedSeat(session.state, [{ name: 'Solo', colour: 'red' }])).toBe(true);
+    });
+
+    it('is false when only an unclaimed seat is dropped', async () => {
+      await claimSeat({ session })(seats[0]!);
+
+      expect(
+        dropsClaimedSeat(session.state, [{ id: seats[0]!, name: 'Anna', colour: 'green' }])
+      ).toBe(false);
     });
   });
 
@@ -589,6 +628,27 @@ describe('use cases', () => {
 
     it('rejects an unknown player', async () => {
       const result = await claimSeat({ session })(playerId('nobody'));
+      expect(result).toEqual({ ok: false, error: 'unknown-player' });
+    });
+  });
+
+  describe('releaseSeat', () => {
+    it('marks a claimed seat free again', async () => {
+      await claimSeat({ session })(seats[0]!);
+      const result = await releaseSeat({ session })(seats[0]!);
+      expect(result.ok).toBe(true);
+      expect(session.state?.players[0]?.claimed).toBe(false);
+    });
+
+    it('is a no-op rather than an error when the seat is already free', async () => {
+      const before = session.events.length;
+      const result = await releaseSeat({ session })(seats[0]!);
+      expect(result.ok).toBe(true);
+      expect(session.events.length).toBe(before);
+    });
+
+    it('rejects an unknown player', async () => {
+      const result = await releaseSeat({ session })(playerId('nobody'));
       expect(result).toEqual({ ok: false, error: 'unknown-player' });
     });
   });
