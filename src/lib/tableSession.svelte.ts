@@ -1,4 +1,7 @@
 import type { Signalling } from '$application/ports/signalling';
+import { dropsClaimedSeat } from '$application/usecases/startGame';
+import type { SeatRequest } from '$application/usecases/startGame';
+import type { GameConfig } from '$domain/state';
 import type { GameStore } from './gameStore.svelte';
 import { hostTable } from './tableConnection.svelte';
 import type { TableHost } from './tableConnection.svelte';
@@ -43,9 +46,10 @@ export function createTableSession(store: GameStore, signalling: Signalling): Ta
   /*
    * A table belongs to a game. Clearing the history ends the game, and a
    * table still heartbeating after that is offering seats at a table nobody
-   * is sitting at. Starting a *new* game is not that: the seats change, the
-   * table does not, which is what lets somebody be invited to a rematch on
-   * the code they already have.
+   * is sitting at. Starting a *new* game is not that, usually: the seats
+   * change, the table does not, which is what lets somebody be invited to a
+   * rematch on the code they already have. `beginNewGame` below is the one
+   * exception, and it goes through `drop()`, not this effect.
    */
   const stopWatchingTheGame = $effect.root(() => {
     $effect(() => {
@@ -79,4 +83,22 @@ export function createTableSession(store: GameStore, signalling: Signalling): Ta
       letGo();
     }
   };
+}
+
+/**
+ * "New game" as the setup screen actually invokes it: begin the game, and
+ * end the current table first if the new roster would leave a claimed seat
+ * out of it. Reconfiguring the same group (a different format, a different
+ * life total) is the common case and deliberately keeps the table — see
+ * `TableSession`'s own comment — but a smaller or genuinely different group
+ * is a table that should not go on offering seats under the old roster.
+ */
+export async function beginNewGame(
+  store: GameStore,
+  session: TableSession,
+  config: GameConfig,
+  seats: readonly SeatRequest[]
+): Promise<void> {
+  if (dropsClaimedSeat(store.state, seats)) session.drop();
+  await store.begin(config, seats);
 }

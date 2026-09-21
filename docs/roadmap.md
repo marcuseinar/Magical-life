@@ -145,6 +145,18 @@ without dropping the whole table is still unbuilt — the seat list only ever
 grows a "free"/"joined" flag, not a per-seat action — and is the natural next
 step if it turns out to matter more than dropping the whole table does.
 
+**Built**: "New game" doing the same thing automatically, when it would
+otherwise strand somebody. Reconfiguring the same group (`beginNewGame`,
+`src/lib/tableSession.svelte.ts`) still keeps the table on purpose — that is
+what lets a rematch, or a life-total change, go out on the code already
+given. But a new roster that would leave a _currently claimed_ seat out of
+it (`dropsClaimedSeat`, `src/application/usecases/startGame.ts`) now drops
+the table first, the same `TableSession.drop()` the manual action uses — the
+missing seat's device was still connected, with no way to learn on its own
+that it had lost its place. Keyed on a claimed seat going missing, not on
+the player count changing: growing the roster, or shrinking away seats
+nobody had joined, stays on the same table.
+
 ## M4 — Native shells
 
 - Capacitor wrapping the same static build

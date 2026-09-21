@@ -386,6 +386,28 @@ seat under it has gone, the same as any other dropped link. Both are real
 gaps, not accidents, and the natural next step if a single-seat kick turns
 out to matter more often than starting the whole table over.
 
+### "New game" drops the table too, when it would strand a joined seat
+
+"Reconfiguring the same group keeps the table" is right for the common
+case — a different format or life total, same people — but it stopped being
+right the moment the new roster is smaller or otherwise different: a device
+that had joined a seat missing from the new `game/started` event is not
+merely unclaimed again, it does not exist in the new state at all, with no
+signal to that device that it happened.
+
+`dropsClaimedSeat` (`src/application/usecases/startGame.ts`) is a pure check
+— does any currently claimed seat fail to appear, by id, in the seats about
+to be recorded — and `beginNewGame` (`src/lib/tableSession.svelte.ts`, what
+`/setup/+page.svelte` actually calls) runs it before `GameStore.begin`: true
+calls `TableSession.drop()` first, so the next `TableSheet` visit issues a
+fresh code rather than going on offering seats under a roster some of its
+players are no longer part of. False — the common case — leaves the table
+exactly as it was, same as before this existed.
+
+Deliberately keyed on a _claimed_ seat going missing, not on the player count
+changing: growing the roster, or shrinking away seats nobody had joined yet,
+costs nobody a connection and stays on the same table.
+
 ### A claim outlives the game it was made in
 
 `game/started` resets the game — totals, counters, eliminations, who went
