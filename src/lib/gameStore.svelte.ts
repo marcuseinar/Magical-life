@@ -9,6 +9,7 @@ import { applyLifeDelta } from '$application/usecases/applyLifeDelta';
 import { changeCounter } from '$application/usecases/changeCounter';
 import { chooseFirstPlayer } from '$application/usecases/chooseFirstPlayer';
 import { claimSeat } from '$application/usecases/claimSeat';
+import { releaseSeat } from '$application/usecases/releaseSeat';
 import { recordCommanderDamage } from '$application/usecases/recordCommanderDamage';
 import { rematch } from '$application/usecases/rematch';
 import { renamePlayer } from '$application/usecases/renamePlayer';
@@ -166,6 +167,17 @@ export function createGameStore(
       const result = await addSeat({ session, ids })({ name, colour });
       sync();
       return result;
+    },
+
+    /** Every claimed seat back to free, in one go — what dropping a table
+     *  needs, since a table gone is every device that joined through it gone
+     *  with it. */
+    async releaseAllSeats() {
+      const claimed = (state?.players ?? []).filter((player) => player.claimed);
+      for (const player of claimed) {
+        await releaseSeat({ session })(player.id);
+      }
+      sync();
     },
 
     async chooseFirstPlayer() {

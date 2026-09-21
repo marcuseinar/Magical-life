@@ -158,4 +158,61 @@ describe('table sheet', () => {
 
     expect(screen.queryByRole('button', { name: 'Add a seat' })).not.toBeInTheDocument();
   });
+
+  /*
+   * The other bug this replaced: once a table was open there was no way to
+   * end it short of clearing the whole game's history, so a code kept
+   * offering the same, already-full seats for as long as the game lasted.
+   */
+  it('drops the table and opens a fresh one, with nobody joined, no confirmation needed', async () => {
+    stubGatheredPeerConnection();
+    const store = await seatPlayers();
+    const signalling = fakeSignalling();
+
+    mount(store, sessionFor(store, signalling));
+    expect(await screen.findByText('CODE1')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: /drop this table/i }));
+
+    expect(await screen.findByText('CODE2')).toBeInTheDocument();
+    expect(signalling.tablesOpened()).toBe(2);
+  });
+
+  it('asks first when dropping would disconnect somebody already joined', async () => {
+    stubGatheredPeerConnection();
+    const store = await seatPlayers();
+    const bjorn = store.state!.players.find((player) => player.name === 'Björn')!;
+    await store.claimSeat(bjorn.id);
+    const signalling = fakeSignalling();
+
+    mount(store, sessionFor(store, signalling));
+    await screen.findByText('CODE1');
+
+    await fireEvent.click(screen.getByRole('button', { name: /drop this table/i }));
+
+    expect(screen.getByRole('dialog', { name: /drop this table\?/i })).toBeInTheDocument();
+    expect(signalling.tablesOpened()).toBe(1);
+    expect(store.state?.players.find((player) => player.name === 'Björn')?.claimed).toBe(true);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Keep this table' }));
+    expect(screen.queryByRole('dialog', { name: /drop this table\?/i })).not.toBeInTheDocument();
+    expect(signalling.tablesOpened()).toBe(1);
+  });
+
+  it('drops a joined table once confirmed, and frees every seat that had joined it', async () => {
+    stubGatheredPeerConnection();
+    const store = await seatPlayers();
+    const bjorn = store.state!.players.find((player) => player.name === 'Björn')!;
+    await store.claimSeat(bjorn.id);
+    const signalling = fakeSignalling();
+
+    mount(store, sessionFor(store, signalling));
+    await screen.findByText('CODE1');
+
+    await fireEvent.click(screen.getByRole('button', { name: /drop this table/i }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Drop table' }));
+
+    expect(await screen.findByText('CODE2')).toBeInTheDocument();
+    expect(store.state?.players.find((player) => player.name === 'Björn')?.claimed).toBe(false);
+  });
 });

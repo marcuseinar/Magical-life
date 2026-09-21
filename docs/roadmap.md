@@ -137,6 +137,33 @@ turn nine, seated without anyone rejoining. `seat/added`
 `TableSheet.svelte`. See `docs/design/shell-and-lobby.md`'s phase 5 for how
 it reuses the existing signalling loop with no change to the worker.
 
+**Built**: a way to end a table on purpose. Until now the only way to make a
+table issue a fresh code was to clear the device's entire history — a table
+otherwise lived exactly as long as the game did (deliberately, so a rematch
+can be invited on the code already given out), with no way to drop it early
+and no way to un-join a seat once claimed. The host's table sheet now has a
+"Drop this table" action (`TableSheet.svelte`): it frees every currently
+claimed seat (`releaseSeat`, a use case alongside `claimSeat`, both wired
+through a new `TableSession.drop()`) and opens a brand-new table under a
+fresh code, ready for new joiners. Asks for confirmation first only when a
+seat is actually claimed — dropping an empty table costs nobody anything, the
+same reasoning "New game" needs none (ADR 0005). Kicking one specific seat
+without dropping the whole table is still unbuilt — the seat list only ever
+grows a "free"/"joined" flag, not a per-seat action — and is the natural next
+step if it turns out to matter more than dropping the whole table does.
+
+**Built**: "New game" doing the same thing automatically, when it would
+otherwise strand somebody. Reconfiguring the same group (`beginNewGame`,
+`src/lib/tableSession.svelte.ts`) still keeps the table on purpose — that is
+what lets a rematch, or a life-total change, go out on the code already
+given. But a new roster that would leave a _currently claimed_ seat out of
+it (`dropsClaimedSeat`, `src/application/usecases/startGame.ts`) now drops
+the table first, the same `TableSession.drop()` the manual action uses — the
+missing seat's device was still connected, with no way to learn on its own
+that it had lost its place. Keyed on a claimed seat going missing, not on
+the player count changing: growing the roster, or shrinking away seats
+nobody had joined, stays on the same table.
+
 ## M4 — Native shells
 
 - Capacitor wrapping the same static build

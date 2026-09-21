@@ -347,6 +347,67 @@ and one device is playing all four, which is what `localSeats` already
 returns for an author matching no seat. The lock only appears once a second
 device is actually in the game — the case the confusion was ever about.
 
+## Ending a table on purpose
+
+A table lives as long as the game does (`TableSession`,
+`src/lib/tableSession.svelte.ts`), by design — that is what lets a rematch be
+invited on the code already given out, and what stops the sheet issuing a
+fresh code every time somebody just looks at who has joined. Until now that
+was the _only_ lifetime a table had: the one way to get a new code was to
+clear the device's entire game history, and there was no way at all to
+un-claim a seat once a device had joined it.
+
+`TableSheet` now has a **Drop this table** action, for a host who wants a
+clean table without ending the game or losing local history — a code that
+has been shared too widely, a seat somebody claimed from the wrong device, or
+simply wanting to start inviting a different group. It does three things, in
+order:
+
+1. Releases every currently claimed seat — `releaseSeat`
+   (`src/application/usecases/releaseSeat.ts`), a `seat/released` use case
+   sitting next to `claimSeat`, called once per claimed seat
+   (`GameStore.releaseAllSeats`). The domain event and its reducer case
+   already existed and were already tested; nothing new needed there.
+2. Stops the current `TableHost` — `TableSession.drop()`, new alongside
+   `open()` and `stop()`. Unlike `stop()`, it does not tear down the
+   game-ended watcher, since the game itself is not ending.
+3. Opens a fresh one — the same `session.open()` the sheet already calls on
+   mount, issuing a new code from the worker.
+
+Confirmation is asked for only when a seat is actually claimed — dropping an
+empty table costs nobody anything, the same reasoning that lets "New game"
+skip confirmation too (ADR 0005).
+
+**Not built**: forcibly disconnecting one specific already-connected peer
+without dropping the whole table (a per-seat "kick"), and closing that peer's
+own `Transport` the moment the seat that used it is released — today the
+connection a dropped seat was using is left to notice on its own that the
+seat under it has gone, the same as any other dropped link. Both are real
+gaps, not accidents, and the natural next step if a single-seat kick turns
+out to matter more often than starting the whole table over.
+
+### "New game" drops the table too, when it would strand a joined seat
+
+"Reconfiguring the same group keeps the table" is right for the common
+case — a different format or life total, same people — but it stopped being
+right the moment the new roster is smaller or otherwise different: a device
+that had joined a seat missing from the new `game/started` event is not
+merely unclaimed again, it does not exist in the new state at all, with no
+signal to that device that it happened.
+
+`dropsClaimedSeat` (`src/application/usecases/startGame.ts`) is a pure check
+— does any currently claimed seat fail to appear, by id, in the seats about
+to be recorded — and `beginNewGame` (`src/lib/tableSession.svelte.ts`, what
+`/setup/+page.svelte` actually calls) runs it before `GameStore.begin`: true
+calls `TableSession.drop()` first, so the next `TableSheet` visit issues a
+fresh code rather than going on offering seats under a roster some of its
+players are no longer part of. False — the common case — leaves the table
+exactly as it was, same as before this existed.
+
+Deliberately keyed on a _claimed_ seat going missing, not on the player count
+changing: growing the roster, or shrinking away seats nobody had joined yet,
+costs nobody a connection and stays on the same table.
+
 ### A claim outlives the game it was made in
 
 `game/started` resets the game — totals, counters, eliminations, who went

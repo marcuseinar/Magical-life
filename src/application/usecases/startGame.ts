@@ -1,6 +1,6 @@
 import type { ManaColour } from '$domain/rules';
 import type { PlayerId } from '$domain/ids';
-import type { GameConfig, PlayerSeat } from '$domain/state';
+import type { GameConfig, GameState, PlayerSeat } from '$domain/state';
 import type { GameSession } from '../gameSession';
 import type { IdSource } from '../ports/idSource';
 
@@ -39,3 +39,22 @@ export const startGame =
 
     return deps.session.record({ kind: 'game/started', config, players });
   };
+
+/**
+ * True when starting a game with `requests` would leave a currently claimed
+ * seat out of the new roster — a strong signal the group of physical players
+ * has actually changed, not just the format or the life total. `reduce`
+ * already handles the seat itself correctly (it just isn't seated anymore),
+ * but a *table* built for the old roster would otherwise carry on unchanged
+ * under the joined device's old seat, with nothing telling that device it
+ * has lost its place. The caller's cue to end that table rather than let it
+ * keep offering seats to a game some of its players are no longer part of.
+ */
+export const dropsClaimedSeat = (
+  current: GameState | null,
+  requests: readonly SeatRequest[]
+): boolean => {
+  if (current === null) return false;
+  const kept = new Set(requests.map((request) => request.id).filter((id) => id !== undefined));
+  return current.players.some((player) => player.claimed && !kept.has(player.id));
+};
