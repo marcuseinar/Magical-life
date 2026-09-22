@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" width="980" height="420" role="img" aria-labelledby="t d">
+  <title id="t">The table's states on the host's device</title>
+  <desc id="d">A state machine. A cold start enters "none" (solo play, no network). open() moves it to "opening", which gets a code and becomes "live", held open by the heartbeat. If there is no worker at all, "opening" falls to "unreachable", which is the QR path. When contact is lost, "live" moves to "reconnecting"; a relaunch holding a saved code enters "reconnecting" directly. "Reconnecting" is resumed under the same code and the same seats back to "live", or, after sixty seconds of failure, gives up to "closed", from which one tap on Reopen returns to "opening". "Drop this table" takes "live" back to "none".</desc>
+
+  <defs>
+    <marker id="a-mute" viewBox="0 0 8 7" refX="8" refY="3.5" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L8,3.5 L0,7 z" fill="#b4a985" />
+    </marker>
+    <marker id="a-gold" viewBox="0 0 8 7" refX="8" refY="3.5" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L8,3.5 L0,7 z" fill="#dfbf5a" />
+    </marker>
+    <marker id="a-danger" viewBox="0 0 8 7" refX="8" refY="3.5" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L8,3.5 L0,7 z" fill="#e04451" />
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="979" height="419" rx="12" fill="#0b0910" stroke="#c9a227" stroke-opacity="0.22" />
+
+  <g fill="none" stroke="#b4a985" stroke-width="1.4">
+    <line x1="26" y1="204" x2="44" y2="204" marker-end="url(#a-mute)" />
+    <line x1="148" y1="204" x2="214" y2="204" marker-end="url(#a-mute)" />
+    <line x1="346" y1="204" x2="410" y2="204" marker-end="url(#a-mute)" />
+    <line x1="530" y1="204" x2="610" y2="204" marker-end="url(#a-mute)" />
+    <polyline points="880,130 880,204 786,204" marker-end="url(#a-mute)" />
+    <polyline points="280,232 280,266 419,266 419,296" marker-end="url(#a-mute)" />
+    <polyline points="698,352 698,392 250,392 250,232" marker-end="url(#a-mute)" />
+    <polyline points="430,176 430,84 96,84 96,176" marker-end="url(#a-mute)" />
+  </g>
+
+  <line x1="698" y1="232" x2="698" y2="296" fill="none" stroke="#e04451" stroke-width="1.4" marker-end="url(#a-danger)" />
+  <polyline points="670,176 670,132 470,132 470,176" fill="none" stroke="#dfbf5a" stroke-width="2.2" marker-end="url(#a-gold)" />
+
+  <circle cx="22" cy="204" r="3.5" fill="#b4a985" />
+  <circle cx="880" cy="124" r="3.5" fill="#b4a985" />
+
+  <g stroke-width="1.2">
+    <rect x="44" y="176" width="104" height="56" rx="8" fill="#14111b" stroke="#c9a227" stroke-opacity="0.45" />
+    <rect x="214" y="176" width="132" height="56" rx="8" fill="#14111b" stroke="#c9a227" stroke-opacity="0.45" />
+    <rect x="410" y="176" width="120" height="56" rx="8" fill="#1d1926" stroke="#c9a227" stroke-width="2" />
+    <rect x="610" y="176" width="176" height="56" rx="8" fill="#14111b" stroke="#c9a227" stroke-opacity="0.45" />
+    <rect x="336" y="296" width="166" height="56" rx="8" fill="#14111b" stroke="#8b8168" stroke-opacity="0.7" />
+    <rect x="620" y="296" width="156" height="56" rx="8" fill="#14111b" stroke="#e04451" stroke-opacity="0.65" />
+  </g>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#f3ecd8" text-anchor="middle">
+    <text x="96" y="202">none</text>
+    <text x="280" y="202">opening</text>
+    <text x="470" y="202" fill="#f0dda2">live</text>
+    <text x="698" y="202">reconnecting</text>
+    <text x="419" y="322" fill="#b4a985">unreachable</text>
+    <text x="698" y="322" fill="#e04451">closed</text>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="10" fill="#8b8168" text-anchor="middle">
+    <text x="96" y="220">solo — no network</text>
+    <text x="280" y="220">one round trip</text>
+    <text x="470" y="220" fill="#b4a985">heartbeat holds it</text>
+    <text x="698" y="220">backoff, and silent</text>
+    <text x="419" y="340">the QR path</text>
+    <text x="698" y="340">Reopen is one tap</text>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="11" fill="#b4a985" text-anchor="middle">
+    <text x="181" y="196">open()</text>
+    <text x="378" y="196">a code</text>
+    <text x="570" y="196">contact lost</text>
+    <text x="263" y="76">Drop this table</text>
+    <text x="474" y="384">Reopen</text>
+    <text x="880" y="96" font-size="10">relaunch, holding</text>
+    <text x="880" y="110" font-size="10">a saved code</text>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="10" fill="#8b8168" text-anchor="start">
+    <text x="292" y="259">no worker at all</text>
+    <text x="710" y="268" fill="#e04451">gave up after 60 s</text>
+  </g>
+
+  <text x="570" y="124" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="11" fill="#dfbf5a" text-anchor="middle">resumed — same code, same seats</text>
+</svg>

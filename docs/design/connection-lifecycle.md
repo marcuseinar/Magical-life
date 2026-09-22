@@ -98,19 +98,18 @@ each one rules out a tempting shortcut.
 
 ### A. The table, on the host's device
 
-```
-  launch, holding a saved table ────────────────────────────► reconnecting
+![A state machine for the host's table. A cold start enters "none" — solo play,
+no network. `open()` moves it to "opening", which gets a code and becomes
+"live", held open by the heartbeat. If there is no worker at all, "opening"
+falls to "unreachable", which is the QR path. Losing contact moves "live" to
+"reconnecting", and a relaunch holding a saved code enters "reconnecting"
+directly. From there it is resumed — same code, same seats — back to "live",
+or, after sixty seconds of failure, gives up to "closed", from which one tap
+on Reopen returns to "opening". "Drop this table" takes "live" back to
+"none".](connection-lifecycle-table-states.svg)
 
-  none ──open()──► opening ──gets a code──► live ──Drop this table──► none
-                      │                      │
-            no worker │                      │ contact lost
-                      ▼                      ▼
-                 unreachable            reconnecting ──resumed, same code──► live
-                 (the QR path)               │
-                                             │ 60 s of failure
-                                             ▼
-                                          closed ──Reopen──► opening
-```
+The gold edge is the one this design adds, and the one every other decision
+here exists to serve.
 
 - `none` — solo play. **Nothing has touched the network**, which is the
   property ADR 0006 bought and this design does not spend. A table opens when
@@ -118,12 +117,14 @@ each one rules out a tempting shortcut.
   otherwise.
 - `opening` — a round trip. Dots in the code's box, and the button underneath
   says what it is waiting for (rule 11).
-- `live` — there is a code, and the heartbeat is holding it open.
+- `live` — there is a code, and the heartbeat is holding it open. **Drop this
+  table** is the only way out that is not a failure; it returns to `none`.
 - `reconnecting` — we had a code and lost contact with it, which is also the
   state a relaunch starts in. Retried on a backoff, silently, because this is
   the case that should heal without anybody noticing.
-- `closed` — retries gave up. The sheet offers **Reopen table**, which mints a
-  code and is the manual fallback the automatic path is allowed to fail into.
+- `closed` — sixty seconds of retries gave up. The sheet offers **Reopen
+  table**, which goes back through `opening` for a code, and is the manual
+  fallback the automatic path is allowed to fail into.
 - `unreachable` — no worker at all: offline, blocked, not deployed. Falls
   through to the no-server QR path exactly as `TableSheet` already does. This
   behaviour is right and stays untouched.
