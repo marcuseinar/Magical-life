@@ -164,6 +164,18 @@ that it had lost its place. Keyed on a claimed seat going missing, not on
 the player count changing: growing the roster, or shrinking away seats
 nobody had joined, stays on the same table.
 
+**Designed, not yet built**: staying connected. Everything above connects
+well and recovers from nothing — a host who closes the app comes back with a
+different table code and no badge, the joiner they dropped has no way back and
+a reload would lose their game, and a claimed seat stays claimed by a device
+that is gone, which takes that seat off the host's own board. ADR 0007 and
+`docs/design/connection-lifecycle.md` separate membership (durable, in the
+log) from presence (ephemeral, per seat) from reachability (a code the host
+writes down and resumes), and stage the work into four pull requests: honest
+per-seat presence with **Free the seat** and **Leave table**; the host
+resuming its own table under the same code; a joiner persisting its game and
+reconnecting on a backoff; then the relay-aware chip and the rest.
+
 ## M4 — Native shells
 
 - Capacitor wrapping the same static build

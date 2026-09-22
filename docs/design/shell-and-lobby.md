@@ -302,6 +302,11 @@ actually in.
 
 ### "In" and "connected" are two different facts
 
+> This section is the antecedent of [ADR 0007](../adr/0007-connection-lifecycle.md)
+> and [`connection-lifecycle.md`](connection-lifecycle.md), which take the
+> split below and add the third fact it does not have — reachability, the
+> code a host writes down so it can resume the same table after a relaunch.
+
 Worth separating carefully, because the app can only honestly answer both for
 one device.
 

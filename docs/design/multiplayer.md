@@ -4,6 +4,13 @@ The three connection paths below, and the order they're tried in, are a
 structural decision recorded in [ADR 0004](../adr/0004-p2p-transport-and-signalling.md).
 This document is the detail of how each one works.
 
+It covers _connecting_, and stops there. What happens afterwards — a phone
+sleeping, an app being closed and reopened, a player going home — is
+[ADR 0007](../adr/0007-connection-lifecycle.md) and
+[`connection-lifecycle.md`](connection-lifecycle.md), which supersede two of
+the gaps this document records below: the sticky "lost" chip, and a joined
+game living only in memory.
+
 ## What "no server" actually means
 
 WebRTC gives you a direct data channel between two browsers. It does not give
@@ -299,6 +306,11 @@ instead of pasted, on both ends of the exchange.
   there. A reload loses a joined table today; rejoining supplies a fresh full
   copy through the same mechanism as the first join. A per-table database is
   the real fix, tracked for when reconnection matters, not before.
+
+  Reconnection matters now, so that condition has come due:
+  [`connection-lifecycle.md`](connection-lifecycle.md) gives a joined table
+  its own IndexedDB database, keyed by the table code, and keeps the device's
+  own `magical-life` log untouched for exactly the reason stated here.
 
 Proven end to end in `tests/e2e/table-connection.spec.ts` with two real
 independent browser contexts standing in for two phones: a life change made
