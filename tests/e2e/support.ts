@@ -121,7 +121,10 @@ export async function poisonOut(page: Page, name: string) {
   await page.getByRole('button', { name: `Counters for ${name}` }).click();
   const sheet = page.getByRole('dialog', { name: new RegExp(`counters for ${name}`, 'i') });
   const addPoison = sheet.getByRole('button', { name: /add one poison counter/i });
-  for (let counter = 0; counter < 10; counter++) await addPoison.click();
+  // Keyboard rather than ten clicks: each click waits for the sheet to hold
+  // still, which on WebKit costs the six-player game its whole timeout.
+  await addPoison.focus();
+  for (let counter = 0; counter < 10; counter++) await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Close counters' }).click();
 
   await page

@@ -158,6 +158,8 @@ for (const phone of [...PHONES, { name: 'a very small phone', width: 320, height
     });
 
     test('across the end of a six player game', async ({ page }) => {
+      // Five players knocked out one at a time is a long journey by design.
+      test.slow();
       await startGame(page, /commander/i, 6);
       for (const seat of [2, 3, 4, 5, 6]) {
         // The summary comes up over the board at the last one; nothing else does.
