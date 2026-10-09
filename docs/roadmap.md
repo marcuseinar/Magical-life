@@ -43,6 +43,18 @@ and naming players during setup rather than once the game has started.
 - Elimination detection across all three lethal conditions
 - Post-game summary: elimination order, damage sources, game length
 
+**Built**: everything above except confirm-not-assert. The damage matrix, the
+crown chip and sheet, drag-to-attribute and lethal detection on all three
+conditions came first; the post-game summary closes the list. It comes up by
+itself when the last opponent goes out — placings best first, what took each
+player out (commander damage named over "life", since a player on zero with
+twenty-one from one commander died to the commander), the commander that hit
+each player hardest, and how long the game ran — with Rematch, New game, and a
+way back to the board. The end is derived from the log (`summariseGame`), not
+recorded as `game/ended`: being out is declared and can be walked back, so
+"Back in" or Undo on the last elimination simply puts the game back in play.
+Dismissed, it stays one tap away under Menu → Game summary.
+
 ## M3 — The table (P2P)
 
 - **The join flow, as the host imagines it**: one player sets the game up on

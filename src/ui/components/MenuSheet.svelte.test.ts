@@ -2,13 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import MenuSheet from './MenuSheet.svelte';
 
-const mount = () => {
+const mount = (extra: { onsummary?: () => void } = {}) => {
   const props = {
     onrematch: vi.fn(),
     onnewgame: vi.fn(),
     onjoin: vi.fn(),
     onsettings: vi.fn(),
-    onclose: vi.fn()
+    onclose: vi.fn(),
+    ...extra
   };
   render(MenuSheet, { props });
   return props;
@@ -31,6 +32,18 @@ describe('menu sheet', () => {
     const { onjoin } = mount();
     await fireEvent.click(screen.getByRole('button', { name: 'Join a table' }));
     expect(onjoin).toHaveBeenCalledOnce();
+  });
+
+  it('offers no game summary while the game is still being played', () => {
+    mount();
+    expect(screen.queryByRole('button', { name: 'Game summary' })).toBeNull();
+  });
+
+  it('brings a dismissed game summary back once the game is over', async () => {
+    const onsummary = vi.fn();
+    mount({ onsummary });
+    await fireEvent.click(screen.getByRole('button', { name: 'Game summary' }));
+    expect(onsummary).toHaveBeenCalledOnce();
   });
 
   it('is a dialog, so a screen reader knows the game behind it is not the subject', () => {

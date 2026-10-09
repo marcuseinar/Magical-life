@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { inviteBySeat, openMenu, openTable, shownCode, startGame } from './support';
+import { inviteBySeat, openMenu, openTable, poisonOut, shownCode, startGame } from './support';
 
 /*
  * Every screen is laid out inside one `.app` grid, and a bare `display: grid`
@@ -155,6 +155,24 @@ for (const phone of [...PHONES, { name: 'a very small phone', width: 320, height
 
       await page.getByRole('button', { name: 'Clear history' }).click();
       expect(await unreachable(page), 'the clear-history confirmation').toEqual([]);
+    });
+
+    test('across the end of a six player game', async ({ page }) => {
+      // Five players knocked out one at a time is a long journey by design.
+      test.slow();
+      await startGame(page, /commander/i, 6);
+      for (const seat of [2, 3, 4, 5, 6]) {
+        // The summary comes up over the board at the last one; nothing else does.
+        await poisonOut(page, `Player ${seat}`);
+      }
+
+      await expect(page.getByRole('dialog', { name: 'Player 1 wins' })).toBeVisible();
+      expect(await unreachable(page), 'the summary at six players').toEqual([]);
+
+      await page.getByRole('button', { name: 'Back to the board' }).click();
+      await openMenu(page);
+      await expect(page.getByRole('button', { name: 'Game summary' })).toBeVisible();
+      expect(await unreachable(page), 'the menu once the game is over').toEqual([]);
     });
 
     test('across the table sheet and joining', async ({ page }) => {

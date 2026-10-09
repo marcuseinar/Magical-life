@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { openMenu, openNewGame, openTable, startGame } from './support';
+import { openMenu, openNewGame, openTable, poisonOut, startGame } from './support';
 
 /* Dark is the only theme; a pretty theme that fails contrast cannot ship. */
 test('the opening screen is clean', async ({ page }) => {
@@ -81,4 +81,13 @@ test('the table sheet is clean while it opens, and once it has opened', async ({
   open();
   await page.getByRole('button', { name: 'Copy link' }).waitFor();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+test('the end-of-game summary is clean', async ({ page }) => {
+  await startGame(page, /commander/i, 3);
+  await poisonOut(page, 'Player 2');
+  await poisonOut(page, 'Player 3');
+  await expect(page.getByRole('dialog', { name: 'Player 1 wins' })).toBeVisible();
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations).toEqual([]);
 });

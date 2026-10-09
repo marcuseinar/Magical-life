@@ -108,6 +108,8 @@ test('tracks poison to lethal and lets a player declare themselves out', async (
   await expect(page.getByText('Poison')).toBeVisible();
 
   await page.getByRole('button', { name: 'Out', exact: true }).click();
+  // Two players, so that ends the game; the board is still there behind it.
+  await page.getByRole('button', { name: 'Back to the board' }).click();
   await expect(page.getByRole('button', { name: 'Back in' })).toBeVisible();
 });
 

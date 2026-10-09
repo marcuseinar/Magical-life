@@ -12,12 +12,15 @@
     onnewgame,
     onjoin,
     onsettings,
+    onsummary,
     onclose
   }: {
     onrematch: () => void;
     onnewgame: () => void;
     onjoin: () => void;
     onsettings: () => void;
+    /** Only once the game is over — there is nothing to summarise before. */
+    onsummary?: (() => void) | undefined;
     onclose: () => void;
   } = $props();
 </script>
@@ -40,6 +43,14 @@
          and the name of an action should be the action. `aria-describedby`
          is how the hint still reaches a screen reader, as a description. -->
     <ul class="items">
+      {#if onsummary !== undefined}
+        <li class="item">
+          <button class="row" type="button" onclick={onsummary} aria-describedby="hint-summary">
+            Game summary
+          </button>
+          <p class="hint" id="hint-summary">Who went out to what, and how long it took</p>
+        </li>
+      {/if}
       <li class="item">
         <button class="row" type="button" onclick={onrematch} aria-describedby="hint-rematch">
           Rematch

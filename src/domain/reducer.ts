@@ -167,6 +167,11 @@ export function orderEvents(events: readonly GameEvent[]): GameEvent[] {
  * and avoids a fixpoint nobody needs.
  */
 export function fold(events: readonly GameEvent[]): GameState | null {
+  return appliedEvents(events).reduce<GameState | null>(reduce, null);
+}
+
+/** The log as `fold` applies it: in total order, with every retracted event gone. */
+export function appliedEvents(events: readonly GameEvent[]): GameEvent[] {
   const ordered = orderEvents(events);
 
   const retracted = new Set<EventId>();
@@ -174,10 +179,5 @@ export function fold(events: readonly GameEvent[]): GameState | null {
     if (event.kind === 'event/retracted') retracted.add(event.retracts);
   }
 
-  let state: GameState | null = null;
-  for (const event of ordered) {
-    if (retracted.has(event.id)) continue;
-    state = reduce(state, event);
-  }
-  return state;
+  return ordered.filter((event) => !retracted.has(event.id));
 }
