@@ -168,7 +168,8 @@ Proposed, same count, same row:
 Rematch moving one tap deeper is a real cost — it is reached often, at the end
 of every game. The answer is not to keep it in the toolbar but to surface it
 where it is actually wanted: once the game has a winner, in the post-game
-summary M2 already plans. Until then it lives in the menu, which is honest
+summary (built — it comes up by itself, and Rematch there skips the
+confirmation, since the game it would start over is already finished). Until then it lives in the menu, which is honest
 about it being a once-per-game action rather than a mid-play one, the same
 reasoning that already hides **First** once the opponent bar appears.
 

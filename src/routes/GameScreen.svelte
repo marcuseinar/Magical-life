@@ -1,9 +1,10 @@
 <script lang="ts">
   import { formatName } from '$domain/rules';
   import type { CounterKind } from '$domain/rules';
-  import type { PlayerId } from '$domain/ids';
+  import type { EventId, PlayerId } from '$domain/ids';
   import { localSeats, remoteSeats } from '$domain/selectors';
   import type { PlayerState } from '$domain/state';
+  import { summariseGame } from '$domain/summary';
   import type { GameStore } from '$lib/gameStore.svelte';
   import type { TableSession } from '$lib/tableSession.svelte';
   import { WINNER_BLINK_MS } from '$ui/interaction/firstPlayerSpin';
@@ -14,6 +15,7 @@
   import RenameSheet from '$ui/components/RenameSheet.svelte';
   import GameBoard from '$ui/components/GameBoard.svelte';
   import MenuSheet from '$ui/components/MenuSheet.svelte';
+  import GameSummarySheet from '$ui/components/GameSummarySheet.svelte';
   import OpponentBar from '$ui/components/OpponentBar.svelte';
   import ConnectionChip from '$ui/components/ConnectionChip.svelte';
   import TableSheet from './TableSheet.svelte';
@@ -72,6 +74,16 @@
       document.removeEventListener('visibilitychange', onHidden);
     };
   });
+
+  /*
+   * The summary comes up by itself once, when the last opponent goes out —
+   * keyed to the elimination that ended the game, so a "Back in" followed by
+   * a fresh "Out" is a fresh ending and comes up again. Dismissing it is this
+   * device's business only; the game being over is the log's.
+   */
+  const summary = $derived(summariseGame(store.events));
+  let dismissedEnding = $state<EventId | null>(null);
+  const showingSummary = $derived(summary !== null && summary.endedBy !== dismissedEnding);
 
   /* A sheet holds a snapshot, so it has to follow the live player. */
   const live = (id: PlayerId | undefined) =>
@@ -276,8 +288,26 @@
     <TableSheet {store} {session} onclose={() => (connecting = false)} />
   {/if}
 
+  {#if summary !== null && showingSummary}
+    <!-- Rematch skips the confirmation here: the game it would start over
+         has already finished, which is the whole point of asking. -->
+    <GameSummarySheet
+      {summary}
+      players={store.state.players}
+      onrematch={confirmRematch}
+      onnewgame={() => leaveFor(onnewgame)}
+      onclose={() => (dismissedEnding = summary.endedBy)}
+    />
+  {/if}
+
   {#if menuOpen}
     <MenuSheet
+      onsummary={summary === null
+        ? undefined
+        : () => {
+            menuOpen = false;
+            dismissedEnding = null;
+          }}
       onrematch={() => {
         menuOpen = false;
         confirming = true;
